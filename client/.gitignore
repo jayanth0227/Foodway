@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+/jspm_packages/
+/web_modules/
+
+# Production Build Outputs
+/dist/
+/dist-ssr/
+/build/
+/out/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.local
+!*.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor & IDE configurations
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Testing & Diagnostics
+.eslintcache
+.stylelintcache
+/coverage/
+/.nyc_output
