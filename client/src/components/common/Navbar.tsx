@@ -115,7 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                 MK
               </span>
               <span className="text-[9px] font-medium tracking-[0.25em] text-primary group-hover:text-text-primary transition-colors mt-0.5 uppercase">
-                Delivery
+                Delivery Services
               </span>
             </div>
           </Link>
