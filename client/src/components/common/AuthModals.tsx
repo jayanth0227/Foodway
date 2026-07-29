@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IoCloseOutline } from 'react-icons/io5';
+import { X } from 'lucide-react';
 
 interface AuthModalsProps {
   isOpen: boolean;
@@ -45,7 +45,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
               onClick={onClose}
               className="absolute top-4 right-4 text-text-muted hover:text-text-primary transition-colors p-1 rounded-full hover:bg-glass-subtleHover"
             >
-              <IoCloseOutline size={24} />
+              <X size={20} />
             </button>
 
             {/* Logo & Header */}
@@ -55,10 +55,10 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
                 alt="MK Delivery Services Logo"
                 className="w-16 h-16 rounded-full object-cover border border-primary/40 shadow-lg mb-3"
               />
-              <h3 className="text-xl font-semibold font-display text-gradient-gold">
+              <h3 className="text-xl font-bold font-display text-gradient-gold tracking-tight">
                 {type === 'login' ? 'Welcome Back' : 'Join the Dynasty'}
               </h3>
-              <p className="text-sm text-text-muted mt-1">
+              <p className="text-xs text-text-muted mt-1.5 font-medium">
                 {type === 'login'
                   ? 'Access your culinary concierge service'
                   : 'Register for premium gourmet delivery'}
@@ -69,7 +69,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
             <div className="flex border-b border-glass mb-6">
               <button
                 onClick={() => setType('login')}
-                className={`flex-1 pb-3 text-sm font-semibold transition-all relative ${
+                className={`flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition-all relative ${
                   type === 'login' ? 'text-primary' : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
@@ -83,7 +83,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
               </button>
               <button
                 onClick={() => setType('register')}
-                className={`flex-1 pb-3 text-sm font-semibold transition-all relative ${
+                className={`flex-1 pb-3 text-xs font-bold uppercase tracking-wider transition-all relative ${
                   type === 'register' ? 'text-primary' : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
@@ -101,44 +101,44 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
             <form onSubmit={handleSubmit} className="space-y-5">
               {type === 'register' && (
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+                  <label className="block text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2">
                     Full Name
                   </label>
                   <input
                     type="text"
                     required
                     placeholder="Enter your name"
-                    className="w-full bg-bg-dark border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-lg outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20"
+                    className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+                <label className="block text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2">
                   Email Address
                 </label>
                 <input
                   type="email"
                   required
                   placeholder="name@luxury.com"
-                  className="w-full bg-bg-dark border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-lg outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20"
+                  className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">
+                <label className="block text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2">
                   Password
                 </label>
                 <input
                   type="password"
                   required
                   placeholder="••••••••"
-                  className="w-full bg-bg-dark border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-lg outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20"
+                  className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
                 />
               </div>
 
               {type === 'login' && (
-                <div className="flex justify-between items-center text-xs">
+                <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider">
                   <label className="flex items-center space-x-2 text-text-muted cursor-pointer">
                     <input
                       type="checkbox"
@@ -154,7 +154,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
 
               <button
                 type="submit"
-                className="w-full bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-black font-semibold text-sm py-3 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-primary/20 transform hover:-translate-y-0.5 active:translate-y-0 text-center"
+                className="w-full btn-primary text-xs font-bold py-3.5 px-6 rounded-lg transition-all duration-300 uppercase tracking-widest text-center shadow-lg"
               >
                 {type === 'login' ? 'Sign In to Estate' : 'Create Account'}
               </button>

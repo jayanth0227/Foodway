@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaInstagram, FaFacebookF, FaTwitter, FaLinkedinIn } from 'react-icons/fa';
-import { IoMailOutline, IoCallOutline, IoLocationOutline } from 'react-icons/io5';
+import { Mail, Phone, MapPin } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const handleScrollToTop = () => {
@@ -38,10 +37,42 @@ export const Footer: React.FC = () => {
           </p>
           <div className="flex items-center space-x-3">
             {[
-              { icon: <FaInstagram size={16} />, href: 'https://instagram.com' },
-              { icon: <FaFacebookF size={15} />, href: 'https://facebook.com' },
-              { icon: <FaTwitter size={15} />, href: 'https://twitter.com' },
-              { icon: <FaLinkedinIn size={16} />, href: 'https://linkedin.com' },
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                  </svg>
+                ),
+                href: 'https://instagram.com',
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path>
+                  </svg>
+                ),
+                href: 'https://facebook.com',
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path>
+                  </svg>
+                ),
+                href: 'https://twitter.com',
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                    <rect x="2" y="9" width="4" height="12"></rect>
+                    <circle cx="4" cy="4" r="2"></circle>
+                  </svg>
+                ),
+                href: 'https://linkedin.com',
+              },
             ].map((social, index) => (
               <a
                 key={index}
@@ -58,13 +89,13 @@ export const Footer: React.FC = () => {
 
         {/* Quick Links */}
         <div>
-          <h4 className="text-sm font-semibold font-display text-text-primary uppercase tracking-wider mb-6">
+          <h4 className="text-xs font-bold font-display text-text-primary uppercase tracking-widest mb-6">
             Gourmet Tiers
           </h4>
-          <ul className="space-y-3 text-sm text-text-muted">
+          <ul className="space-y-3.5 text-xs text-text-muted">
             {['Signature Menus', 'Michelin Partners', 'Private Dining', 'Bespoke Catering', 'Corporate Concierge'].map((link, idx) => (
               <li key={idx}>
-                <a href="#restaurants" className="hover:text-primary transition-colors hover:pl-1 duration-200 block">
+                <a href="#restaurants" className="hover:text-primary transition-all hover:pl-1.5 duration-300 block font-medium">
                   {link}
                 </a>
               </li>
@@ -74,13 +105,13 @@ export const Footer: React.FC = () => {
 
         {/* Company Links */}
         <div>
-          <h4 className="text-sm font-semibold font-display text-text-primary uppercase tracking-wider mb-6">
+          <h4 className="text-xs font-bold font-display text-text-primary uppercase tracking-widest mb-6">
             Our Estate
           </h4>
-          <ul className="space-y-3 text-sm text-text-muted">
+          <ul className="space-y-3.5 text-xs text-text-muted">
             {['About MK', 'Bespoke T&C', 'Curator Careers', 'Press & Media', 'Gourmet Blog'].map((link, idx) => (
               <li key={idx}>
-                <a href="#about" className="hover:text-primary transition-colors hover:pl-1 duration-200 block">
+                <a href="#about" className="hover:text-primary transition-all hover:pl-1.5 duration-300 block font-medium">
                   {link}
                 </a>
               </li>
@@ -90,29 +121,29 @@ export const Footer: React.FC = () => {
 
         {/* Contact Info */}
         <div className="space-y-4">
-          <h4 className="text-sm font-semibold font-display text-text-primary uppercase tracking-wider mb-6">
+          <h4 className="text-xs font-bold font-display text-text-primary uppercase tracking-widest mb-6">
             Contact Concierge
           </h4>
-          <div className="flex items-start space-x-3 text-sm text-text-muted">
-            <IoLocationOutline size={18} className="text-primary shrink-0 mt-0.5" />
+          <div className="flex items-start space-x-3 text-xs text-text-muted font-medium leading-relaxed">
+            <MapPin size={16} className="text-primary shrink-0 mt-0.5" />
             <span>100 Royal Crescent, Mayfair, London, W1S</span>
           </div>
-          <div className="flex items-center space-x-3 text-sm text-text-muted">
-            <IoCallOutline size={18} className="text-primary shrink-0" />
-            <a href="tel:+442079460958" className="hover:text-primary transition-colors">
+          <div className="flex items-center space-x-3 text-xs text-text-muted font-medium">
+            <Phone size={16} className="text-primary shrink-0" />
+            <a href="tel:+442079460958" className="hover:text-primary transition-all duration-300">
               +44 (20) 7946 0958
             </a>
           </div>
-          <div className="flex items-center space-x-3 text-sm text-text-muted">
-            <IoMailOutline size={18} className="text-primary shrink-0" />
-            <a href="mailto:concierge@mkdelivery.com" className="hover:text-primary transition-colors">
+          <div className="flex items-center space-x-3 text-xs text-text-muted font-medium">
+            <Mail size={16} className="text-primary shrink-0" />
+            <a href="mailto:concierge@mkdelivery.com" className="hover:text-primary transition-all duration-300">
               concierge@mkdelivery.com
             </a>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-8 border-t border-glass/40 flex flex-col md:flex-row items-center justify-between text-xs text-text-muted relative z-10">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 pt-8 border-t border-glass flex flex-col md:flex-row items-center justify-between text-[10px] font-bold uppercase tracking-widest text-text-muted relative z-10">
         <p>© {currentYear} MK Delivery Services. Crafted for Royalty.</p>
         <div className="flex space-x-6 mt-4 md:mt-0">
           <a href="#terms" className="hover:text-primary transition-colors">Terms of Service</a>

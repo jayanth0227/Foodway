@@ -1,6 +1,7 @@
 import React from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, EffectCoverflow, Pagination } from 'swiper/modules';
+import { Copy } from 'lucide-react';
 
 // Import Swiper styles
 import 'swiper/css';
@@ -45,7 +46,7 @@ const OFFERS: OfferCard[] = [
 
 export const Offers: React.FC = () => {
   return (
-    <section id="offers-section" className="py-24 bg-bg-darkSec border-t border-glass relative overflow-hidden">
+    <section id="offers-section" className="py-16 md:py-20 lg:py-30 bg-bg-darkSec border-t border-glass relative overflow-hidden">
       {/* Cinematic background light */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
@@ -59,7 +60,7 @@ export const Offers: React.FC = () => {
           <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
             Active Estate Offers
           </h2>
-          <p className="text-sm text-text-muted">
+          <p className="text-xs md:text-sm text-text-secondary font-medium">
             Unlock temporary dining charters and bespoke codes crafted to amplify your gastronomic experience.
           </p>
         </div>
@@ -93,9 +94,7 @@ export const Offers: React.FC = () => {
           >
             {OFFERS.map((offer) => (
               <SwiperSlide key={offer.id} className="w-[300px] sm:w-[450px] md:w-[500px]">
-                <div
-                  className={`relative overflow-hidden rounded-3xl bg-bg-card border border-glass p-8 md:p-12 flex flex-col justify-between h-[300px] md:h-[350px] group transition-all duration-500 shadow-luxury hover:shadow-luxury-hover`}
-                >
+                <div className="relative overflow-hidden premium-card p-8 md:p-12 flex flex-col justify-between h-[300px] md:h-[350px] group">
                   {/* Decorative background radial gradient */}
                   <div
                     className={`absolute inset-0 bg-gradient-to-br ${offer.gradient} opacity-80 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
@@ -103,24 +102,24 @@ export const Offers: React.FC = () => {
 
                   {/* Top content */}
                   <div className="space-y-4 relative z-10">
-                    <span className="inline-block bg-glass-subtle border border-glass text-primary text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-md">
+                    <span className="inline-block bg-glass-subtle border border-primary/20 text-primary text-[9px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-lg shadow-sm">
                       {offer.badge}
                     </span>
-                    <h3 className="text-xl md:text-2xl font-bold font-display text-text-primary leading-tight">
+                    <h3 className="text-xl md:text-2xl font-extrabold font-display text-text-primary leading-tight group-hover:text-primary transition-colors duration-300">
                       {offer.title}
                     </h3>
-                    <p className="text-xs md:text-sm text-text-muted leading-relaxed max-w-md">
+                    <p className="text-xs md:text-sm text-text-muted/90 leading-relaxed max-w-md font-medium">
                       {offer.description}
                     </p>
                   </div>
 
                   {/* Promo Code footer */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-6 border-t border-glass/40 relative z-10">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-5 border-t border-glass relative z-10">
                     <div className="flex flex-col">
-                      <span className="text-[9px] text-text-muted tracking-widest uppercase">
+                      <span className="text-[9px] text-text-muted tracking-widest uppercase font-bold">
                         Privilege Charter Code
                       </span>
-                      <span className="text-sm font-bold font-display text-primary tracking-wider mt-0.5">
+                      <span className="text-sm font-bold font-display text-primary tracking-wider mt-1 uppercase">
                         {offer.code}
                       </span>
                     </div>
@@ -129,9 +128,10 @@ export const Offers: React.FC = () => {
                         navigator.clipboard.writeText(offer.code);
                         alert(`Code "${offer.code}" copied to clipboard!`);
                       }}
-                      className="bg-glass-subtle hover:bg-glass-subtleHover border border-glass text-text-primary hover:text-primary text-xs font-semibold py-2.5 px-5 rounded-lg transition-all"
+                      className="btn-ghost text-xs font-bold py-2.5 px-5 rounded-lg transition-all duration-300 flex items-center space-x-1.5"
                     >
-                      Copy Charter Code
+                      <Copy size={13} />
+                      <span>Copy Code</span>
                     </button>
                   </div>
                 </div>

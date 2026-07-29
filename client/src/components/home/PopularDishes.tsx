@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { IoStar, IoHeart, IoHeartOutline, IoAdd } from 'react-icons/io5';
+import { Star, Heart, Plus } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { DISHES } from '../../utils/mockData';
 import type { DishItem } from '../../utils/mockData';
@@ -27,18 +27,18 @@ export const PopularDishes: React.FC = () => {
     show: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1,
+        staggerChildren: 0.08,
       },
     },
   };
 
   const itemVariants = {
     hidden: { opacity: 0, y: 30 },
-    show: { opacity: 1, y: 0, transition: { type: 'spring' as const, damping: 20 } },
+    show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] as any } },
   };
 
   return (
-    <section id="popular-dishes" className="py-24 bg-bg-dark border-t border-glass relative">
+    <section id="popular-dishes" className="py-16 md:py-20 lg:py-30 bg-bg-dark border-t border-glass relative">
       {/* Background decorations */}
       <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-accent/5 blur-[120px] pointer-events-none" />
 
@@ -54,7 +54,7 @@ export const PopularDishes: React.FC = () => {
               Signature Dishes
             </h2>
           </div>
-          <p className="text-sm text-text-muted max-w-md text-center md:text-left">
+          <p className="text-xs md:text-sm text-text-secondary font-medium max-w-md text-center md:text-left">
             Indulge in our most sought-after gourmet selections, highly praised for ingredient purity and complex culinary execution.
           </p>
         </div>
@@ -64,7 +64,7 @@ export const PopularDishes: React.FC = () => {
           variants={containerVariants}
           initial="hidden"
           whileInView="show"
-          viewport={{ once: true, margin: '-100px' }}
+          viewport={{ once: true, margin: '-60px' }}
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
         >
           {DISHES.map((dish) => {
@@ -73,25 +73,24 @@ export const PopularDishes: React.FC = () => {
               <motion.div
                 key={dish.id}
                 variants={itemVariants}
-                whileHover={{ y: -8 }}
-                className="group relative overflow-hidden rounded-2xl bg-bg-card border border-glass p-5 flex flex-col justify-between transition-all duration-500 h-[480px] shadow-luxury hover:shadow-luxury-hover"
+                className="group premium-card p-5 flex flex-col justify-between h-[490px]"
               >
                 <div>
                   {/* Dish Image Container */}
-                  <div className="relative h-56 rounded-xl overflow-hidden border border-glass mb-5">
+                  <div className="relative h-56 rounded-2xl overflow-hidden border border-glass mb-5">
                     <img
                       src={dish.image}
                       alt={dish.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1.2s] ease-out"
                     />
 
                     {/* Veg/Non-Veg Badge */}
                     <div className="absolute top-3 left-3 z-20">
                       <span
-                        className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md shadow-lg ${
+                        className={`text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.2 rounded-lg shadow-lg ${
                           dish.type === 'veg'
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
                         }`}
                       >
                         {dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
@@ -101,38 +100,36 @@ export const PopularDishes: React.FC = () => {
                     {/* Favorite Button Overlay */}
                     <button
                       onClick={(e) => toggleFavorite(dish.id, e)}
-                      className="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/60 backdrop-blur-sm border border-glass text-text-primary hover:text-primary transition-colors flex items-center justify-center shadow-lg"
+                      className="absolute top-3 right-3 z-20 w-8.5 h-8.5 rounded-full bg-black/70 backdrop-blur-md border border-glass text-text-primary hover:text-primary transition-all duration-300 flex items-center justify-center shadow-lg hover:scale-105 active:scale-95"
                     >
                       {isFav ? (
-                        <IoHeart className="text-primary animate-ping" size={16} />
+                        <Heart className="text-primary fill-primary" size={16} />
                       ) : (
-                        <IoHeartOutline size={16} />
+                        <Heart size={16} className="text-text-primary" />
                       )}
-                      {/* True steady heart overlay */}
-                      {isFav && <IoHeart className="absolute text-primary" size={16} />}
                     </button>
                   </div>
 
                   {/* Title & Rating */}
                   <div className="flex items-start justify-between space-x-2">
-                    <h3 className="font-display font-semibold text-base text-text-primary group-hover:text-primary transition-colors truncate">
+                    <h3 className="font-display font-bold text-base text-text-primary group-hover:text-primary transition-colors truncate duration-300">
                       {dish.name}
                     </h3>
-                    <div className="flex items-center space-x-1 shrink-0 bg-glass-subtle border border-glass px-2 py-0.5 rounded-md">
-                      <IoStar className="text-[#FBBF24]" size={11} />
+                    <div className="flex items-center space-x-1 shrink-0 bg-glass-subtle border border-primary/20 px-2.5 py-1 rounded-lg">
+                      <Star className="text-[#FBBF24] fill-[#FBBF24]" size={11} />
                       <span className="text-[10px] font-bold text-text-primary">{dish.rating}</span>
                     </div>
                   </div>
 
-                  <p className="text-xs text-text-muted mt-2 leading-relaxed line-clamp-3">
+                  <p className="text-xs text-text-muted mt-2.5 leading-relaxed line-clamp-3 font-medium">
                     {dish.description}
                   </p>
                 </div>
 
                 {/* Price & Add to Cart Footer */}
-                <div className="flex items-center justify-between pt-5 border-t border-glass/40 mt-5">
+                <div className="flex items-center justify-between pt-5 border-t border-glass mt-5">
                   <div className="flex flex-col">
-                    <span className="text-[10px] text-text-muted tracking-wider uppercase font-semibold">
+                    <span className="text-[9px] text-text-muted tracking-widest uppercase font-bold">
                       Curated Price
                     </span>
                     <span className="text-lg font-bold text-text-primary mt-0.5">
@@ -141,10 +138,10 @@ export const PopularDishes: React.FC = () => {
                   </div>
                   <button
                     onClick={(e) => handleAddToCart(dish, e)}
-                    className="bg-transparent hover:bg-primary border border-primary text-primary hover:text-black font-bold text-xs py-2.5 px-5 rounded-lg transition-all duration-300 flex items-center space-x-1 hover:shadow-lg hover:shadow-primary/10"
+                    className="btn-secondary font-bold text-xs py-2.5 px-5 rounded-lg flex items-center space-x-1.5"
                   >
-                    <IoAdd size={14} />
-                    <span>Add to Cart</span>
+                    <Plus size={13} />
+                    <span>Add Selection</span>
                   </button>
                 </div>
               </motion.div>

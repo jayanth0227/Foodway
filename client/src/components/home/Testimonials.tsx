@@ -1,7 +1,7 @@
 import React from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
-import { IoStar } from 'react-icons/io5';
+import { Star } from 'lucide-react';
 import { TESTIMONIALS } from '../../utils/mockData';
 
 // Import Swiper styles
@@ -10,7 +10,7 @@ import 'swiper/css/pagination';
 
 export const Testimonials: React.FC = () => {
   return (
-    <section id="testimonials" className="py-24 bg-bg-dark border-t border-glass relative overflow-hidden">
+    <section id="testimonials" className="py-16 md:py-20 lg:py-30 bg-bg-dark border-t border-glass relative overflow-hidden">
       {/* Decorative ambient background orb */}
       <div className="absolute top-1/2 left-0 w-96 h-96 rounded-full bg-accent/5 blur-[120px] pointer-events-none" />
 
@@ -24,7 +24,7 @@ export const Testimonials: React.FC = () => {
           <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
             Testimonials of Prestige
           </h2>
-          <p className="text-sm text-text-muted">
+          <p className="text-xs md:text-sm text-text-secondary font-medium">
             Hear from our elite patrons, food critics, and gourmet connoisseurs who rely on our services.
           </p>
         </div>
@@ -52,36 +52,38 @@ export const Testimonials: React.FC = () => {
             modules={[Autoplay, Pagination]}
             className="pb-12"
           >
-            {TESTIMONIALS.map((test) => (
-              <SwiperSlide key={test.id}>
-                <div className="glass-panel rounded-3xl p-8 border border-glass h-full flex flex-col justify-between hover:border-primary/20 hover:shadow-luxury-hover transition-all duration-500 group relative">
+             {TESTIMONIALS.map((test) => (
+              <SwiperSlide key={test.id} className="!h-auto flex">
+                <div className="border border-glass rounded-3xl p-8 h-full w-full flex flex-col justify-between group relative bg-transparent hover:border-primary/40 transition-all duration-300">
                   {/* Glowing card dot */}
                   <div className="absolute top-6 right-6 w-12 h-12 rounded-full bg-primary/5 blur-[15px] pointer-events-none" />
 
-                  {/* Stars Rating */}
-                  <div className="flex items-center space-x-1 mb-6 text-[#FBBF24]">
-                    {[...Array(test.rating)].map((_, i) => (
-                      <IoStar key={i} size={15} />
-                    ))}
+                  <div>
+                    {/* Stars Rating */}
+                    <div className="flex items-center space-x-1 mb-6 text-[#FBBF24]">
+                      {[...Array(test.rating)].map((_, i) => (
+                        <Star key={i} size={14} className="fill-[#FBBF24]" />
+                      ))}
+                    </div>
+
+                    {/* Review Text */}
+                    <p className="text-xs md:text-sm text-text-secondary/90 leading-relaxed font-medium italic">
+                      "{test.review}"
+                    </p>
                   </div>
 
-                  {/* Review Text */}
-                  <p className="text-sm md:text-base text-text-secondary leading-relaxed font-medium italic">
-                    "{test.review}"
-                  </p>
-
                   {/* Critic Info */}
-                  <div className="flex items-center space-x-4 mt-8 pt-6 border-t border-glass/40">
+                  <div className="flex items-center space-x-4 mt-8 pt-6 border-t border-glass">
                     <img
                       src={test.image}
                       alt={test.name}
-                      className="w-12 h-12 rounded-full object-cover border border-primary/30 group-hover:border-primary/70 transition-colors"
+                      className="w-12 h-12 rounded-full object-cover border-2 border-primary/30 group-hover:border-primary group-hover:scale-105 transition-all duration-500 shadow-md"
                     />
                     <div>
                       <h4 className="font-display font-bold text-text-primary text-sm">
                         {test.name}
                       </h4>
-                      <p className="text-[11px] text-primary font-semibold tracking-wider uppercase mt-0.5">
+                      <p className="text-[9px] text-primary font-bold tracking-widest uppercase mt-1">
                         {test.designation}
                       </p>
                     </div>
