@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IoCloseOutline, IoTrashOutline, IoAddOutline, IoRemoveOutline } from 'react-icons/io5';
+import { X, Trash2, Plus, Minus } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 
 export const CartSidebar: React.FC = () => {
@@ -60,14 +60,14 @@ export const CartSidebar: React.FC = () => {
                     onClick={() => setCartOpen(false)}
                     className="text-text-muted hover:text-text-primary transition-colors p-1 rounded-full hover:bg-glass-subtleHover"
                   >
-                    <IoCloseOutline size={24} />
+                    <X size={20} />
                   </button>
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 z-10 custom-scroll">
                   {cartItems.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-5">
                       <div className="w-16 h-16 rounded-full bg-glass-subtle flex items-center justify-center text-text-muted border border-glass">
                         <img
                           src="/logo.jpeg"
@@ -76,16 +76,16 @@ export const CartSidebar: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <h3 className="font-display font-semibold text-text-primary text-base">
+                        <h3 className="font-display font-bold text-text-primary text-base tracking-tight">
                           Your cart is empty
                         </h3>
-                        <p className="text-xs text-text-muted mt-1 max-w-xs mx-auto">
+                        <p className="text-xs text-text-muted mt-1.5 max-w-xs mx-auto font-medium">
                           Explore our signature menus and curate your ultimate dining experience.
                         </p>
                       </div>
                       <button
                         onClick={() => setCartOpen(false)}
-                        className="bg-transparent border border-primary text-primary hover:bg-primary hover:text-black font-semibold text-xs px-5 py-2.5 rounded-lg transition-all"
+                        className="btn-secondary font-bold text-xs px-5 py-2.5 rounded-lg"
                       >
                         Explore Cuisines
                       </button>
@@ -94,35 +94,35 @@ export const CartSidebar: React.FC = () => {
                     cartItems.map((item) => (
                       <div
                         key={item.dish.id}
-                        className="flex items-center space-x-4 bg-bg-cardSec p-3 rounded-xl border border-glass hover:border-primary/20 transition-all duration-300 group"
+                        className="flex items-center space-x-4 bg-bg-cardSec/40 backdrop-blur-md p-3.5 rounded-2xl border border-glass hover:border-primary/30 transition-all duration-500 group"
                       >
                         <img
                           src={item.dish.image}
                           alt={item.dish.name}
-                          className="w-16 h-16 rounded-lg object-cover border border-glass group-hover:scale-[1.03] transition-transform duration-300"
+                          className="w-16 h-16 rounded-xl object-cover border border-glass group-hover:scale-[1.03] transition-transform duration-500"
                         />
                         <div className="flex-1 min-w-0">
-                          <h4 className="text-sm font-semibold text-text-primary truncate font-display">
+                          <h4 className="text-sm font-bold text-text-primary truncate font-display tracking-tight">
                             {item.dish.name}
                           </h4>
-                          <p className="text-xs text-primary font-medium mt-0.5">
+                          <p className="text-xs text-primary font-bold mt-1">
                             ${item.dish.price.toFixed(2)}
                           </p>
-                          <div className="flex items-center space-x-2 mt-2">
+                          <div className="flex items-center space-x-2 mt-2.5">
                              <button
                                onClick={() => reduceQuantity(item.dish.id)}
                                className="p-1 rounded bg-glass-subtle hover:bg-glass-subtleHover text-text-secondary transition-colors"
                              >
-                               <IoRemoveOutline size={12} />
+                               <Minus size={12} />
                              </button>
-                             <span className="text-xs font-semibold px-2 w-4 text-center">
+                             <span className="text-xs font-bold px-2 w-4 text-center">
                                {item.quantity}
                              </span>
                              <button
                                onClick={() => addToCart(item.dish)}
                                className="p-1 rounded bg-glass-subtle hover:bg-glass-subtleHover text-text-secondary transition-colors"
                              >
-                               <IoAddOutline size={12} />
+                               <Plus size={12} />
                              </button>
                           </div>
                         </div>
@@ -130,7 +130,7 @@ export const CartSidebar: React.FC = () => {
                           onClick={() => removeFromCart(item.dish.id)}
                           className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                         >
-                          <IoTrashOutline size={16} />
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     ))
@@ -140,7 +140,7 @@ export const CartSidebar: React.FC = () => {
                 {/* Footer Subtotal Section */}
                 {cartItems.length > 0 && (
                   <div className="px-6 py-6 border-t border-glass bg-bg-cardSec z-10 space-y-4">
-                    <div className="space-y-2 text-sm text-text-secondary">
+                    <div className="space-y-2.5 text-xs text-text-secondary font-medium">
                       <div className="flex justify-between">
                         <span>Subtotal</span>
                         <span>${totalAmount.toFixed(2)}</span>
@@ -149,18 +149,18 @@ export const CartSidebar: React.FC = () => {
                         <span>Premium Courier Fee</span>
                         <span>${serviceFee.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between font-semibold text-text-primary text-base pt-2 border-t border-glass">
+                      <div className="flex justify-between font-bold text-text-primary text-sm pt-2.5 border-t border-glass">
                         <span>Total Sum</span>
-                        <span className="text-gradient-gold">${grandTotal.toFixed(2)}</span>
+                        <span className="text-gradient-gold text-base">${grandTotal.toFixed(2)}</span>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       <button
                         onClick={clearCart}
-                        className="border border-glass hover:bg-glass-subtleHover text-text-secondary text-xs font-semibold py-3 rounded-lg transition-colors flex items-center justify-center space-x-1"
+                        className="btn-ghost text-[10px] font-bold py-3.5 rounded-xl flex items-center justify-center space-x-1 uppercase tracking-wider"
                       >
-                        <IoTrashOutline size={14} />
+                        <Trash2 size={13} />
                         <span>Reset Cart</span>
                       </button>
                       <button
@@ -171,7 +171,7 @@ export const CartSidebar: React.FC = () => {
                           clearCart();
                           setCartOpen(false);
                         }}
-                        className="bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-black text-xs font-bold py-3 rounded-lg transition-all shadow-lg shadow-primary/10 text-center"
+                        className="btn-primary text-[10px] font-bold py-3.5 rounded-xl uppercase tracking-wider text-center"
                       >
                         Checkout
                       </button>

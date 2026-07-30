@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IoAddOutline, IoRemoveOutline } from 'react-icons/io5';
+import { Plus, Minus } from 'lucide-react';
 import { FAQS } from '../../utils/mockData';
 
 export const FAQ: React.FC = () => {
@@ -11,7 +11,7 @@ export const FAQ: React.FC = () => {
   };
 
   return (
-    <section id="faq" className="py-24 bg-bg-darkSec border-t border-glass relative">
+    <section id="faq" className="py-16 md:py-20 lg:py-30 bg-bg-darkSec border-t border-glass relative">
       {/* Decorative ambient gradients */}
       <div className="absolute bottom-12 left-12 w-80 h-80 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
@@ -25,7 +25,7 @@ export const FAQ: React.FC = () => {
           <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
             Frequently Asked Questions
           </h2>
-          <p className="text-sm text-text-muted">
+          <p className="text-xs md:text-sm text-text-secondary font-medium">
             Explore basic information details about our premium service operations and logistics charter.
           </p>
         </div>
@@ -38,18 +38,26 @@ export const FAQ: React.FC = () => {
             return (
               <div
                 key={faq.id}
-                className="rounded-2xl border border-glass bg-bg-card overflow-hidden hover:border-primary/25 transition-colors duration-300"
+                className={`rounded-2xl border transition-all duration-500 overflow-hidden ${
+                  isOpen
+                    ? 'border-primary/40 shadow-luxury-hover bg-bg-card'
+                    : 'border-glass shadow-luxury hover:border-primary/20 bg-bg-cardSec/20'
+                }`}
               >
                 {/* Header/Question Trigger */}
                 <button
                   onClick={() => toggleFAQ(faq.id)}
-                  className="w-full flex items-center justify-between p-6 text-left outline-none"
+                  className="w-full flex items-center justify-between p-6 text-left outline-none group"
                 >
-                  <span className="font-display font-semibold text-text-primary text-sm sm:text-base group-hover:text-primary transition-colors">
+                  <span className="font-display font-bold text-text-primary text-sm sm:text-base group-hover:text-primary transition-colors duration-300">
                     {faq.question}
                   </span>
-                  <span className="ml-4 shrink-0 w-8 h-8 rounded-full bg-glass-subtle border border-glass flex items-center justify-center text-primary transition-colors">
-                    {isOpen ? <IoRemoveOutline size={18} /> : <IoAddOutline size={18} />}
+                  <span className={`ml-4 shrink-0 w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-350 ${
+                    isOpen
+                      ? 'bg-primary text-black border-primary shadow-[0_0_10px_rgba(197,147,99,0.3)]'
+                      : 'bg-glass-subtle text-primary border-glass group-hover:border-primary/30 group-hover:bg-glass-subtleHover'
+                  }`}>
+                    {isOpen ? <Minus size={14} /> : <Plus size={14} />}
                   </span>
                 </button>
 
@@ -60,9 +68,9 @@ export const FAQ: React.FC = () => {
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3, ease: 'easeInOut' }}
+                      transition={{ duration: 0.35, ease: 'easeInOut' }}
                     >
-                      <div className="px-6 pb-6 pt-2 text-xs sm:text-sm text-text-muted leading-relaxed border-t border-glass/30 bg-bg-dark/50">
+                      <div className="px-6 pb-6 pt-2 text-xs sm:text-sm text-text-muted/95 leading-relaxed border-t border-glass bg-bg-cardSec/30 font-medium">
                         {faq.answer}
                       </div>
                     </motion.div>

@@ -22,7 +22,7 @@ export const DeliveryProcess: React.FC = () => {
     <section
       id="delivery-process"
       ref={containerRef}
-      className="py-24 bg-bg-darkSec border-t border-glass relative"
+      className="py-16 md:py-20 lg:py-30 bg-bg-darkSec border-t border-glass relative"
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         
@@ -34,7 +34,7 @@ export const DeliveryProcess: React.FC = () => {
           <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
             The Gourmet Journey
           </h2>
-          <p className="text-sm text-text-muted">
+          <p className="text-xs md:text-sm text-text-secondary font-medium">
             Follow the meticulous progression of your gourmet order, from organic prep to temperature-sealed delivery.
           </p>
         </div>
@@ -62,13 +62,13 @@ export const DeliveryProcess: React.FC = () => {
                   } relative`}
                 >
                   {/* Glowing bubble anchor */}
-                  <div className="absolute left-[16px] md:left-1/2 w-8 h-8 rounded-full bg-bg-card border border-glass group flex items-center justify-center -translate-x-1/2 z-20">
+                  <div className="absolute left-[16px] md:left-1/2 w-8.5 h-8.5 rounded-full bg-bg-card border border-glass group flex items-center justify-center -translate-x-1/2 z-20 shadow-md">
                     <motion.div
-                      initial={{ scale: 0.7, backgroundColor: '#1c1c1c' }}
+                      initial={{ scale: 0.7, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
                       whileInView={{
                         scale: 1,
-                        backgroundColor: '#C58A6A',
-                        boxShadow: '0 0 15px rgba(197, 138, 106, 0.6)',
+                        backgroundColor: 'var(--color-primary)',
+                        boxShadow: '0 0 15px var(--color-primary)',
                       }}
                       viewport={{ once: false, margin: '-100px 0px -50% 0px' }}
                       transition={{ duration: 0.5 }}
@@ -79,21 +79,23 @@ export const DeliveryProcess: React.FC = () => {
                   {/* Card Content Column */}
                   <div className={`w-full md:w-1/2 pl-12 md:pl-0 ${isEven ? 'md:pr-12 text-left md:text-right' : 'md:pl-12 text-left'}`}>
                     <motion.div
-                      initial={{ opacity: 0, y: 30 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-100px' }}
-                      transition={{ duration: 0.6, type: 'spring', damping: 25 }}
-                      className="bg-bg-card border border-glass p-6 rounded-2xl inline-block w-full max-w-md hover:border-primary/20 hover:shadow-primary/5 transition-all duration-300 relative group"
+                      initial={{ opacity: 0, y: 25, scale: 0.98 }}
+                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                      viewport={{ once: true, margin: '-60px' }}
+                      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as any }}
+                      className="premium-card p-6 inline-block w-full max-w-md relative group"
                     >
-                      {/* Step Number Overlay */}
-                      <span className="absolute top-4 right-4 text-xs font-bold text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-md">
-                        {step.timeEstimate}
-                      </span>
+                      {/* Card Header (Title & Badge side-by-side) */}
+                      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2.5 ${isEven ? 'sm:flex-row-reverse' : ''}`}>
+                        <h3 className="font-display font-bold text-text-primary group-hover:text-primary transition-colors duration-300 tracking-tight text-sm sm:text-base">
+                          {step.title}
+                        </h3>
+                        <span className="self-start sm:self-center text-[9px] font-bold uppercase tracking-wider text-primary bg-glass-subtle border border-primary/20 px-2.5 py-1 rounded-md whitespace-nowrap">
+                          {step.timeEstimate}
+                        </span>
+                      </div>
 
-                      <h3 className="font-display font-bold text-text-primary text-base group-hover:text-primary transition-colors">
-                        {step.title}
-                      </h3>
-                      <p className="text-xs text-text-muted mt-3 leading-relaxed">
+                      <p className="text-xs text-text-muted mt-2 leading-relaxed font-medium">
                         {step.description}
                       </p>
                     </motion.div>

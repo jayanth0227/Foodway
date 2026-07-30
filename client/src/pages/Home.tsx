@@ -4,8 +4,6 @@ import Hero from '../components/home/Hero';
 import Categories from '../components/home/Categories';
 import FeaturedRestaurants from '../components/home/FeaturedRestaurants';
 import PopularDishes from '../components/home/PopularDishes';
-import Offers from '../components/home/Offers';
-import WhyChooseUs from '../components/home/WhyChooseUs';
 import DeliveryProcess from '../components/home/DeliveryProcess';
 import Testimonials from '../components/home/Testimonials';
 import FAQ from '../components/home/FAQ';
@@ -32,8 +30,6 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
         <Categories />
         <FeaturedRestaurants />
         <PopularDishes />
-        <Offers />
-        <WhyChooseUs />
         <DeliveryProcess />
         <Testimonials />
         <FAQ />

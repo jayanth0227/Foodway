@@ -39,7 +39,7 @@ export default {
         display: ['Poppins', 'sans-serif'],
       },
       borderColor: {
-        glass: 'rgba(255, 255, 255, 0.08)',
+        glass: 'var(--border-glass-color)',
       },
       animation: {
         'float': 'float 6s ease-in-out infinite',

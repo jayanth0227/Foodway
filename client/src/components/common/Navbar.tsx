@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IoMenuOutline, IoCloseOutline, IoCartOutline, IoPersonOutline, IoSunnyOutline, IoMoonOutline } from 'react-icons/io5';
+import { ShoppingBag, User, Sun, Moon, Home, Compass } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -11,7 +11,6 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [activeSection, setActiveSection] = useState('home');
 
@@ -23,8 +22,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const navLinks = [
     { name: 'Home', id: 'home', hash: 'home' },
     { name: 'Restaurants', id: 'restaurants', hash: 'featured-restaurants' },
-    { name: 'Offers', id: 'offers', hash: 'offers-section' },
-    { name: 'About', id: 'about', hash: 'why-choose' },
     { name: 'Contact', id: 'contact', hash: 'footer' },
   ];
 
@@ -65,7 +62,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
   const handleNavClick = (e: React.MouseEvent, link: typeof navLinks[0]) => {
     e.preventDefault();
-    setIsMobileMenuOpen(false);
 
     if (location.pathname !== '/') {
       navigate('/#' + link.hash);
@@ -84,13 +80,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
       <header
         className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${
           isScrolled
-            ? 'bg-bg-dark/70 backdrop-blur-xl border-b border-glass py-4 shadow-lg'
+            ? 'bg-bg-dark/80 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury'
             : 'bg-transparent py-6 border-b border-transparent'
         }`}
       >
         {/* Scroll Progress Bar */}
         <div
-          className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-primary via-accent to-primary-dark transition-all duration-75"
+          className="absolute top-0 left-0 h-[2px] bg-gradient-to-r from-primary via-secondary to-primary-dark transition-all duration-75"
           style={{ width: `${scrollProgress}%` }}
         />
 
@@ -103,25 +99,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
               window.scrollTo({ top: 0, behavior: 'smooth' });
               setActiveSection('home');
             }}
-            className="flex items-center space-x-3 group"
+            className="flex items-center space-x-3 group relative z-10"
           >
             <img
               src="/logo.jpeg"
               alt="MK Delivery Services Logo"
-              className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border border-primary/20 group-hover:border-primary/50 transition-all duration-300 shadow-md"
+              className="w-10 h-10 md:w-11 md:h-11 rounded-full object-cover border border-primary/20 group-hover:border-primary/60 group-hover:scale-105 transition-all duration-500 shadow-md"
             />
             <div className="flex flex-col leading-none">
-              <span className="text-sm font-semibold tracking-[0.15em] font-display text-text-primary uppercase group-hover:text-primary transition-colors">
+              <span className="text-sm font-bold tracking-[0.2em] font-display text-text-primary uppercase group-hover:text-primary transition-colors duration-300">
                 MK
               </span>
               <span className="text-[9px] font-medium tracking-[0.25em] text-primary group-hover:text-text-primary transition-colors mt-0.5 uppercase">
-                Delivery Services
+                Delivery
               </span>
             </div>
           </Link>
 
           {/* Navigation Links - Desktop */}
-          <nav className="hidden lg:flex items-center space-x-8">
+          <nav className="hidden lg:flex items-center space-x-9">
             {navLinks.map((link) => {
               const isActive = activeSection === link.id && location.pathname === '/';
               return (
@@ -129,7 +125,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                   key={link.id}
                   href={`#${link.hash}`}
                   onClick={(e) => handleNavClick(e, link)}
-                  className={`text-sm font-medium tracking-wide transition-colors relative py-2 ${
+                  className={`text-xs font-bold tracking-[0.12em] uppercase transition-colors duration-300 relative py-2.5 ${
                     isActive ? 'text-primary' : 'text-text-muted hover:text-text-primary'
                   }`}
                 >
@@ -137,7 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                   {isActive && (
                     <motion.span
                       layoutId="navUnderline"
-                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full"
+                      className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full shadow-[0_0_8px_rgba(197,147,99,0.5)]"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
@@ -151,29 +147,29 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
-              className="relative p-2 text-text-secondary hover:text-primary transition-all duration-300 rounded-full hover:bg-glass-subtleHover group border border-transparent hover:border-glass"
+              className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
               aria-label="Toggle theme"
             >
               {theme === 'light' ? (
-                <IoMoonOutline size={20} className="group-hover:scale-105 transition-transform" />
+                <Moon size={18} className="group-hover:scale-110 group-hover:rotate-[15deg] transition-all duration-500" />
               ) : (
-                <IoSunnyOutline size={20} className="group-hover:scale-105 transition-transform" />
+                <Sun size={18} className="group-hover:scale-110 group-hover:rotate-[45deg] transition-all duration-500" />
               )}
             </button>
 
             {/* Cart Button */}
             <button
               onClick={() => setCartOpen(true)}
-              className="relative p-2 text-text-secondary hover:text-primary transition-all duration-300 rounded-full hover:bg-glass-subtleHover group border border-transparent hover:border-glass"
+              className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
             >
-              <IoCartOutline size={22} className="group-hover:scale-105 transition-transform" />
+              <ShoppingBag size={18} className="group-hover:scale-110 transition-transform duration-300" />
               <AnimatePresence>
                 {totalItemsCount > 0 && (
                   <motion.span
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     exit={{ scale: 0 }}
-                    className="absolute -top-1 -right-1 bg-accent text-white text-[9px] font-bold w-5 h-5 rounded-full flex items-center justify-center border border-bg-dark"
+                    className="absolute -top-1 -right-1 bg-primary text-black text-[9px] font-extrabold w-4.5 h-4.5 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_10px_rgba(197,147,99,0.3)]"
                   >
                     {totalItemsCount}
                   </motion.span>
@@ -182,78 +178,90 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             </button>
 
             {/* Auth Buttons - Desktop */}
-            <div className="hidden sm:flex items-center space-x-3 pl-2 border-l border-glass">
+            <div className="hidden sm:flex items-center space-x-3 pl-3 border-l border-glass">
               <button
                 onClick={() => onOpenAuth('login')}
-                className="text-xs font-semibold text-text-secondary hover:text-primary transition-colors py-2 px-3 rounded-lg hover:bg-glass-subtleHover"
+                className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
               >
                 Login
               </button>
               <button
                 onClick={() => onOpenAuth('register')}
-                className="bg-primary hover:bg-primary-dark text-black text-xs font-bold py-2 px-4 rounded-lg transition-all shadow-md shadow-primary/5 hover:shadow-primary/20 transform hover:-translate-y-0.5 active:translate-y-0"
+                className="btn-primary text-[10px] font-bold py-2.5 px-5 rounded-xl uppercase tracking-wider transition-all duration-300"
               >
                 Register
               </button>
             </div>
 
-            {/* Mobile Menu Toggle */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 text-text-secondary hover:text-primary transition-colors rounded-full hover:bg-glass-subtleHover"
-            >
-              {isMobileMenuOpen ? <IoCloseOutline size={26} /> : <IoMenuOutline size={26} />}
-            </button>
+            {/* Removed Hamburger toggle button */}
           </div>
         </div>
-
-        {/* Mobile Navigation Drawer */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="lg:hidden bg-bg-card border-b border-glass overflow-hidden"
-            >
-              <div className="px-6 py-6 space-y-4 flex flex-col">
-                {navLinks.map((link) => (
-                  <a
-                    key={link.id}
-                    href={`#${link.hash}`}
-                    onClick={(e) => handleNavClick(e, link)}
-                    className="text-base font-medium py-2 border-b border-glass/30 text-text-secondary hover:text-primary transition-colors"
-                  >
-                    {link.name}
-                  </a>
-                ))}
-                <div className="flex items-center justify-between pt-4">
-                  <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      onOpenAuth('login');
-                    }}
-                    className="text-sm font-semibold text-text-secondary hover:text-primary py-2 px-4 rounded-lg bg-glass-subtle flex items-center space-x-2"
-                  >
-                    <IoPersonOutline size={16} />
-                    <span>Login</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      onOpenAuth('register');
-                    }}
-                    className="bg-primary hover:bg-primary-dark text-black text-sm font-bold py-2.5 px-6 rounded-lg transition-all"
-                  >
-                    Register
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </header>
+
+      {/* Floating Bottom Navigation Bar for Mobile/Tablet */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 lg:hidden w-[calc(100%-32px)] max-w-sm premium-bottom-nav py-2 rounded-full flex items-center justify-around">
+        {/* Home */}
+        <button
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            setActiveSection('home');
+          }}
+          className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
+            activeSection === 'home' ? 'text-primary' : 'text-text-muted hover:text-text-primary'
+          }`}
+          aria-label="Home"
+        >
+          <Home size={18} />
+          <span className="text-[9px] font-bold mt-1 tracking-wider">Home</span>
+        </button>
+
+        {/* Explore / Restaurants */}
+        <button
+          onClick={(e) => handleNavClick(e, { name: 'Restaurants', id: 'restaurants', hash: 'featured-restaurants' })}
+          className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
+            activeSection === 'restaurants' ? 'text-primary' : 'text-text-muted hover:text-text-primary'
+          }`}
+          aria-label="Explore Restaurants"
+        >
+          <Compass size={18} />
+          <span className="text-[9px] font-bold mt-1 tracking-wider">Explore</span>
+        </button>
+
+        {/* Cart */}
+        <button
+          onClick={() => setCartOpen(true)}
+          className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300 relative"
+          aria-label="Shopping Cart"
+        >
+          <ShoppingBag size={18} />
+          <span className="text-[9px] font-bold mt-1 tracking-wider">Cart</span>
+          {totalItemsCount > 0 && (
+            <span className="absolute top-1 right-2 bg-primary text-black text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_8px_rgba(197,147,99,0.3)]">
+              {totalItemsCount}
+            </span>
+          )}
+        </button>
+
+        {/* Profile */}
+        <button
+          onClick={() => onOpenAuth('login')}
+          className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300"
+          aria-label="User Account"
+        >
+          <User size={18} />
+          <span className="text-[9px] font-bold mt-1 tracking-wider">Account</span>
+        </button>
+
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleTheme}
+          className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300"
+          aria-label="Toggle Theme"
+        >
+          {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          <span className="text-[9px] font-bold mt-1 tracking-wider">Theme</span>
+        </button>
+      </div>
     </>
   );
 };
