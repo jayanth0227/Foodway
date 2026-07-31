@@ -12,6 +12,16 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   const { theme } = useTheme();
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 767px)');
+    setIsMobile(mediaQuery.matches);
+
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
   
   // Simulated loading states for premium feel
   const [isOrdering, setIsOrdering] = useState(false);
@@ -162,8 +172,22 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       ref={containerRef}
       onMouseMove={handleMouseMove}
       className="relative min-h-screen flex items-center justify-center pt-28 pb-20 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
-      style={{ backgroundImage: theme === 'dark' ? "url('/dark.png')" : "url('/light.png')" }}
     >
+      {/* Background Video */}
+      <video
+        key={`${theme}-${isMobile}`}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
+      >
+        <source
+          src={theme === 'dark' ? (isMobile ? "/dark_mobile.mp4" : "/darkest.mp4") : (isMobile ? "/light_mobile.mp4" : "/lightest.mp4")}
+          type="video/mp4"
+        />
+      </video>
+
       {/* Premium left-to-right gradient overlay optimized for mobile contrast & readability */}
       <div className="absolute inset-0 bg-gradient-to-r from-bg-dark-color/95 via-bg-dark-color/80 to-bg-dark-color/40 md:from-bg-dark-color/90 md:via-bg-dark-color/50 md:to-transparent pointer-events-none z-0" />
       {/* Background Cinematic Gradients and Orbs (Mouse-driven parallax) */}
