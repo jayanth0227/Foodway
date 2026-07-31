@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useSpring, useScroll, useTransform } from 'framer-motion';
 import { Search, ChevronRight, User, Store, Clock } from 'lucide-react';
-import { useTheme } from '../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext'; 
 
 interface HeroProps {
   onOpenAuth: (type: 'login' | 'register') => void;
