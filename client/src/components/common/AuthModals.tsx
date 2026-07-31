@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import axios from 'axios';
+import { API_BASE_URL } from '../../utils/api';
 
 interface AuthModalsProps {
   isOpen: boolean;
@@ -10,10 +13,47 @@ interface AuthModalsProps {
 }
 
 export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, setType }) => {
-  const handleSubmit = (e: React.FormEvent) => {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onClose();
+    setLoading(true);
+
+    try {
+      if (type === 'login') {
+        // Check if the credentials correspond to an admin
+        const response = await axios.post(`${API_BASE_URL}/admin/login`, {
+          email,
+          password,
+        });
+
+        if (response.data.success && response.data.admin?.role === 'admin') {
+          const authData = {
+            isLoggedIn: true,
+            email: response.data.admin.email,
+            role: response.data.admin.role,
+            token: response.data.admin.token,
+          };
+          localStorage.setItem('adminAuth', JSON.stringify(authData));
+          onClose();
+          navigate('/admin/dashboard');
+          return;
+        }
+      }
+    } catch (err) {
+      console.log('Not an admin or server error, logging in as normal mock user:', err);
+    } finally {
+      setLoading(false);
+      // Close the modal for standard mock user flow
+      setEmail('');
+      setPassword('');
+      onClose();
+    }
   };
+
 
   return (
     <AnimatePresence>
@@ -120,6 +160,8 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
                 <input
                   type="email"
                   required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@luxury.com"
                   className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
                 />
@@ -132,6 +174,8 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
                 <input
                   type="password"
                   required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
                 />
@@ -154,9 +198,10 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
 
               <button
                 type="submit"
-                className="w-full btn-primary text-xs font-bold py-3.5 px-6 rounded-lg transition-all duration-300 uppercase tracking-widest text-center shadow-lg"
+                disabled={loading}
+                className="w-full btn-primary text-xs font-bold py-3.5 px-6 rounded-lg transition-all duration-300 uppercase tracking-widest text-center shadow-lg disabled:opacity-75 disabled:cursor-not-allowed"
               >
-                {type === 'login' ? 'Sign In to Estate' : 'Create Account'}
+                {loading ? 'Authenticating...' : (type === 'login' ? 'Sign In to Estate' : 'Create Account')}
               </button>
             </form>
 

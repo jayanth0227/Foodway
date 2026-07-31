@@ -18,6 +18,21 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const adminAuthRaw = localStorage.getItem('adminAuth') || sessionStorage.getItem('adminAuth');
+    if (adminAuthRaw) {
+      try {
+        const auth = JSON.parse(adminAuthRaw);
+        setIsAdmin(!!(auth.isLoggedIn && auth.role === 'admin'));
+      } catch (e) {
+        setIsAdmin(false);
+      }
+    } else {
+      setIsAdmin(false);
+    }
+  }, [location.pathname]);
 
   const navLinks = [
     { name: 'Home', id: 'home', hash: 'home' },
@@ -179,18 +194,44 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
             {/* Auth Buttons - Desktop */}
             <div className="hidden sm:flex items-center space-x-3 pl-3 border-l border-glass">
-              <button
-                onClick={() => onOpenAuth('login')}
-                className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
-              >
-                Login
-              </button>
-              <button
-                onClick={() => onOpenAuth('register')}
-                className="btn-primary text-[10px] font-bold py-2.5 px-5 rounded-xl uppercase tracking-wider transition-all duration-300"
-              >
-                Register
-              </button>
+              {isAdmin ? (
+                <>
+                  {location.pathname !== '/admin/dashboard' && (
+                    <Link
+                      to="/admin/dashboard"
+                      className="text-xs font-bold tracking-[0.12em] uppercase text-primary hover:text-primary-dark transition-colors mr-2"
+                    >
+                      Console
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('adminAuth');
+                      sessionStorage.removeItem('adminAuth');
+                      setIsAdmin(false);
+                      navigate('/');
+                    }}
+                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onOpenAuth('login')}
+                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
+                  >
+                    Login
+                  </button>
+                  <button
+                    onClick={() => onOpenAuth('register')}
+                    className="btn-primary text-[10px] font-bold py-2.5 px-5 rounded-xl uppercase tracking-wider transition-all duration-300"
+                  >
+                    Register
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Removed Hamburger toggle button */}

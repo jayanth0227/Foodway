@@ -43,10 +43,12 @@ Locally previews the production build.
 Create a `.env` file in this directory based on the `.env.example` file:
 
 ```env
-VITE_API_BASE_URL=         # Backend API Base URL
+VITE_API_BASE_URL=         # Backend API Base URL (point to http://localhost:5000/api in development)
 VITE_FIREBASE_API_KEY=     # Firebase project API key
 VITE_FIREBASE_PROJECT_ID=  # Firebase Project ID
 VITE_FIREBASE_APP_ID=      # Firebase Application ID
 VITE_GOOGLE_MAP_KEY=       # Google Maps API key (for live tracking/address)
 VITE_CLOUDINARY_CLOUD_NAME= # Cloudinary account cloud name (for image uploads)
 ```
+
+

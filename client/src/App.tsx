@@ -10,6 +10,9 @@ import { CursorGlow } from './components/common/CursorGlow';
 import { CartSidebar } from './components/common/CartSidebar';
 import { AuthModals } from './components/common/AuthModals';
 import { Home } from './pages/Home';
+import { AdminLogin } from './pages/AdminLogin';
+import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminRouteGuard } from './components/common/AdminRouteGuard';
 
 const AppContent: React.FC = () => {
   const [authModal, setAuthModal] = useState<{ isOpen: boolean; type: 'login' | 'register' }>({
@@ -73,6 +76,15 @@ const AppContent: React.FC = () => {
       <main className="relative z-10">
         <Routes>
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route
+            path={String("/admin/dashboard")}
+            element={
+              <AdminRouteGuard>
+                <AdminDashboard />
+              </AdminRouteGuard>
+            }
+          />
         </Routes>
       </main>
 
