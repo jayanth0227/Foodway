@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Heart, Plus } from 'lucide-react';
+import { Star, Heart, Plus, Ban } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { DISHES } from '../../utils/mockData';
 import type { DishItem } from '../../utils/mockData';
@@ -18,6 +18,7 @@ export const PopularDishes: React.FC = () => {
   const handleAddToCart = (dish: DishItem, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (dish.isAvailable === false || dish.status === 'disabled') return;
     addToCart(dish);
     setCartOpen(true);
   };
@@ -47,15 +48,14 @@ export const PopularDishes: React.FC = () => {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 space-y-4 md:space-y-0">
           <div className="space-y-4 text-center md:text-left">
-            <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-              Signature Creation
-            </span>
+           
             <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
-              Signature Dishes
+           Taste the Heart of Konaseema. 
             </h2>
           </div>
           <p className="text-xs md:text-sm text-text-secondary font-medium max-w-md text-center md:text-left">
-            Indulge in our most sought-after gourmet selections, highly praised for ingredient purity and complex culinary execution.
+             Experience traditional recipes, local ingredients, and unforgettable tastes from the kitchens that define Konaseema. 
+
           </p>
         </div>
 
@@ -69,11 +69,14 @@ export const PopularDishes: React.FC = () => {
         >
           {DISHES.map((dish) => {
             const isFav = !!favorites[dish.id];
+            const isOutOfStock = dish.isAvailable === false || dish.status === 'disabled';
             return (
               <motion.div
                 key={dish.id}
                 variants={itemVariants}
-                className="group premium-card p-5 flex flex-col justify-between h-[490px]"
+                className={`group premium-card p-5 flex flex-col justify-between h-[490px] transition-all duration-300 ${
+                  isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
+                }`}
               >
                 <div>
                   {/* Dish Image Container */}
@@ -81,11 +84,13 @@ export const PopularDishes: React.FC = () => {
                     <img
                       src={dish.image}
                       alt={dish.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-[1.2s] ease-out"
+                      className={`w-full h-full object-cover transition-transform duration-[1.2s] ease-out ${
+                        isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
+                      }`}
                     />
 
                     {/* Veg/Non-Veg Badge */}
-                    <div className="absolute top-3 left-3 z-20">
+                    <div className="absolute top-3 left-3 z-20 flex gap-2">
                       <span
                         className={`text-[9px] font-bold uppercase tracking-widest px-2.5 py-1.2 rounded-lg shadow-lg ${
                           dish.type === 'veg'
@@ -95,6 +100,13 @@ export const PopularDishes: React.FC = () => {
                       >
                         {dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
                       </span>
+
+                      {/* FEATURE 3: Out of Stock Badge */}
+                      {isOutOfStock && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg bg-rose-600/90 text-white shadow-lg backdrop-blur-md">
+                          Out of Stock
+                        </span>
+                      )}
                     </div>
 
                     {/* Favorite Button Overlay */}
@@ -133,15 +145,31 @@ export const PopularDishes: React.FC = () => {
                       Curated Price
                     </span>
                     <span className="text-lg font-bold text-text-primary mt-0.5">
-                      ${dish.price.toFixed(2)}
+                      ₹{dish.price.toFixed(2)}
                     </span>
                   </div>
+
+                  {/* FEATURE 3: Disable Add to Cart when Out of Stock */}
                   <button
                     onClick={(e) => handleAddToCart(dish, e)}
-                    className="btn-secondary font-bold text-xs py-2.5 px-5 rounded-lg flex items-center space-x-1.5"
+                    disabled={isOutOfStock}
+                    className={`font-bold text-xs py-2.5 px-5 rounded-lg flex items-center space-x-1.5 transition-all ${
+                      isOutOfStock
+                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed'
+                        : 'btn-secondary'
+                    }`}
                   >
-                    <Plus size={13} />
-                    <span>Add Selection</span>
+                    {isOutOfStock ? (
+                      <>
+                        <Ban size={13} />
+                        <span>Out of Stock</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={13} />
+                        <span>Add Selection</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </motion.div>
@@ -152,4 +180,5 @@ export const PopularDishes: React.FC = () => {
     </section>
   );
 };
+
 export default PopularDishes;

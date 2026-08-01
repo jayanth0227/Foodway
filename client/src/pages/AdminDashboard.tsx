@@ -35,14 +35,12 @@ import {
   List,
   ArrowLeft,
   Mail,
-  MapPin,
-  Star
+  MapPin
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
-import { DISHES } from '../utils/mockData';
 
 interface DBItem {
   id: string;
@@ -65,150 +63,12 @@ interface AWSStatus {
   dynamoTableConfigured: boolean;
 }
 
-// Initial Mock Data for Restaurants
-const initialRestaurants = [
-  {
-    id: 'res-1',
-    name: 'The Gilded Fork',
-    ownerName: 'Chef Jean-Luc',
-    email: 'fork@gilded.com',
-    phone: '+1 555-0199',
-    address: '45 Rue de l\'Étoile, Paris',
-    category: 'Gourmet Pizza',
-    openingTime: '11:00 AM',
-    closingTime: '11:00 PM',
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=85',
-    createdAt: '2026-07-10T12:00:00Z'
-  },
-  {
-    id: 'res-2',
-    name: 'Nippon Kaiseki',
-    ownerName: 'Akira Tanaka',
-    email: 'tanaka@nippon.com',
-    phone: '+1 555-0144',
-    address: '2-15-1 Ginza, Tokyo',
-    category: 'Luxury Ice Cream',
-    openingTime: '12:00 PM',
-    closingTime: '10:00 PM',
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=800&q=85',
-    createdAt: '2026-07-12T14:30:00Z'
-  },
-  {
-    id: 'res-3',
-    name: "Trattoria D'Oro",
-    ownerName: 'Giovanni Rossi',
-    email: 'rossi@trattoria.com',
-    phone: '+1 555-0177',
-    address: 'Via Condotti 86, Rome',
-    category: 'Gourmet Pizza',
-    openingTime: '11:30 AM',
-    closingTime: '10:30 PM',
-    status: 'active',
-    image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
-    createdAt: '2026-07-15T09:00:00Z'
-  },
-  {
-    id: 'res-4',
-    name: 'Saffron Royal Hall',
-    ownerName: 'Rajesh Nair',
-    email: 'nair@saffron.com',
-    phone: '+1 555-0188',
-    address: 'Colaba Causeway, Mumbai',
-    category: 'Royal Biryani',
-    openingTime: '12:00 PM',
-    closingTime: '11:30 PM',
-    status: 'inactive',
-    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=800&q=85',
-    createdAt: '2026-07-18T18:45:00Z'
-  }
-];
-
-// Initial Mock Data for Orders
-const initialOrders = [
-  {
-    id: 'ORD-9824',
-    customer: { name: 'Lady Victoria Sterling', email: 'victoria@sterling.com', phone: '+1 555-0211', address: 'Belsize Park, London' },
-    restaurant: 'The Gilded Fork',
-    items: '2x Gourmet Black Truffle Pizza, 1x Lava Fondant',
-    total: 86.0,
-    paymentStatus: 'paid',
-    orderStatus: 'ready',
-    assignedRider: '',
-    createdTime: '2026-07-31T20:15:00Z',
-    assignmentTime: ''
-  },
-  {
-    id: 'ORD-9825',
-    customer: { name: 'Marcus Vance', email: 'marcus@vance.com', phone: '+1 555-0222', address: 'Mayfair, London' },
-    restaurant: 'Nippon Kaiseki',
-    items: '1x Wagyu A5 Brioche Burger, 1x Caviar Roast Dosa',
-    total: 74.0,
-    paymentStatus: 'paid',
-    orderStatus: 'assigned',
-    assignedRider: 'Rider Alexander',
-    createdTime: '2026-07-31T21:00:00Z',
-    assignmentTime: '2026-07-31T21:05:00Z'
-  },
-  {
-    id: 'ORD-9826',
-    customer: { name: 'Elena Rostova', email: 'elena@rostova.com', phone: '+1 555-0233', address: 'Kensington Palace, London' },
-    restaurant: "Trattoria D'Oro",
-    items: '1x Gourmet Black Truffle Pizza, 2x Lava Fondant',
-    total: 70.0,
-    paymentStatus: 'pending',
-    orderStatus: 'pending',
-    assignedRider: '',
-    createdTime: '2026-07-31T22:30:00Z',
-    assignmentTime: ''
-  },
-  {
-    id: 'ORD-9827',
-    customer: { name: 'Lord Sebastian', email: 'sebastian@noble.com', phone: '+1 555-0244', address: 'Belgravia Square, London' },
-    restaurant: 'Saffron Royal Hall',
-    items: '2x Royal Saffron Lobster Biryani',
-    total: 84.0,
-    paymentStatus: 'paid',
-    orderStatus: 'delivered',
-    assignedRider: 'Rider Christian',
-    createdTime: '2026-07-31T18:00:00Z',
-    assignmentTime: '2026-07-31T18:10:00Z'
-  }
-];
-
-// Initial Activities
-const initialActivities = [
-  { id: 'act-1', type: 'restaurant_added', message: 'Restaurant "Saffron Royal Hall" was added by Admin.', time: '2 hours ago' },
-  { id: 'act-2', type: 'order_assigned', message: 'Order ORD-9825 was assigned to Rider Alexander.', time: '4 hours ago' },
-  { id: 'act-3', type: 'order_delivered', message: 'Order ORD-9827 was successfully delivered by Rider Christian.', time: '5 hours ago' },
-  { id: 'act-4', type: 'restaurant_approved', message: 'Restaurant "The Gilded Fork" status set to Active.', time: '1 day ago' }
-];
+// Initial Data Arrays
+const initialRestaurants: any[] = [];
+const initialOrders: any[] = [];
+const initialActivities: any[] = [];
 
 const ridersList = ['Rider Alexander', 'Rider Christian', 'Rider Sebastian', 'Rider Maximilian'];
-
-const categoriesList = [
-  'Gourmet Pizza',
-  'Artisanal Burger',
-  'Royal Biryani',
-  'Peking Chinese',
-  'South Indian',
-  'Shawarma & Kebab',
-  'Grand Desserts',
-  'Luxury Ice Cream'
-];
-
-// Helper function to map gourmet dishes to restaurants by category matching
-const getRestaurantDishes = (restaurant: any) => {
-  if (!restaurant || !restaurant.category) return [DISHES[5]]; // Lava Fondant default
-  const categoryWords = restaurant.category.toLowerCase().split(' ');
-  const matched = DISHES.filter(dish => {
-    const dishCat = dish.category.toLowerCase();
-    const matchesCategory = categoryWords.some((word: string) => dishCat.includes(word) || word.includes(dishCat));
-    return matchesCategory;
-  });
-  return matched.length > 0 ? matched : [DISHES[5]]; // Fallback to lava fondant
-};
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -290,7 +150,6 @@ export const AdminDashboard: React.FC = () => {
 
   // Filter States
   const [resSearch, setResSearch] = useState('');
-  const [resCategoryFilter, setResCategoryFilter] = useState('All');
   
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
@@ -489,25 +348,78 @@ export const AdminDashboard: React.FC = () => {
     setActivities(prev => [newAct, ...prev.slice(0, 19)]);
   };
 
+  // Toast & Custom Delete Modal States
+  const [deleteResTarget, setDeleteResTarget] = useState<{ id: string; name: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  // Vendor Menu & Category Filter state for Admin Profile View (Requirements 3, 4, 5)
+  const [vendorMenuItems, setVendorMenuItems] = useState<any[]>([]);
+  const [isVendorMenuLoading, setIsVendorMenuLoading] = useState(false);
+  const [selectedVendorCategory, setSelectedVendorCategory] = useState<string>('All');
+
+  useEffect(() => {
+    if (!selectedResProfile) {
+      setVendorMenuItems([]);
+      setSelectedVendorCategory('All');
+      return;
+    }
+
+    const fetchVendorMenu = async () => {
+      setIsVendorMenuLoading(true);
+      const resId = selectedResProfile.id || selectedResProfile.email;
+      try {
+        const response = await axios.get(`${API_BASE_URL}/restaurant/menu/${resId}`);
+        if (response.data && response.data.success && Array.isArray(response.data.items) && response.data.items.length > 0) {
+          setVendorMenuItems(response.data.items);
+        } else {
+          // Fallback to checking localStorage foodway_menu
+          const savedMenu = localStorage.getItem(`foodway_menu_${resId}`) || localStorage.getItem('foodway_menu');
+          if (savedMenu) {
+            setVendorMenuItems(JSON.parse(savedMenu));
+          } else {
+            setVendorMenuItems([]);
+          }
+        }
+      } catch (err) {
+        console.warn('Error fetching vendor menu from API:', err);
+        const savedMenu = localStorage.getItem(`foodway_menu_${resId}`) || localStorage.getItem('foodway_menu');
+        if (savedMenu) {
+          try { setVendorMenuItems(JSON.parse(savedMenu)); } catch(e) { setVendorMenuItems([]); }
+        } else {
+          setVendorMenuItems([]);
+        }
+      } finally {
+        setIsVendorMenuLoading(false);
+      }
+    };
+
+    fetchVendorMenu();
+  }, [selectedResProfile]);
+
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    setToastMessage({ type, message });
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
+
   // Handler: Manage Restaurant Toggle Status
   const toggleRestaurantStatus = (resId: string) => {
     setRestaurants(prev => prev.map(r => {
       if (r.id === resId) {
         const newStatus = r.status === 'active' ? 'inactive' : 'active';
         addActivity('restaurant_status', `Restaurant "${r.name}" status set to ${newStatus.toUpperCase()}.`);
+        showToast('info', `Establishment "${r.name}" is now ${newStatus.toUpperCase()}.`);
         return { ...r, status: newStatus };
       }
       return r;
     }));
   };
 
-  // Handler: Delete Restaurant
+  // Handler: Delete Restaurant (Opens custom confirmation modal, replaces window.confirm)
   const deleteRestaurant = (resId: string) => {
     const resName = restaurants.find(r => r.id === resId)?.name || 'Restaurant';
-    if (window.confirm(`Are you sure you want to delete ${resName}?`)) {
-      setRestaurants(prev => prev.filter(r => r.id !== resId));
-      addActivity('restaurant_deleted', `Restaurant "${resName}" was deleted.`);
-    }
+    setDeleteResTarget({ id: resId, name: resName });
   };
 
   // Helper: Generate clean unique Restaurant ID
@@ -715,12 +627,10 @@ export const AdminDashboard: React.FC = () => {
   const ordersInDelivery = orders.filter(o => o.orderStatus === 'assigned' || o.orderStatus === 'picked up').length;
   const completedOrders = orders.filter(o => o.orderStatus === 'delivered').length;
 
-  // Filter Restaurants
+  // Filter Restaurants (Requirement 2: Search Restaurant only)
   const filteredRestaurants = restaurants.filter(r => {
-    const matchesSearch = r.name.toLowerCase().includes(resSearch.toLowerCase()) || 
-                          r.ownerName.toLowerCase().includes(resSearch.toLowerCase());
-    const matchesCategory = resCategoryFilter === 'All' || r.category === resCategoryFilter;
-    return matchesSearch && matchesCategory;
+    return (r.name || '').toLowerCase().includes(resSearch.toLowerCase()) || 
+           (r.ownerName || '').toLowerCase().includes(resSearch.toLowerCase());
   });
 
   // Filter Orders
@@ -752,11 +662,19 @@ export const AdminDashboard: React.FC = () => {
         </button>
       </header>
 
+      {/* Mobile Backdrop Overlay for Drawer */}
+      {isSidebarOpen && (
+        <div 
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-30 lg:hidden"
+        />
+      )}
+
       {/* Sidebar Navigation */}
       <aside 
         data-lenis-prevent
         className={`
-          fixed inset-y-0 left-0 w-64 bg-bg-darkSec/95 border-r border-glass z-40 transition-transform duration-300 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col justify-between shrink-0 lg:overflow-y-auto
+          fixed inset-y-0 left-0 w-64 bg-bg-card border-r border-glass z-40 transition-transform duration-300 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col justify-between shrink-0 lg:overflow-y-auto shadow-2xl
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
@@ -1217,28 +1135,6 @@ export const AdminDashboard: React.FC = () => {
                         <span className="text-[9px] text-text-muted uppercase tracking-wider block">Gourmet Address:</span>
                         <p className="text-text-secondary leading-relaxed font-medium">{selectedResProfile.address}</p>
                       </div>
-
-                      <div className="space-y-1 pt-2 border-t border-glass/40">
-                        <span className="text-[9px] text-text-muted uppercase tracking-wider block">Establishment Status:</span>
-                        <div className="flex items-center gap-3 mt-1.5">
-                          <button
-                            onClick={() => {
-                              toggleRestaurantStatus(selectedResProfile.id);
-                              setSelectedResProfile({ ...selectedResProfile, status: selectedResProfile.status === 'active' ? 'inactive' : 'active' });
-                            }}
-                            className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${
-                              selectedResProfile.status === 'active' ? 'bg-success' : 'bg-glass-subtle border border-glass'
-                            }`}
-                          >
-                            <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                              selectedResProfile.status === 'active' ? 'translate-x-3.5' : 'translate-x-0'
-                            }`} />
-                          </button>
-                          <span className="text-[10px] text-text-muted font-bold">
-                            {selectedResProfile.status === 'active' ? 'ACTIVE & ONLINE' : 'INACTIVE & OFFLINE'}
-                          </span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1246,41 +1142,88 @@ export const AdminDashboard: React.FC = () => {
                 {/* Right Side: Dishes list & Recent Orders (2/3) */}
                 <div className="lg:col-span-2 space-y-6">
                   
-                  {/* Dishes listing */}
+                  {/* Gourmet Menu Selections with Dynamic Vendor Category Filter (Requirements 3, 4, 5, 6) */}
                   <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-4">
-                    <h3 className="text-sm font-bold font-display text-text-primary border-b border-glass pb-3">Gourmet Menu Selections</h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-glass pb-3">
+                      <h3 className="text-sm font-bold font-display text-text-primary">Gourmet Menu Selections</h3>
+                      
+                      {/* Dynamic Category Dropdown (Requirements 3 & 5) */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-muted">Select Category:</span>
+                        <select
+                          value={selectedVendorCategory}
+                          onChange={(e) => setSelectedVendorCategory(e.target.value)}
+                          className="py-1.5 px-3 text-xs font-bold rounded-lg bg-bg-dark border border-glass text-text-secondary outline-none focus:border-primary/40 cursor-pointer"
+                        >
+                          {['All', ...Array.from(new Set(vendorMenuItems.map(item => item.category || 'General').filter(Boolean)))].map((cat: any) => (
+                            <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {getRestaurantDishes(selectedResProfile).map(dish => (
-                        <div key={dish.id} className="flex gap-4 p-3 rounded-lg border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
-                          <img
-                            src={dish.image}
-                            alt={dish.name}
-                            className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
-                          />
-                          <div className="min-w-0 flex-grow flex flex-col justify-between">
-                            <div>
-                              <div className="flex justify-between items-start gap-1">
-                                <h4 className="text-xs font-bold text-text-primary truncate">{dish.name}</h4>
-                                <div className="flex items-center gap-0.5 shrink-0 text-amber-500 font-extrabold text-[9px]">
-                                  <Star size={9} fill="currentColor" />
-                                  <span>{dish.rating}</span>
+                    {isVendorMenuLoading ? (
+                      <div className="py-8 text-center text-xs font-bold text-text-muted">Fetching real vendor menu...</div>
+                    ) : vendorMenuItems.length === 0 ? (
+                      <div className="py-8 text-center text-xs font-bold text-text-muted italic border border-dashed border-glass rounded-lg">
+                        No vendor menu products found for this establishment.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {vendorMenuItems
+                          .filter(dish => selectedVendorCategory === 'All' || (dish.category || '').toLowerCase() === selectedVendorCategory.toLowerCase())
+                          .map(dish => (
+                            <div key={dish.id} className="flex gap-4 p-3.5 rounded-xl border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
+                              <img
+                                src={dish.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80'}
+                                alt={dish.name}
+                                className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
+                              />
+                              <div className="min-w-0 flex-grow flex flex-col justify-between">
+                                <div>
+                                  <div className="flex justify-between items-start gap-1">
+                                    <h4 className="text-xs font-bold text-text-primary truncate">{dish.name}</h4>
+                                    {/* Availability Badge (Requirement 6) */}
+                                    <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${
+                                      dish.isAvailable !== false && dish.status !== 'disabled' 
+                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                        : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                    }`}>
+                                      {dish.isAvailable !== false && dish.status !== 'disabled' ? 'Available' : 'Out of Stock'}
+                                    </span>
+                                  </div>
+                                  <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
+                                    {dish.description || 'Vendor Menu Product'}
+                                  </p>
+                                </div>
+
+                                <div className="flex justify-between items-center mt-2.5">
+                                  {/* Price in ₹ (Requirement 6) */}
+                                  <span className="text-xs font-black font-display text-primary">
+                                    ₹{(dish.price || 0).toFixed(2)}
+                                  </span>
+
+                                  <div className="flex items-center gap-1.5">
+                                    {/* Category Name (Requirement 6) */}
+                                    <span className="text-[8px] font-bold text-text-muted uppercase bg-glass px-1.5 py-0.5 rounded border border-glass">
+                                      {dish.category || 'General'}
+                                    </span>
+
+                                    {/* Veg / Non-Veg badge (Requirement 6) */}
+                                    {(dish.isVeg !== undefined || dish.type) && (
+                                      <span className={`text-[8px] font-extrabold uppercase px-1 py-0.5 rounded border ${
+                                        dish.isVeg || dish.type === 'veg' ? 'bg-success/10 border-success/20 text-success' : 'bg-error/10 border-error/20 text-error'
+                                      }`}>
+                                        {dish.isVeg || dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
-                              <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">{dish.description}</p>
                             </div>
-                            <div className="flex justify-between items-center mt-2.5">
-                              <span className="text-xs font-black font-display text-primary">${dish.price.toFixed(2)}</span>
-                              <span className={`text-[8px] font-extrabold uppercase px-1 rounded-sm border ${
-                                dish.type === 'veg' ? 'bg-success/10 border-success/20 text-success' : 'bg-error/10 border-error/20 text-error'
-                              }`}>
-                                {dish.type}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Recent orders */}
@@ -1544,36 +1487,17 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Filter Controls Bar */}
+              {/* Filter Controls Bar (Requirement 2: Search Restaurant only) */}
               <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
-                <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
-                  <div className="relative w-full sm:w-72 md:w-96 shrink-0">
-                    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                    <input
-                      type="text"
-                      placeholder="Search restaurants or owner..."
-                      value={resSearch}
-                      onChange={(e) => setResSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none transition-all focus:ring-1 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  {/* Decorative divider */}
-                  <div className="hidden sm:block w-px h-6 bg-glass" />
-
-                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-muted shrink-0">Category:</span>
-                    <select
-                      value={resCategoryFilter}
-                      onChange={(e) => setResCategoryFilter(e.target.value)}
-                      className="w-full sm:w-48 py-2.5 px-3 text-xs font-bold rounded-lg bg-bg-dark border border-glass text-text-secondary outline-none focus:border-primary/40 cursor-pointer"
-                    >
-                      <option value="All">All Categories</option>
-                      {categoriesList.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="relative w-full sm:w-72 md:w-96 shrink-0">
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    placeholder="Search restaurants or owner..."
+                    value={resSearch}
+                    onChange={(e) => setResSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none transition-all focus:ring-1 focus:ring-primary/20"
+                  />
                 </div>
 
                 {/* View Mode Toggle Controls */}
@@ -2049,7 +1973,7 @@ export const AdminDashboard: React.FC = () => {
         {/* DELIVERY ASSIGNMENTS TAB */}
         {/* ==================================================== */}
         {activeTab === 'delivery' && (
-          <div className="space-y-8">
+          <div className="space-y-8 animate-fadeIn">
             <div>
               <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Courier Operations</span>
               <h1 className="text-3xl font-black font-display text-primary tracking-tight">Rider Assignments</h1>
@@ -2070,7 +1994,7 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                <div className="space-y-4">
                   {orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length === 0 ? (
                     <div className="py-8 text-center text-text-muted text-[11px] font-medium border border-dashed border-glass rounded-xl bg-glass-subtle/10">
                       No orders waiting for riders.
@@ -2124,7 +2048,7 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                <div className="space-y-4">
                   {orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length === 0 ? (
                     <div className="py-8 text-center text-text-muted text-[11px] font-medium border border-dashed border-glass rounded-xl bg-glass-subtle/10">
                       No active courier transits.
@@ -2180,7 +2104,7 @@ export const AdminDashboard: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                <div className="space-y-4">
                   {orders.filter(o => o.orderStatus === 'delivered').length === 0 ? (
                     <div className="py-8 text-center text-text-muted text-[11px] font-medium border border-dashed border-glass rounded-xl bg-glass-subtle/10">
                       No orders successfully delivered yet.
@@ -2563,6 +2487,78 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
         </ErrorBoundary>
+
+        {/* Custom Delete Confirmation Modal (Sidebar remains fixed & clear; overlay starts at lg:left-64) */}
+        {deleteResTarget && (
+          <div className="fixed inset-y-0 right-0 left-0 lg:left-64 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-bg-card border border-glass rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6 text-text-primary"
+            >
+              <div className="flex items-center gap-3 border-b border-glass pb-4">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shrink-0">
+                  <Trash2 size={22} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black font-display text-text-primary tracking-tight">
+                    Delete Establishment
+                  </h2>
+                  <span className="text-xs text-text-muted font-medium block">Confirmation</span>
+                </div>
+              </div>
+
+              <p className="text-sm font-medium text-text-secondary leading-relaxed">
+                Are you sure you want to delete <strong className="text-text-primary">{deleteResTarget.name}</strong>? This action cannot be undone.
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteResTarget(null)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-glass bg-glass hover:bg-glass-subtle text-text-primary font-bold text-xs uppercase tracking-wider transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRestaurants(prev => prev.filter(r => r.id !== deleteResTarget.id));
+                    addActivity('restaurant_deleted', `Restaurant "${deleteResTarget.name}" was deleted.`);
+                    showToast('success', `Establishment "${deleteResTarget.name}" deleted successfully.`);
+                    setDeleteResTarget(null);
+                  }}
+                  className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-red-600/30 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Floating Toast Notification */}
+        <AnimatePresence>
+          {toastMessage && (
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center gap-3 font-bold text-xs ${
+                toastMessage.type === 'success'
+                  ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
+                  : toastMessage.type === 'error'
+                  ? 'bg-rose-950/90 border-rose-500/40 text-rose-300'
+                  : 'bg-bg-card/90 border-primary/40 text-primary'
+              }`}
+            >
+              <CheckCircle size={18} className="shrink-0" />
+              <span>{toastMessage.message}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </main>
     </div>

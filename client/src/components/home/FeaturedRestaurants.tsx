@@ -29,15 +29,13 @@ export const FeaturedRestaurants: React.FC = () => {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 space-y-4 md:space-y-0">
           <div className="space-y-4 text-center md:text-left">
-            <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-              Michelin Partners
-            </span>
+           
             <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
-              Featured Establishments
+             One Category One Favourite. 
             </h2>
           </div>
           <p className="text-xs md:text-sm text-text-secondary font-medium max-w-md text-center md:text-left">
-            Dine from the city's most prestigious culinary kitchens, vetted for exceptional flavor profiles and hygiene standards.
+             Discover the most-loved store in every category, from delicious meals and tiffins to refreshing juices, desserts, and fresh fruits.
           </p>
         </div>
 

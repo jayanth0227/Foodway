@@ -13,6 +13,9 @@ import { Home } from './pages/Home';
 import { AdminLogin } from './pages/AdminLogin';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminRouteGuard } from './components/common/AdminRouteGuard';
+import { RestaurantLogin } from './pages/RestaurantLogin';
+import { RestaurantDashboard } from './pages/RestaurantDashboard';
+import { RestaurantRouteGuard } from './components/common/RestaurantRouteGuard';
 
 const AppContent: React.FC = () => {
   const [authModal, setAuthModal] = useState<{ isOpen: boolean; type: 'login' | 'register' }>({
@@ -37,9 +40,6 @@ const AppContent: React.FC = () => {
 
     requestAnimationFrame(raf);
 
-    // Sync Lenis scroll with GSAP ScrollTrigger if GSAP is loaded
-    // We will do simple custom scroll triggering to keep performance high
-
     return () => {
       lenis.destroy();
     };
@@ -58,7 +58,7 @@ const AppContent: React.FC = () => {
   };
 
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith('/admin');
+  const isPortalRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/restaurant');
 
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
@@ -66,7 +66,7 @@ const AppContent: React.FC = () => {
       <CursorGlow />
 
       {/* Global Elements */}
-      {!isAdminRoute && <Navbar onOpenAuth={openAuthModal} />}
+      {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
       <AuthModals
         isOpen={authModal.isOpen}
@@ -81,30 +81,44 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
           <Route path="/admin" element={<AdminLogin />} />
           <Route
-            path={String("/admin/dashboard")}
+            path="/admin/dashboard"
             element={
               <AdminRouteGuard>
                 <AdminDashboard />
               </AdminRouteGuard>
             }
           />
+          <Route path="/restaurant" element={<RestaurantLogin />} />
+          <Route path="/restaurant/login" element={<RestaurantLogin />} />
+          <Route
+            path="/restaurant/dashboard"
+            element={
+              <RestaurantRouteGuard>
+                <RestaurantDashboard />
+              </RestaurantRouteGuard>
+            }
+          />
         </Routes>
       </main>
 
-      {!isAdminRoute && <Footer />}
+      {!isPortalRoute && <Footer />}
     </div>
   );
 };
+
+import { LanguageProvider } from './context/LanguageContext';
 
 export const App: React.FC = () => {
   return (
     <HelmetProvider>
       <ThemeProvider>
-        <CartProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </CartProvider>
+        <LanguageProvider>
+          <CartProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </CartProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </HelmetProvider>
   );

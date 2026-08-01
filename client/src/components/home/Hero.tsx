@@ -288,7 +288,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
           >
             <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
             <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-              Now Serving Your Location
+            Fast Delivery Across Konaseema. 
             </span>
           </motion.div>
 
@@ -297,10 +297,10 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="text-4xl sm:text-5xl md:text-6.5xl lg:text-7xl font-extrabold font-display leading-[1.05] tracking-[-0.03em] text-text-primary"
+            className="text-4xl sm:text-5xl md:text-6.5xl lg:text-5xl font-extrabold font-display leading-[1.05] tracking-[-0.03em] text-text-primary"
           >
-            Delicious food <br />
-            <span className="text-gradient-gold text-glow-gold">delivered home.</span>
+            Fresh food,<br />
+            <span className="text-gradient-gold text-glow-gold">Delivered to your doorstep... </span>
           </motion.h1>
 
           {/* Description */}
@@ -310,7 +310,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="text-sm md:text-base text-text-secondary/90 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium"
           >
-            From breakfast to dinner, get everything delivered to your doorstep. Your favorite restaurants, now online.
+            Discover the best restaurants across Konaseema and enjoy hot, freshly prepared meals delivered quickly, safely, and with care. 
+ 
           </motion.p>
 
           {/* Search bar */}

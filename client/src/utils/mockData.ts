@@ -27,6 +27,8 @@ export interface DishItem {
   type: 'veg' | 'non-veg';
   category: string;
   description: string;
+  isAvailable?: boolean;
+  status?: string;
 }
 
 export interface TestimonialItem {
@@ -118,7 +120,7 @@ export const RESTAURANTS: RestaurantItem[] = [
     rating: 4.9,
     deliveryTime: '20-30 min',
     distance: '1.2 km',
-    offerBadge: 'Complimentary Caviar on $100+',
+    offerBadge: 'Complimentary Caviar on ₹1000+',
     image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=85',
     isPopular: true,
   },
@@ -329,4 +331,40 @@ export const TIMELINE_STEPS: TimelineStep[] = [
     description: 'Arrives at your doorstep in pristine condition, ready for standard-setting dining.',
     timeEstimate: 'Arrived',
   },
+];
+
+export interface OfferItem {
+  id: string;
+  badge: string;
+  discount: string;
+  title: string;
+  description: string;
+  code: string;
+}
+
+export const OFFERS: OfferItem[] = [
+  {
+    id: 'off-1',
+    badge: 'ROYAL PRIVILEGE',
+    discount: '25% OFF',
+    title: 'Gourmet Debut Experience',
+    description: 'Enjoy 25% savings on your first order across all signature partner establishments.',
+    code: 'ROYAL25'
+  },
+  {
+    id: 'off-2',
+    badge: 'COMPLIMENTARY',
+    discount: 'FREE CAVIAR',
+    title: 'Grand Caviar Charter',
+    description: 'Receive complimentary Sturgeon Caviar pairing on luxury orders over ₹1000.',
+    code: 'CAVIARX'
+  },
+  {
+    id: 'off-3',
+    badge: 'ZERO COURIER',
+    discount: 'FREE DELIVERY',
+    title: 'White-Glove Delivery',
+    description: 'Complimentary white-glove thermal transport on all chef tasting menu orders.',
+    code: 'FREEDEL'
+  }
 ];

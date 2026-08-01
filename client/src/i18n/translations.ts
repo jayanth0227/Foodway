@@ -1,0 +1,361 @@
+export type Language = 'en' | 'te' | 'hi';
+
+export const translations: Record<Language, Record<string, string>> = {
+  en: {
+    // Nav Items
+    nav_dashboard: 'Dashboard',
+    nav_menu: 'Menu Management',
+    nav_orders: 'Orders',
+    nav_profile: 'Profile',
+    nav_settings: 'Settings',
+    nav_logout: 'Logout',
+    app_subtitle: 'MK DELIVERY',
+
+    // Dashboard Tab
+    establishment_overview: 'Establishment Overview',
+    welcome_back: 'Welcome back',
+    overview_desc: "Here is your restaurant's live performance and order activity today.",
+    manage_menu: 'Manage Menu',
+
+    // Restaurant Status Card
+    restaurant_status: 'Restaurant Status',
+    restaurant_open: 'Restaurant Open',
+    restaurant_closed: 'Restaurant Closed',
+    badge_open: 'Open',
+    badge_closed: 'Closed',
+    accepting_orders: 'Accepting Orders',
+    offline: 'Offline',
+
+    // Stats Grid
+    todays_orders: "Today's Orders",
+    total_received: 'Total received',
+    pending: 'Pending',
+    awaiting_response: 'Awaiting response',
+    preparing: 'Preparing',
+    in_kitchen: 'In the kitchen',
+    ready: 'Ready',
+    for_pickup: 'For pickup/rider',
+    completed: 'Completed',
+    delivered: 'Delivered',
+    todays_revenue: "Today's Revenue",
+    gross_earnings: 'Gross earnings',
+
+    // Orders Section
+    latest_orders: 'Latest Customer Orders',
+    view_all_orders: 'View All Orders',
+    order_id: 'Order ID',
+    customer: 'Customer',
+    items: 'Items',
+    total: 'Total',
+    payment: 'Payment',
+    status: 'Status',
+    action: 'Action',
+    no_orders: 'No orders found matching criteria.',
+    accept: 'Accept',
+    reject: 'Reject',
+    mark_preparing: 'Start Preparing',
+    mark_ready: 'Mark Ready',
+    mark_completed: 'Complete Order',
+
+    // Menu Management
+    add_food_item: 'Add Food Item',
+    search_dishes: 'Search dishes...',
+    all_categories: 'All Categories',
+    all_types: 'All Types',
+    veg_only: 'Veg Only',
+    non_veg_only: 'Non-Veg Only',
+    availability_filter: 'Availability',
+    available: 'Available',
+    out_of_stock: 'Out of Stock',
+    edit: 'Edit',
+    delete: 'Delete',
+    available_toggle: 'Available',
+    out_of_stock_toggle: 'Out of Stock',
+    veg: 'Veg',
+    non_veg: 'Non-Veg',
+    price_label: 'Price (₹)',
+    prep_time_label: 'Preparation Time',
+    dish_name: 'Dish Name',
+    category: 'Category',
+    description: 'Description',
+    image_url: 'Image URL',
+    save_item: 'Save Dish',
+    cancel: 'Cancel',
+    upload_image: 'Upload Image',
+
+    // Add Category
+    add_category: 'Add Category',
+    new_category_name: 'New Category Name',
+    save_category: 'Save Category',
+
+    // Profile Tab
+    restaurant_profile: 'Restaurant Profile',
+    profile_desc: 'Manage your restaurant details, operating hours, and imagery.',
+    owner_name: 'Owner Name',
+    email: 'Email Address',
+    phone: 'Phone Number',
+    address: 'Address',
+    opening_time: 'Opening Time',
+    closing_time: 'Closing Time',
+    cuisine: 'Cuisine Type',
+    save_profile: 'Save Profile Details',
+    profile_updated: 'Profile updated successfully!',
+
+    // Settings Tab
+    settings_title: 'Restaurant Settings',
+    sound_alerts: 'Sound Alerts for New Orders',
+    language_selection: 'Select Language',
+    currency_preference: 'Currency Preference',
+    indian_rupee: 'Indian Rupee (₹)',
+
+    // Logout Modal
+    logout_modal_title: 'Confirm Logout',
+    logout_modal_message: 'Are you sure you want to logout?',
+    logout_cancel: 'Cancel',
+    logout_confirm: 'Logout',
+
+    // Customer View
+    add_selection: 'Add Selection',
+    out_of_stock_badge: 'Out of Stock',
+    cannot_add: 'Cannot Add To Cart',
+    curated_price: 'Curated Price',
+  },
+  te: {
+    // Nav Items
+    nav_dashboard: 'డాష్‌బోర్డ్',
+    nav_menu: 'మెనూ నిర్వాహణ',
+    nav_orders: 'ఆర్డర్లు',
+    nav_profile: 'ప్రొఫైల్',
+    nav_settings: 'సెట్టింగ్‌లు',
+    nav_logout: 'లాగ్‌అవుట్',
+    app_subtitle: 'ఎమ్‌కే డెలివరీ',
+
+    // Dashboard Tab
+    establishment_overview: 'రెస్టారెంట్ అవలోకనం',
+    welcome_back: 'పునఃస్వాగతం',
+    overview_desc: 'ఈ రోజు మీ రెస్టారెంట్ లైవ్ పనితీరు మరియు ఆర్డర్ వివరాలు.',
+    manage_menu: 'మెనూ నిర్వహించండి',
+
+    // Restaurant Status Card
+    restaurant_status: 'రెస్టారెంట్ స్థితి',
+    restaurant_open: 'రెస్టారెంట్ తెరిచి ఉంది',
+    restaurant_closed: 'రెస్టారెంట్ మూసివేయబడింది',
+    badge_open: 'ఓపెన్',
+    badge_closed: 'క్లోజ్డ్',
+    accepting_orders: 'ఆర్డర్లు స్వీకరిస్తోంది',
+    offline: 'ఆఫ్‌లైన్',
+
+    // Stats Grid
+    todays_orders: 'నేటి ఆర్డర్లు',
+    total_received: 'మొత్తం వచ్చినవి',
+    pending: 'పెండింగ్',
+    awaiting_response: 'స్పందన కోసం వేచి ఉంది',
+    preparing: 'తయారవుతోంది',
+    in_kitchen: 'వంటగదిలో ఉంది',
+    ready: 'సిద్ధంగా ఉంది',
+    for_pickup: 'పికప్ కోసం',
+    completed: 'పూర్తయింది',
+    delivered: 'డెలివరీ చేయబడింది',
+    todays_revenue: 'నేటి ఆదాయం',
+    gross_earnings: 'మొత్తం సంపాదన',
+
+    // Orders Section
+    latest_orders: 'తాజా కస్టమర్ ఆర్డర్లు',
+    view_all_orders: 'అన్ని ఆర్డర్లు చూడండి',
+    order_id: 'ఆర్డర్ ఐడి',
+    customer: 'కస్టమర్',
+    items: 'వస్తువులు',
+    total: 'మొత్తం',
+    payment: 'చెల్లింపు',
+    status: 'స్థితి',
+    action: 'చర్య',
+    no_orders: 'ఆర్డర్లు ఏవీ దొరకలేదు.',
+    accept: 'అంగీకరించు',
+    reject: 'తిరస్కరించు',
+    mark_preparing: 'తయారీ ప్రారంభించు',
+    mark_ready: 'సిద్ధంగా ఉంది అనండి',
+    mark_completed: 'ఆర్డర్ పూర్తి చేయండి',
+
+    // Menu Management
+    add_food_item: 'కొత్త డిష్ జోడించండి',
+    search_dishes: 'వంటకాలను వెతకండి...',
+    all_categories: 'అన్ని విభాగాలు',
+    all_types: 'అన్ని రకాలు',
+    veg_only: 'శాకాహారం మాత్రమే',
+    non_veg_only: 'మాంసాహారం మాత్రమే',
+    availability_filter: 'అందుబాటు',
+    available: 'అందుబాటులో ఉంది',
+    out_of_stock: 'స్టాక్ ముగిసింది',
+    edit: 'సవరించు',
+    delete: 'తొలగించు',
+    available_toggle: 'అందుబాటులో ఉంది',
+    out_of_stock_toggle: 'స్టాక్ ముగిసింది',
+    veg: 'వెజ్',
+    non_veg: 'నాన్-వెజ్',
+    price_label: 'ధర (₹)',
+    prep_time_label: 'తయారీ సమయం',
+    dish_name: 'వంటకం పేరు',
+    category: 'విభాగం',
+    description: 'వివరణ',
+    image_url: 'చిత్రం URL',
+    save_item: 'వంటకం సేవ్ చేయి',
+    cancel: 'రద్దు చేయి',
+    upload_image: 'చిత్రం అప్‌లోడ్ చేయి',
+
+    // Add Category
+    add_category: 'విభాగం జోడించు',
+    new_category_name: 'కొత్త విభాగం పేరు',
+    save_category: 'విభాగం సేవ్ చేయి',
+
+    // Profile Tab
+    restaurant_profile: 'రెస్టారెంట్ ప్రొఫైల్',
+    profile_desc: 'మీ రెస్టారెంట్ వివరాలు మరియు పని వేళలను నిర్వహించండి.',
+    owner_name: 'యజమాని పేరు',
+    email: 'ఇమెయిల్ అడ్రస్',
+    phone: 'ఫోన్ నంబర్',
+    address: 'చిరునామా',
+    opening_time: 'తెరిచే సమయం',
+    closing_time: 'మూసే సమయం',
+    cuisine: 'వంటకాల రకం',
+    save_profile: 'వివరాలు సేవ్ చేయి',
+    profile_updated: 'ప్రొఫైల్ విజయవంతంగా నవీకరించబడింది!',
+
+    // Settings Tab
+    settings_title: 'రెస్టారెంట్ సెట్టింగ్‌లు',
+    sound_alerts: 'కొత్త ఆర్డర్‌ల కోసం శబ్ద సూచనలు',
+    language_selection: 'భాషను ఎంచుకోండి',
+    currency_preference: 'కరెన్సీ ప్రాధాన్యత',
+    indian_rupee: 'భారతీయ రూపాయి (₹)',
+
+    // Logout Modal
+    logout_modal_title: 'లాగ్‌అవుట్',
+    logout_modal_message: 'మీరు ఖచ్చితంగా లాగ్‌అవుట్ చేయాలనుకుంటున్నారా?',
+    logout_cancel: 'రద్దు చేయి',
+    logout_confirm: 'లాగ్‌అవుట్ చేయి',
+
+    // Customer View
+    add_selection: 'కార్ట్‌కు జోడించు',
+    out_of_stock_badge: 'స్టాక్ ముగిసింది',
+    cannot_add: 'కార్ట్‌కు జోడించలేరు',
+    curated_price: 'ధర',
+  },
+  hi: {
+    // Nav Items
+    nav_dashboard: 'डैशबोर्ड',
+    nav_menu: 'मेनू प्रबंधन',
+    nav_orders: 'ऑर्डर',
+    nav_profile: 'प्रोफाइल',
+    nav_settings: 'सेटिंग्स',
+    nav_logout: 'लॉगआउट',
+    app_subtitle: 'एमके डिलीवरी',
+
+    // Dashboard Tab
+    establishment_overview: 'रेस्तरां अवलोकन',
+    welcome_back: 'पुनः स्वागत है',
+    overview_desc: 'आज का आपका लाइव रेस्तरां प्रदर्शन और ऑर्डर गतिविधि।',
+    manage_menu: 'मेनू प्रबंधित करें',
+
+    // Restaurant Status Card
+    restaurant_status: 'रेस्तरां स्थिति',
+    restaurant_open: 'रेस्तरां खुला है',
+    restaurant_closed: 'रेस्तरां बंद है',
+    badge_open: 'खुला',
+    badge_closed: 'बंद',
+    accepting_orders: 'ऑर्डर स्वीकार कर रहे हैं',
+    offline: 'ऑफलाइन',
+
+    // Stats Grid
+    todays_orders: 'आज के ऑर्डर',
+    total_received: 'कुल प्राप्त',
+    pending: 'लंबित',
+    awaiting_response: 'प्रतिक्रिया की प्रतीक्षा',
+    preparing: 'तैयार हो रहा है',
+    in_kitchen: 'रसोई में है',
+    ready: 'तैयार है',
+    for_pickup: 'पिकअप के लिए',
+    completed: 'पूरा हुआ',
+    delivered: 'डिलीवर किया गया',
+    todays_revenue: 'आज का राजस्व',
+    gross_earnings: 'कुल कमाई',
+
+    // Orders Section
+    latest_orders: 'नवीनतम ग्राहक ऑर्डर',
+    view_all_orders: 'सभी ऑर्डर देखें',
+    order_id: 'ऑर्डर आईडी',
+    customer: 'ग्राहक',
+    items: 'सामान',
+    total: 'कुल',
+    payment: 'भुगतान',
+    status: 'स्थिति',
+    action: 'कार्रवाई',
+    no_orders: 'कोई ऑर्डर नहीं मिला।',
+    accept: 'स्वीकार करें',
+    reject: 'अस्वीकार करें',
+    mark_preparing: 'तैयारी शुरू करें',
+    mark_ready: 'तैयार चिह्नित करें',
+    mark_completed: 'ऑर्डर पूरा करें',
+
+    // Menu Management
+    add_food_item: 'नया व्यंजन जोड़ें',
+    search_dishes: 'व्यंजन खोजें...',
+    all_categories: 'सभी श्रेणियां',
+    all_types: 'सभी प्रकार',
+    veg_only: 'केवल शाकाहारी',
+    non_veg_only: 'केवल मांसाहारी',
+    availability_filter: 'उपलब्धता',
+    available: 'उपलब्ध',
+    out_of_stock: 'स्टॉक समाप्त',
+    edit: 'संपादित करें',
+    delete: 'हटाएं',
+    available_toggle: 'उपलब्ध',
+    out_of_stock_toggle: 'स्टॉक समाप्त',
+    veg: 'वेज',
+    non_veg: 'नॉन-वेज',
+    price_label: 'मूल्य (₹)',
+    prep_time_label: 'तैयारी का समय',
+    dish_name: 'व्यंजन का नाम',
+    category: 'श्रेणी',
+    description: 'विवरण',
+    image_url: 'छवि यूआरएल',
+    save_item: 'व्यंजन सहेजें',
+    cancel: 'रद्द करें',
+    upload_image: 'छवि अपलोड करें',
+
+    // Add Category
+    add_category: 'श्रेणी जोड़ें',
+    new_category_name: 'नई श्रेणी का नाम',
+    save_category: 'श्रेणी सहेजें',
+
+    // Profile Tab
+    restaurant_profile: 'रेस्तरां प्रोफाइल',
+    profile_desc: 'अपने रेस्तरां का विवरण और खुलने के घंटे प्रबंधित करें।',
+    owner_name: 'मालिक का नाम',
+    email: 'ईमेल पता',
+    phone: 'फोन नंबर',
+    address: 'पता',
+    opening_time: 'खुलने का समय',
+    closing_time: 'बंद होने का समय',
+    cuisine: 'व्यंजन प्रकार',
+    save_profile: 'विवरण सहेजें',
+    profile_updated: 'प्रोफाइल सफलतापूर्वक अद्यतन की गई!',
+
+    // Settings Tab
+    settings_title: 'रेस्तरां सेटिंग्स',
+    sound_alerts: 'नए ऑर्डर के लिए ध्वनि सूचनाएं',
+    language_selection: 'भाषा चुनें',
+    currency_preference: 'मुद्रा प्राथमिकता',
+    indian_rupee: 'भारतीय रुपया (₹)',
+
+    // Logout Modal
+    logout_modal_title: 'लॉगआउट',
+    logout_modal_message: 'क्या आप निश्चित रूप से लॉगआउट करना चाहते हैं?',
+    logout_cancel: 'रद्द करें',
+    logout_confirm: 'लॉगआउट',
+
+    // Customer View
+    add_selection: 'कार्ट में जोड़ें',
+    out_of_stock_badge: 'स्टॉक समाप्त',
+    cannot_add: 'कार्ट में नहीं जोड़ सकते',
+    curated_price: 'मूल्य',
+  }
+};

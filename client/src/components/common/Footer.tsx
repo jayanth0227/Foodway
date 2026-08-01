@@ -146,9 +146,9 @@ export const Footer: React.FC = () => {
       <div className="max-w-7xl mx-auto px-6 md:px-12 pt-8 border-t border-glass flex flex-col md:flex-row items-center justify-between text-[10px] font-bold uppercase tracking-widest text-text-muted relative z-10">
         <p>© {currentYear} MK Delivery Services. Crafted for Royalty.</p>
         <div className="flex space-x-6 mt-4 md:mt-0">
-          <a href="#terms" className="hover:text-primary transition-colors">Terms of Service</a>
+          <Link to="/restaurant/login" className="hover:text-primary transition-colors text-primary font-bold">Restaurant Portal</Link>
+          <Link to="/admin" className="hover:text-primary transition-colors">Admin Console</Link>
           <a href="#privacy" className="hover:text-primary transition-colors">Privacy Charter</a>
-          <a href="#cookies" className="hover:text-primary transition-colors">Cookie Settings</a>
         </div>
       </div>
     </footer>

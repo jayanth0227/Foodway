@@ -26,15 +26,14 @@ export const Categories: React.FC = () => {
         {/* Section Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-16 space-y-4 md:space-y-0">
           <div className="space-y-4 text-center md:text-left">
-            <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-              Curate Your Appetite
-            </span>
+           
             <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
-              Elite Categories
+              Explore Our Categories. 
             </h2>
           </div>
           <p className="text-xs md:text-sm text-text-secondary font-medium max-w-md text-center md:text-left">
-            Select from our refined classifications of culinary styles, each prepared by specialised masters of the craft.
+             From breakfast to desserts, browse everything you need from trusted restaurants and stores across Konaseema. 
+ 
           </p>
         </div>
 

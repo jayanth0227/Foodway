@@ -1,146 +1,133 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { Tag, Copy, CheckCircle } from 'lucide-react';
+import { OFFERS } from '../../utils/mockData';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay, EffectCoverflow, Pagination } from 'swiper/modules';
-import { Copy } from 'lucide-react';
+import { Autoplay, Pagination } from 'swiper/modules';
 
-// Import Swiper styles
 import 'swiper/css';
-import 'swiper/css/effect-coverflow';
 import 'swiper/css/pagination';
 
-interface OfferCard {
-  id: string;
-  badge: string;
-  title: string;
-  description: string;
-  code: string;
-  gradient: string;
-}
-
-const OFFERS: OfferCard[] = [
-  {
-    id: 'offer-1',
-    badge: 'Limited Privilege',
-    title: '50% OFF Michelin Selections',
-    description: 'Indulge in our exquisite partner menus with a complimentary 50% privilege on your first curation. Max discount $50.',
-    code: 'MKROYAL50',
-    gradient: 'from-[#2563EB]/40 via-[#1D4ED8]/25 to-transparent',
-  },
-  {
-    id: 'offer-2',
-    badge: 'Gold Tier Perks',
-    title: 'Complimentary White-Glove Delivery',
-    description: 'Savor Michelin-star meals delivered by our private couriers with active temperature protection, free of delivery fees.',
-    code: 'MKESTATE',
-    gradient: 'from-[#C58A6A]/40 via-[#A86C50]/25 to-transparent',
-  },
-  {
-    id: 'offer-3',
-    badge: 'Weekend Soirée',
-    title: 'Complimentary Fine Champagne Box',
-    description: 'Order any Private Banquet or Estate Platter during weekends and receive a curated premium dessert & champagne box.',
-    code: 'MKCHAMPAGNE',
-    gradient: 'from-amber-500/30 via-amber-800/15 to-transparent',
-  },
-];
-
 export const Offers: React.FC = () => {
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 3000);
+  };
+
   return (
-    <section id="offers-section" className="py-16 md:py-20 lg:py-30 bg-bg-darkSec border-t border-glass relative overflow-hidden">
-      {/* Cinematic background light */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
+    <section className="py-16 md:py-24 bg-bg-darkSec/60 border-t border-glass relative overflow-hidden">
+      {/* Glow orb */}
+      <div className="absolute top-1/2 left-0 w-80 h-80 rounded-full bg-primary/5 blur-[100px] pointer-events-none -translate-y-1/2" />
+
+      {/* Floating Copied Toast Notification */}
+      {copiedCode && (
+        <motion.div
+          initial={{ opacity: 0, y: -20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -20, scale: 0.95 }}
+          className="fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 shadow-2xl backdrop-blur-xl flex items-center gap-3 font-bold text-xs"
+        >
+          <CheckCircle size={18} className="shrink-0 text-emerald-400" />
+          <span>Promo Code "{copiedCode}" copied to clipboard!</span>
+        </motion.div>
+      )}
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         
         {/* Section Header */}
-        <div className="text-center max-w-2xl mx-auto mb-16 space-y-4">
-          <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-            Exclusive Privileges
-          </span>
-          <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
-            Active Estate Offers
-          </h2>
-          <p className="text-xs md:text-sm text-text-secondary font-medium">
-            Unlock temporary dining charters and bespoke codes crafted to amplify your gastronomic experience.
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 space-y-4 md:space-y-0">
+          <div className="space-y-3 text-center md:text-left">
+            <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
+              Exclusive Privileges
+            </span>
+            <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
+              Curated Offers & Charters
+            </h2>
+          </div>
+          <p className="text-xs md:text-sm text-text-secondary font-medium max-w-md text-center md:text-left">
+            Experience bespoke dining privileges tailored exclusively for members of MK Delivery Services.
           </p>
         </div>
 
-        {/* Swiper Slider Wrapper */}
-        <div className="w-full py-8">
-          <Swiper
-            effect={'coverflow'}
-            grabCursor={true}
-            centeredSlides={true}
-            slidesPerView={'auto'}
-            loop={true}
-            coverflowEffect={{
-              rotate: 15,
-              stretch: 0,
-              depth: 150,
-              modifier: 1,
-              slideShadows: false,
-            }}
-            autoplay={{
-              delay: 4000,
-              disableOnInteraction: false,
-            }}
-            pagination={{
-              clickable: true,
-              bulletClass: 'swiper-pagination-bullet !bg-text-muted opacity-40',
-              bulletActiveClass: '!bg-primary !opacity-100',
-            }}
-            modules={[EffectCoverflow, Autoplay, Pagination]}
-            className="w-full max-w-4xl"
-          >
-            {OFFERS.map((offer) => (
-              <SwiperSlide key={offer.id} className="w-[300px] sm:w-[450px] md:w-[500px]">
-                <div className="relative overflow-hidden premium-card p-8 md:p-12 flex flex-col justify-between h-[300px] md:h-[350px] group">
-                  {/* Decorative background radial gradient */}
-                  <div
-                    className={`absolute inset-0 bg-gradient-to-br ${offer.gradient} opacity-80 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}
-                  />
+        {/* Offers Swiper Carousel */}
+        <Swiper
+          modules={[Autoplay, Pagination]}
+          spaceBetween={24}
+          slidesPerView={1}
+          autoplay={{ delay: 5000, disableOnInteraction: false }}
+          pagination={{ clickable: true }}
+          breakpoints={{
+            640: { slidesPerView: 2 },
+            1024: { slidesPerView: 3 },
+          }}
+          className="offers-swiper pb-14"
+        >
+          {OFFERS.map((offer) => (
+            <SwiperSlide key={offer.id} className="h-full">
+              <div className="group premium-card p-6 h-full flex flex-col justify-between relative overflow-hidden">
+                {/* Subtle card glow */}
+                <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-primary/5 blur-[40px] group-hover:bg-primary/10 transition-all duration-500" />
 
-                  {/* Top content */}
-                  <div className="space-y-4 relative z-10">
-                    <span className="inline-block bg-glass-subtle border border-primary/20 text-primary text-[9px] font-bold tracking-widest uppercase px-3 py-1.5 rounded-lg shadow-sm">
+                <div>
+                  {/* Badge & Discount */}
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-primary bg-primary/10 border border-primary/20 px-3 py-1 rounded-full">
                       {offer.badge}
                     </span>
-                    <h3 className="text-xl md:text-2xl font-extrabold font-display text-text-primary leading-tight group-hover:text-primary transition-colors duration-300">
-                      {offer.title}
-                    </h3>
-                    <p className="text-xs md:text-sm text-text-muted/90 leading-relaxed max-w-md font-medium">
-                      {offer.description}
-                    </p>
-                  </div>
-
-                  {/* Promo Code footer */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-5 border-t border-glass relative z-10">
-                    <div className="flex flex-col">
-                      <span className="text-[9px] text-text-muted tracking-widest uppercase font-bold">
-                        Privilege Charter Code
-                      </span>
-                      <span className="text-sm font-bold font-display text-primary tracking-wider mt-1 uppercase">
-                        {offer.code}
+                    <div className="flex items-center space-x-1 text-primary">
+                      <Tag size={14} />
+                      <span className="font-display font-extrabold text-lg">
+                        {offer.discount}
                       </span>
                     </div>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(offer.code);
-                        alert(`Code "${offer.code}" copied to clipboard!`);
-                      }}
-                      className="btn-ghost text-xs font-bold py-2.5 px-5 rounded-lg transition-all duration-300 flex items-center space-x-1.5"
-                    >
-                      <Copy size={13} />
-                      <span>Copy Code</span>
-                    </button>
                   </div>
+
+                  {/* Title & Description */}
+                  <h3 className="font-display font-bold text-lg text-text-primary group-hover:text-primary transition-colors duration-300">
+                    {offer.title}
+                  </h3>
+                  <p className="text-xs text-text-muted mt-2 leading-relaxed font-medium">
+                    {offer.description}
+                  </p>
                 </div>
-              </SwiperSlide>
-            ))}
-          </Swiper>
-        </div>
+
+                {/* Promo Code & Action */}
+                <div className="pt-5 border-t border-glass mt-6 flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] text-text-muted tracking-widest uppercase font-bold">
+                      Privilege Charter Code
+                    </span>
+                    <span className="text-sm font-bold font-display text-primary tracking-wider mt-1 uppercase">
+                      {offer.code}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleCopyCode(offer.code)}
+                    className="btn-ghost text-xs font-bold py-2.5 px-5 rounded-lg transition-all duration-300 flex items-center space-x-1.5"
+                  >
+                    {copiedCode === offer.code ? (
+                      <>
+                        <CheckCircle size={13} className="text-emerald-400" />
+                        <span className="text-emerald-400">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={13} />
+                        <span>Copy Code</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </SwiperSlide>
+          ))}
+        </Swiper>
       </div>
     </section>
   );
 };
+
 export default Offers;
