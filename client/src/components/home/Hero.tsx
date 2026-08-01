@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useSpring, useScroll, useTransform } from 'framer-motion';
 import { Search, ChevronRight, User, Store, Clock } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { API_BASE_URL } from '../../utils/api';
 
 interface HeroProps {
   onOpenAuth: (type: 'login' | 'register') => void;
@@ -14,6 +15,18 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
 
+  const [videoUrls, setVideoUrls] = useState<{
+    darkest: string;
+    dark_mobile: string;
+    lightest: string;
+    light_mobile: string;
+  }>({
+    darkest: "/darkest.mp4",
+    dark_mobile: "/dark_mobile.mp4",
+    lightest: "/lightest.mp4",
+    light_mobile: "/light_mobile.mp4"
+  });
+
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 767px)');
     setIsMobile(mediaQuery.matches);
@@ -21,6 +34,25 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mediaQuery.addEventListener('change', handler);
     return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  useEffect(() => {
+    // Fetch video URLs from server
+    fetch(`${API_BASE_URL}/hero/videos`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && data.urls) {
+          setVideoUrls({
+            darkest: data.urls.darkest || "/darkest.mp4",
+            dark_mobile: data.urls.dark_mobile || "/dark_mobile.mp4",
+            lightest: data.urls.lightest || "/lightest.mp4",
+            light_mobile: data.urls.light_mobile || "/light_mobile.mp4"
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to fetch custom background videos from server, using local fallbacks.", err);
+      });
   }, []);
   
   // Simulated loading states for premium feel
@@ -175,7 +207,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
     >
       {/* Background Video */}
       <video
-        key={`${theme}-${isMobile}`}
+        key={`${theme}-${isMobile}-${theme === 'dark' ? (isMobile ? videoUrls.dark_mobile : videoUrls.darkest) : (isMobile ? videoUrls.light_mobile : videoUrls.lightest)}`}
         autoPlay
         loop
         muted
@@ -183,7 +215,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
         className="absolute inset-0 w-full h-full object-cover pointer-events-none z-0"
       >
         <source
-          src={theme === 'dark' ? (isMobile ? "/dark_mobile.mp4" : "/darkest.mp4") : (isMobile ? "/light_mobile.mp4" : "/lightest.mp4")}
+          src={theme === 'dark' ? (isMobile ? videoUrls.dark_mobile : videoUrls.darkest) : (isMobile ? videoUrls.light_mobile : videoUrls.lightest)}
           type="video/mp4"
         />
       </video>

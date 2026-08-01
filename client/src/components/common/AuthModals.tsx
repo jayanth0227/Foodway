@@ -16,41 +16,95 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
       if (type === 'login') {
-        // Check if the credentials correspond to an admin
-        const response = await axios.post(`${API_BASE_URL}/admin/login`, {
+        // Try admin login first
+        try {
+          const adminResponse = await axios.post(`${API_BASE_URL}/admin/login`, {
+            email,
+            password,
+          });
+
+          if (adminResponse.data.success && adminResponse.data.admin?.role === 'admin') {
+            const authData = {
+              isLoggedIn: true,
+              email: adminResponse.data.admin.email,
+              role: adminResponse.data.admin.role,
+              token: adminResponse.data.admin.token,
+            };
+            localStorage.setItem('adminAuth', JSON.stringify(authData));
+            localStorage.removeItem('userAuth');
+            onClose();
+            navigate('/admin/dashboard');
+            return;
+          }
+        } catch (adminErr) {
+          // Fallback to customer login
+          const userResponse = await axios.post(`${API_BASE_URL}/user/login`, {
+            email,
+            password,
+          });
+
+          if (userResponse.data.success) {
+            const authData = {
+              isLoggedIn: true,
+              id: userResponse.data.user.id,
+              email: userResponse.data.user.email,
+              name: userResponse.data.user.name,
+              phone: userResponse.data.user.phone,
+              role: userResponse.data.user.role,
+            };
+            localStorage.setItem('userAuth', JSON.stringify(authData));
+            localStorage.removeItem('adminAuth');
+            onClose();
+            window.location.reload();
+            return;
+          }
+        }
+      } else {
+        // User registration
+        const response = await axios.post(`${API_BASE_URL}/user/register`, {
+          name,
           email,
           password,
+          phone,
         });
 
-        if (response.data.success && response.data.admin?.role === 'admin') {
+        if (response.data.success) {
           const authData = {
             isLoggedIn: true,
-            email: response.data.admin.email,
-            role: response.data.admin.role,
-            token: response.data.admin.token,
+            id: response.data.user.id,
+            email: response.data.user.email,
+            name: response.data.user.name,
+            phone: response.data.user.phone,
+            role: response.data.user.role,
           };
-          localStorage.setItem('adminAuth', JSON.stringify(authData));
+          localStorage.setItem('userAuth', JSON.stringify(authData));
+          localStorage.removeItem('adminAuth');
           onClose();
-          navigate('/admin/dashboard');
+          window.location.reload();
           return;
         }
       }
-    } catch (err) {
-      console.log('Not an admin or server error, logging in as normal mock user:', err);
+    } catch (err: any) {
+      console.error('Authentication error:', err);
+      setError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Authentication failed. Please verify your credentials or server connection.'
+      );
     } finally {
       setLoading(false);
-      // Close the modal for standard mock user flow
-      setEmail('');
-      setPassword('');
-      onClose();
     }
   };
 
@@ -137,20 +191,44 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
               </button>
             </div>
 
+            {/* Error Alert */}
+            {error && (
+              <div className="flex items-start gap-2.5 p-3.5 mb-5 rounded-xl bg-error/10 border border-error/20 text-error text-[11px] font-semibold leading-relaxed">
+                <span>{error}</span>
+              </div>
+            )}
+
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-5">
               {type === 'register' && (
-                <div>
-                  <label className="block text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter your name"
-                    className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="block text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Enter your name"
+                      className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2">
+                      Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Enter your phone number"
+                      className="w-full bg-bg-dark/60 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none text-sm transition-all focus:ring-1 focus:ring-primary/20 font-medium placeholder-text-muted/50"
+                    />
+                  </div>
+                </>
               )}
 
               <div>

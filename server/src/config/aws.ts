@@ -49,3 +49,4 @@ export const dynamoDocClient = DynamoDBDocumentClient.from(dynamoClient, {
 
 export const bucketName = process.env.AWS_S3_BUCKET_NAME || '';
 export const tableName = process.env.AWS_DYNAMODB_TABLE_NAME || '';
+export const usersTableName = process.env.AWS_DYNAMODB_USERS_TABLE_NAME || 'foodway-users';

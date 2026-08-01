@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
 import { CartProvider } from './context/CartContext';
@@ -57,13 +57,16 @@ const AppContent: React.FC = () => {
     setAuthModal((prev) => ({ ...prev, type }));
   };
 
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
       {/* Background glow trail */}
       <CursorGlow />
 
       {/* Global Elements */}
-      <Navbar onOpenAuth={openAuthModal} />
+      {!isAdminRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
       <AuthModals
         isOpen={authModal.isOpen}
@@ -88,7 +91,7 @@ const AppContent: React.FC = () => {
         </Routes>
       </main>
 
-      <Footer />
+      {!isAdminRoute && <Footer />}
     </div>
   );
 };
