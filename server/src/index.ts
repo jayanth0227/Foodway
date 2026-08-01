@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Import AWS SDK Command helpers
-import { ScanCommand, PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { ScanCommand, PutCommand, GetCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
@@ -454,6 +454,275 @@ app.post('/api/user/login', async (req: Request, res: Response) => {
   }
 });
 
+
+// -----------------
+// Restaurant Portal API Routes
+// -----------------
+
+// Restaurant Login API
+app.post('/api/restaurant/login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required.' });
+    }
+
+    let matchedRestaurant: any = null;
+
+    if (tableName) {
+      try {
+        const scanCommand = new ScanCommand({ TableName: tableName });
+        const scanResponse = await dynamoDocClient.send(scanCommand);
+        if (scanResponse.Items) {
+          matchedRestaurant = scanResponse.Items.find(
+            (item: any) =>
+              (item.type === 'restaurant' || item.pk?.startsWith('RESTAURANT#') || item.email) &&
+              item.email?.toLowerCase() === email.toLowerCase() &&
+              item.password === password
+          );
+        }
+      } catch (err) {
+        console.warn('DynamoDB scan failed during restaurant login:', err);
+      }
+    }
+
+    if (!matchedRestaurant) {
+      return res.status(401).json({ success: false, error: 'Invalid restaurant email or password.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Logged in successfully as Restaurant Owner.',
+      token: 'mock-jwt-restaurant-token',
+      restaurant: {
+        id: matchedRestaurant.id || matchedRestaurant.pk?.replace('RESTAURANT#', ''),
+        name: matchedRestaurant.name,
+        ownerName: matchedRestaurant.ownerName,
+        email: matchedRestaurant.email,
+        phone: matchedRestaurant.phone || '',
+        address: matchedRestaurant.address || '',
+        image: matchedRestaurant.image || '',
+        openingTime: matchedRestaurant.openingTime || '11:00 AM',
+        closingTime: matchedRestaurant.closingTime || '11:00 PM',
+        description: matchedRestaurant.description || 'Gourmet establishment serving handcrafted culinary delights.',
+        cuisine: matchedRestaurant.cuisine || matchedRestaurant.category || 'Multi-Cuisine',
+        role: 'RESTAURANT'
+      }
+    });
+  } catch (error: any) {
+    console.error('Restaurant login error:', error);
+    res.status(500).json({ success: false, error: 'Server error during login.', details: error.message });
+  }
+});
+
+// Fetch Menu Items for a specific Restaurant
+app.get('/api/restaurant/menu/:restaurantId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    if (!tableName) {
+      return res.json({ success: true, items: [] });
+    }
+
+    const command = new ScanCommand({ TableName: tableName });
+    const response = await dynamoDocClient.send(command);
+    const menuItems = (response.Items || []).filter(
+      (item: any) => item.type === 'menu_item' && item.restaurantId === restaurantId
+    );
+
+    res.json({ success: true, items: menuItems });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch menu items.', details: error.message });
+  }
+});
+
+// Save or Update Menu Item
+app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
+  try {
+    const menuItem = req.body;
+    if (!menuItem || !menuItem.name || !menuItem.restaurantId) {
+      return res.status(400).json({ success: false, error: 'Missing required menu item fields.' });
+    }
+
+    if (tableName) {
+      const itemId = menuItem.id || `food_${Date.now()}`;
+      const command = new PutCommand({
+        TableName: tableName,
+        Item: {
+          ...menuItem,
+          id: itemId,
+          pk: `MENU#${itemId}`,
+          type: 'menu_item',
+          updatedAt: new Date().toISOString()
+        }
+      });
+      await dynamoDocClient.send(command);
+    }
+
+    res.json({ success: true, message: 'Menu item saved successfully.', item: menuItem });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to save menu item.', details: error.message });
+  }
+});
+
+// Delete Menu Item
+app.delete('/api/restaurant/menu/:itemId', async (req: Request, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    if (tableName) {
+      const command = new DeleteCommand({
+        TableName: tableName,
+        Key: { pk: `MENU#${itemId}`, email: `MENU#${itemId}` }
+      });
+      await dynamoDocClient.send(command);
+    }
+    res.json({ success: true, message: 'Menu item deleted successfully.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to delete menu item.', details: error.message });
+  }
+});
+
+// Fetch Orders for a specific Restaurant
+app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    if (!tableName) {
+      return res.json({ success: true, orders: [] });
+    }
+
+    const command = new ScanCommand({ TableName: tableName });
+    const response = await dynamoDocClient.send(command);
+    const orders = (response.Items || []).filter(
+      (item: any) => item.type === 'order' && (item.restaurantId === restaurantId || item.restaurant === restaurantId)
+    );
+
+    res.json({ success: true, orders });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch restaurant orders.', details: error.message });
+  }
+});
+
+// Update Order Status
+app.put('/api/restaurant/orders/:orderId/status', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+
+    if (tableName) {
+      const getCommand = new GetCommand({ TableName: tableName, Key: { pk: `ORDER#${orderId}` } });
+      const getResp = await dynamoDocClient.send(getCommand);
+      if (getResp.Item) {
+        const updatedItem = {
+          ...getResp.Item,
+          orderStatus: status,
+          status: status,
+          updatedAt: new Date().toISOString()
+        };
+        const putCommand = new PutCommand({ TableName: tableName, Item: updatedItem });
+        await dynamoDocClient.send(putCommand);
+      }
+    }
+
+    res.json({ success: true, message: `Order status updated to ${status}.`, orderId, status });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to update order status.', details: error.message });
+  }
+});
+
+// Update Restaurant Profile
+app.put('/api/restaurant/profile/:restaurantId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    const profileUpdates = req.body;
+
+    if (tableName) {
+      const putCommand = new PutCommand({
+        TableName: tableName,
+        Item: {
+          ...profileUpdates,
+          pk: `RESTAURANT#${restaurantId}`,
+          id: restaurantId,
+          type: 'restaurant',
+          updatedAt: new Date().toISOString()
+        }
+      });
+      await dynamoDocClient.send(putCommand);
+    }
+
+    res.json({ success: true, message: 'Restaurant profile updated successfully.', profile: profileUpdates });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to update restaurant profile.', details: error.message });
+  }
+});
+
+// Fetch Categories for a specific Restaurant
+app.get('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    const defaultCategories = ['Starters', 'Main Course', 'Breads', 'Desserts', 'Beverages'];
+    
+    if (!tableName) {
+      return res.json({ success: true, categories: defaultCategories });
+    }
+
+    const command = new ScanCommand({ TableName: tableName });
+    const response = await dynamoDocClient.send(command);
+    const customCategories = (response.Items || [])
+      .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
+      .map((item: any) => item.name);
+
+    const allCategories = Array.from(new Set([...defaultCategories, ...customCategories]));
+    res.json({ success: true, categories: allCategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch restaurant categories.', details: error.message });
+  }
+});
+
+// Add New Category for a specific Restaurant
+app.post('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    const { name } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, error: 'Category name is required.' });
+    }
+
+    const categoryName = name.trim();
+    const categoryId = `cat_${Date.now()}`;
+
+    if (tableName) {
+      const command = new PutCommand({
+        TableName: tableName,
+        Item: {
+          pk: `CATEGORY#${restaurantId}#${categoryId}`,
+          email: `CATEGORY#${restaurantId}#${categoryId}`,
+          id: categoryId,
+          restaurantId,
+          name: categoryName,
+          type: 'category',
+          createdAt: new Date().toISOString()
+        }
+      });
+      await dynamoDocClient.send(command);
+    }
+
+    const defaultCategories = ['Starters', 'Main Course', 'Breads', 'Desserts', 'Beverages'];
+    let allCategories = [...defaultCategories, categoryName];
+
+    if (tableName) {
+      const scanCommand = new ScanCommand({ TableName: tableName });
+      const response = await dynamoDocClient.send(scanCommand);
+      const customCategories = (response.Items || [])
+        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
+        .map((item: any) => item.name);
+      allCategories = Array.from(new Set([...defaultCategories, ...customCategories]));
+    }
+
+    res.json({ success: true, message: 'Category added successfully.', category: categoryName, categories: allCategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to save category.', details: error.message });
+  }
+});
 
 // Start the server
 app.listen(Number(PORT), '0.0.0.0', async () => {
