@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, User, Sun, Moon, Home, Compass } from 'lucide-react';
+import { ShoppingBag, User, Sun, Moon, Home, Compass, LogOut } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -19,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
     const adminAuthRaw = localStorage.getItem('adminAuth') || sessionStorage.getItem('adminAuth');
@@ -31,6 +32,22 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
       }
     } else {
       setIsAdmin(false);
+    }
+
+    const userAuthRaw = localStorage.getItem('userAuth') || sessionStorage.getItem('userAuth');
+    if (userAuthRaw) {
+      try {
+        const auth = JSON.parse(userAuthRaw);
+        if (auth.isLoggedIn) {
+          setUser({ name: auth.name, email: auth.email });
+        } else {
+          setUser(null);
+        }
+      } catch (e) {
+        setUser(null);
+      }
+    } else {
+      setUser(null);
     }
   }, [location.pathname]);
 
@@ -159,10 +176,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3">
-            {/* Theme Toggle Button */}
+            {/* Theme Toggle Button - Hidden on mobile, shown on desktop */}
             <button
               onClick={toggleTheme}
-              className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
+              className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
               aria-label="Toggle theme"
             >
               {theme === 'light' ? (
@@ -172,25 +189,49 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
               )}
             </button>
 
+            {/* Logout Button - Mobile View */}
+            {(isAdmin || user) && (
+              <button
+                onClick={() => {
+                  if (isAdmin) {
+                    localStorage.removeItem('adminAuth');
+                    sessionStorage.removeItem('adminAuth');
+                    setIsAdmin(false);
+                  } else {
+                    localStorage.removeItem('userAuth');
+                    sessionStorage.removeItem('userAuth');
+                    setUser(null);
+                  }
+                  navigate('/');
+                }}
+                className="lg:hidden p-2.5 text-text-secondary hover:text-error transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-error/20 group"
+                aria-label="Logout"
+              >
+                <LogOut size={18} className="group-hover:scale-110 transition-transform duration-300" />
+              </button>
+            )}
+
             {/* Cart Button */}
-            <button
-              onClick={() => setCartOpen(true)}
-              className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
-            >
-              <ShoppingBag size={18} className="group-hover:scale-110 transition-transform duration-300" />
-              <AnimatePresence>
-                {totalItemsCount > 0 && (
-                  <motion.span
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                    className="absolute -top-1 -right-1 bg-primary text-black text-[9px] font-extrabold w-4.5 h-4.5 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_10px_rgba(197,147,99,0.3)]"
-                  >
-                    {totalItemsCount}
-                  </motion.span>
-                )}
-              </AnimatePresence>
-            </button>
+            {!location.pathname.startsWith('/admin') && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
+              >
+                <ShoppingBag size={18} className="group-hover:scale-110 transition-transform duration-300" />
+                <AnimatePresence>
+                  {totalItemsCount > 0 && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
+                      className="absolute -top-1 -right-1 bg-primary text-black text-[9px] font-extrabold w-4.5 h-4.5 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_10px_rgba(197,147,99,0.3)]"
+                    >
+                      {totalItemsCount}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </button>
+            )}
 
             {/* Auth Buttons - Desktop */}
             <div className="hidden sm:flex items-center space-x-3 pl-3 border-l border-glass">
@@ -209,6 +250,23 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                       localStorage.removeItem('adminAuth');
                       sessionStorage.removeItem('adminAuth');
                       setIsAdmin(false);
+                      navigate('/');
+                    }}
+                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : user ? (
+                <>
+                  <span className="text-xs font-bold text-text-secondary mr-2">
+                    Hi, {user.name.split(' ')[0]}
+                  </span>
+                  <button
+                    onClick={() => {
+                      localStorage.removeItem('userAuth');
+                      sessionStorage.removeItem('userAuth');
+                      setUser(null);
                       navigate('/');
                     }}
                     className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
@@ -269,28 +327,38 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         </button>
 
         {/* Cart */}
-        <button
-          onClick={() => setCartOpen(true)}
-          className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300 relative"
-          aria-label="Shopping Cart"
-        >
-          <ShoppingBag size={18} />
-          <span className="text-[9px] font-bold mt-1 tracking-wider">Cart</span>
-          {totalItemsCount > 0 && (
-            <span className="absolute top-1 right-2 bg-primary text-black text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_8px_rgba(197,147,99,0.3)]">
-              {totalItemsCount}
-            </span>
-          )}
-        </button>
+        {!location.pathname.startsWith('/admin') && (
+          <button
+            onClick={() => setCartOpen(true)}
+            className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300 relative"
+            aria-label="Shopping Cart"
+          >
+            <ShoppingBag size={18} />
+            <span className="text-[9px] font-bold mt-1 tracking-wider">Cart</span>
+            {totalItemsCount > 0 && (
+              <span className="absolute top-1 right-2 bg-primary text-black text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_8px_rgba(197,147,99,0.3)]">
+                {totalItemsCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Profile */}
         <button
-          onClick={() => onOpenAuth('login')}
-          className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300"
+          onClick={() => {
+            if (!user && !isAdmin) {
+              onOpenAuth('login');
+            }
+          }}
+          className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
+            user ? 'text-primary' : 'text-text-muted hover:text-text-primary'
+          }`}
           aria-label="User Account"
         >
           <User size={18} />
-          <span className="text-[9px] font-bold mt-1 tracking-wider">Account</span>
+          <span className="text-[9px] font-bold mt-1 tracking-wider">
+            {isAdmin ? 'Admin' : user ? user.name.split(' ')[0] : 'Account'}
+          </span>
         </button>
 
         {/* Theme Toggle */}

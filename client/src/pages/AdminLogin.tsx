@@ -77,14 +77,14 @@ export const AdminLogin: React.FC = () => {
         className="w-full max-w-md overflow-hidden rounded-2xl glass-panel border border-glass p-8 md:p-10 z-10 shadow-luxury glow-gold relative"
       >
         {/* Luxury top accent line */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-primary via-primary-dark to-secondary" />
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-primary" />
 
         {/* Header */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 rounded-full bg-glass-subtle border border-primary/30 flex items-center justify-center mb-4 text-primary shadow-lg">
             <ShieldCheck size={32} />
           </div>
-          <h2 className="text-2xl md:text-3xl font-extrabold font-display tracking-tight text-gradient-gold text-center">
+          <h2 className="text-2xl md:text-3xl font-extrabold font-display tracking-tight text-primary text-center">
             Administrative Portal
           </h2>
           <p className="text-xs text-text-muted mt-2 text-center max-w-[280px]">
@@ -157,7 +157,7 @@ export const AdminLogin: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 py-3.5 bg-gradient-to-r from-primary to-secondary hover:from-primary-dark hover:to-secondary text-bg-dark font-semibold text-sm rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full mt-2 py-3.5 bg-primary hover:bg-primary-dark text-bg-dark font-semibold text-sm rounded-lg shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? (
               <div className="w-5 h-5 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
