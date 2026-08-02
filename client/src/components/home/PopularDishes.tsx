@@ -1,13 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Star, Heart, Plus, Ban } from 'lucide-react';
+import { Star, Heart, Plus, Minus, Ban, Utensils } from 'lucide-react';
+import axios from 'axios';
 import { useCart } from '../../context/CartContext';
-import { DISHES } from '../../utils/mockData';
 import type { DishItem } from '../../utils/mockData';
+import { API_BASE_URL } from '../../utils/api';
 
 export const PopularDishes: React.FC = () => {
-  const { addToCart, setCartOpen } = useCart();
+  const { addToCart, reduceQuantity, getItemQuantity } = useCart();
+  const [dishes, setDishes] = useState<any[]>([]);
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    const fetchDishes = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/public/dishes`);
+        if (response.data.success && Array.isArray(response.data.dishes)) {
+          setDishes(response.data.dishes);
+        } else {
+          setDishes([]);
+        }
+      } catch (err) {
+        console.warn('Error fetching public dishes from DB:', err);
+        setDishes([]);
+      }
+    };
+
+    fetchDishes();
+  }, []);
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -20,7 +40,6 @@ export const PopularDishes: React.FC = () => {
     e.preventDefault();
     if (dish.isAvailable === false || dish.status === 'disabled') return;
     addToCart(dish);
-    setCartOpen(true);
   };
 
   const containerVariants = {
@@ -60,14 +79,21 @@ export const PopularDishes: React.FC = () => {
         </div>
 
         {/* Dishes Grid */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, margin: '-60px' }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
-        >
-          {DISHES.map((dish) => {
+        {dishes.length === 0 ? (
+          <div className="text-center py-12 glass-panel border border-glass rounded-2xl p-8 max-w-md mx-auto space-y-2">
+            <Utensils size={36} className="mx-auto text-text-muted opacity-50" />
+            <h3 className="font-bold text-base text-text-primary">No Dishes Found in Database</h3>
+            <p className="text-xs text-text-muted">Menu items added in Restaurant Dashboard will automatically display here.</p>
+          </div>
+        ) : (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="show"
+            viewport={{ once: true, margin: '-60px' }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
+            {dishes.map((dish) => {
             const isFav = !!favorites[dish.id];
             const isOutOfStock = dish.isAvailable === false || dish.status === 'disabled';
             return (
@@ -149,33 +175,58 @@ export const PopularDishes: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* FEATURE 3: Disable Add to Cart when Out of Stock */}
-                  <button
-                    onClick={(e) => handleAddToCart(dish, e)}
-                    disabled={isOutOfStock}
-                    className={`font-bold text-xs py-2.5 px-5 rounded-lg flex items-center space-x-1.5 transition-all ${
-                      isOutOfStock
-                        ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed'
-                        : 'btn-secondary'
-                    }`}
-                  >
-                    {isOutOfStock ? (
-                      <>
-                        <Ban size={13} />
-                        <span>Out of Stock</span>
-                      </>
-                    ) : (
-                      <>
+                  {/* FEATURE 3: Disable Add to Cart when Out of Stock & Dynamic Quantity Counter */}
+                  {isOutOfStock ? (
+                    <button
+                      disabled
+                      className="font-bold text-xs py-2.5 px-5 rounded-lg flex items-center space-x-1.5 bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed"
+                    >
+                      <Ban size={13} />
+                      <span>Out of Stock</span>
+                    </button>
+                  ) : getItemQuantity(dish.id) > 0 ? (
+                    <div className="flex items-center bg-primary text-black rounded-xl p-1 shadow-md border border-amber-300">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reduceQuantity(dish.id);
+                        }}
+                        className="w-7 h-7 rounded-lg bg-black/15 hover:bg-black/30 text-black font-black flex items-center justify-center transition-colors cursor-pointer"
+                        title="Decrease quantity"
+                      >
+                        <Minus size={13} />
+                      </button>
+                      <span className="w-8 text-center font-black text-xs">
+                        {getItemQuantity(dish.id)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddToCart(dish, e);
+                        }}
+                        className="w-7 h-7 rounded-lg bg-black/15 hover:bg-black/30 text-black font-black flex items-center justify-center transition-colors cursor-pointer"
+                        title="Increase quantity"
+                      >
                         <Plus size={13} />
-                        <span>Add Selection</span>
-                      </>
-                    )}
-                  </button>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={(e) => handleAddToCart(dish, e)}
+                      className="font-bold text-xs py-2.5 px-5 rounded-lg flex items-center space-x-1.5 transition-all btn-secondary cursor-pointer"
+                    >
+                      <Plus size={13} />
+                      <span>Add Selection</span>
+                    </button>
+                  )}
                 </div>
               </motion.div>
             );
           })}
         </motion.div>
+        )}
       </div>
     </section>
   );

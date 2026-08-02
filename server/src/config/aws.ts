@@ -7,7 +7,6 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-
 const s3Region = process.env.AWS_S3_REGION || 'ap-south-2';
 const dynamoRegion = process.env.AWS_DYNAMODB_REGION || 'eu-north-1';
 
@@ -15,10 +14,10 @@ const accessKeyId = process.env.AWS_ACCESS_KEY_ID || '';
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || '';
 
 if (!accessKeyId || !secretAccessKey) {
-  console.warn('⚠️ WARNING: AWS credentials are not set in the environment variables.');
+  console.warn('⚠️ WARNING: AWS credentials are not set in environment variables.');
 }
 
-// Initialize the S3 client
+// Initialize S3 client
 export const s3Client = new S3Client({
   region: s3Region,
   credentials: {
@@ -27,7 +26,7 @@ export const s3Client = new S3Client({
   },
 });
 
-// Initialize the DynamoDB client
+// Initialize DynamoDB client
 const dynamoClient = new DynamoDBClient({
   region: dynamoRegion,
   credentials: {
@@ -49,5 +48,12 @@ export const dynamoDocClient = DynamoDBDocumentClient.from(dynamoClient, {
 });
 
 export const bucketName = process.env.AWS_S3_BUCKET_NAME || '';
-export const tableName = process.env.AWS_DYNAMODB_TABLE_NAME || '';
+export const tableName = process.env.AWS_DYNAMODB_TABLE_NAME || 'mk-delivery-services';
+
+// Clean Architecture Production Table Names
 export const usersTableName = process.env.AWS_DYNAMODB_USERS_TABLE_NAME || 'foodway-users';
+export const restaurantsTableName = process.env.AWS_DYNAMODB_RESTAURANTS_TABLE_NAME || 'foodway-restaurants';
+export const menuItemsTableName = process.env.AWS_DYNAMODB_MENU_ITEMS_TABLE_NAME || 'foodway-menu-items';
+export const ordersTableName = process.env.AWS_DYNAMODB_ORDERS_TABLE_NAME || 'foodway-orders';
+export const orderItemsTableName = process.env.AWS_DYNAMODB_ORDER_ITEMS_TABLE_NAME || 'foodway-order-items';
+export const deliveryTableName = process.env.AWS_DYNAMODB_DELIVERY_TABLE_NAME || 'foodway-delivery';

@@ -4,18 +4,27 @@ import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
 import { CartProvider } from './context/CartContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
+import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
 import { CursorGlow } from './components/common/CursorGlow';
 import { CartSidebar } from './components/common/CartSidebar';
 import { AuthModals } from './components/common/AuthModals';
 import { Home } from './pages/Home';
-import { AdminLogin } from './pages/AdminLogin';
+import { RestaurantsPage } from './pages/RestaurantsPage';
+import { RestaurantDetailsPage } from './pages/RestaurantDetailsPage';
+import { CartPage } from './pages/CartPage';
+import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
+import { CartNotificationToast } from './components/common/CartNotificationToast';
+import { FloatingCartBar } from './components/common/FloatingCartBar';
+import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
-import { AdminRouteGuard } from './components/common/AdminRouteGuard';
-import { RestaurantLogin } from './pages/RestaurantLogin';
+import { AdminOrderDetailsPage } from './pages/AdminOrderDetailsPage';
+import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartnerPage';
 import { RestaurantDashboard } from './pages/RestaurantDashboard';
-import { RestaurantRouteGuard } from './components/common/RestaurantRouteGuard';
+import { DeliveryDashboard } from './pages/DeliveryDashboard';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 
 const AppContent: React.FC = () => {
   const [authModal, setAuthModal] = useState<{ isOpen: boolean; type: 'login' | 'register' }>({
@@ -58,7 +67,11 @@ const AppContent: React.FC = () => {
   };
 
   const location = useLocation();
-  const isPortalRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/restaurant');
+  const isPortalRoute = location.pathname.startsWith('/admin') || 
+                        location.pathname.startsWith('/restaurant/') || 
+                        location.pathname === '/restaurant' || 
+                        location.pathname.startsWith('/delivery') ||
+                        location.pathname === '/login';
 
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
@@ -68,6 +81,8 @@ const AppContent: React.FC = () => {
       {/* Global Elements */}
       {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
+      <CartNotificationToast />
+      <FloatingCartBar />
       <AuthModals
         isOpen={authModal.isOpen}
         onClose={closeAuthModal}
@@ -79,23 +94,63 @@ const AppContent: React.FC = () => {
       <main className="relative z-10">
         <Routes>
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
-          <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/restaurants" element={<RestaurantsPage />} />
+          <Route path="/restaurants/:id" element={<RestaurantDetailsPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/orders" element={<CustomerOrdersPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/admin" element={<Login />} />
+          <Route path="/admin/login" element={<Login />} />
           <Route
             path="/admin/dashboard"
             element={
-              <AdminRouteGuard>
+              <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AdminDashboard />
-              </AdminRouteGuard>
+              </ProtectedRoute>
             }
           />
-          <Route path="/restaurant" element={<RestaurantLogin />} />
-          <Route path="/restaurant/login" element={<RestaurantLogin />} />
+          <Route
+            path="/admin/orders/:orderId"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminOrderDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/delivery-partners/new"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminCreateDeliveryPartnerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/delivery-partners/create"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminCreateDeliveryPartnerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/restaurant" element={<Login />} />
+          <Route path="/restaurant/login" element={<Login />} />
           <Route
             path="/restaurant/dashboard"
             element={
-              <RestaurantRouteGuard>
+              <ProtectedRoute allowedRoles={['RESTAURANT']}>
                 <RestaurantDashboard />
-              </RestaurantRouteGuard>
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/delivery" element={<Login />} />
+          <Route path="/delivery/login" element={<Login />} />
+          <Route
+            path="/delivery/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['DELIVERY_PARTNER', 'ADMIN']}>
+                <DeliveryDashboard />
+              </ProtectedRoute>
             }
           />
         </Routes>
@@ -106,18 +161,18 @@ const AppContent: React.FC = () => {
   );
 };
 
-import { LanguageProvider } from './context/LanguageContext';
-
 export const App: React.FC = () => {
   return (
     <HelmetProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <CartProvider>
-            <Router>
-              <AppContent />
-            </Router>
-          </CartProvider>
+          <AuthProvider>
+            <CartProvider>
+              <Router>
+                <AppContent />
+              </Router>
+            </CartProvider>
+          </AuthProvider>
         </LanguageProvider>
       </ThemeProvider>
     </HelmetProvider>

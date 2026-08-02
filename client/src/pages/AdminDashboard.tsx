@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LogOut, 
@@ -35,12 +35,19 @@ import {
   List,
   ArrowLeft,
   Mail,
-  MapPin
+  MapPin,
+  Eye,
+  Phone,
+  Lock,
+  ShieldCheck,
+  ShoppingBag
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
+import { getCurrentUser, clearSession } from '../utils/auth.utils';
+import { useAuth } from '../hooks/useAuth';
 
 interface DBItem {
   id: string;
@@ -63,20 +70,25 @@ interface AWSStatus {
   dynamoTableConfigured: boolean;
 }
 
-// Initial Data Arrays
-const initialRestaurants: any[] = [];
-const initialOrders: any[] = [];
-const initialActivities: any[] = [];
 
-const ridersList = ['Rider Alexander', 'Rider Christian', 'Rider Sebastian', 'Rider Maximilian'];
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, toggleTheme } = useTheme();
 
   // Navigation & UI States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'settings'>(
+    (location.state as any)?.activeTab || 'dashboard'
+  );
+
+  useEffect(() => {
+    if ((location.state as any)?.activeTab) {
+      setActiveTab((location.state as any).activeTab);
+    }
+  }, [location.state]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const [resViewMode, setResViewMode] = useState<'grid' | 'table'>('grid');
@@ -85,18 +97,40 @@ export const AdminDashboard: React.FC = () => {
   // Authentication
   const [adminEmail, setAdminEmail] = useState('');
 
-  // Core App States
+  // Helper to filter out dummy/mock items from legacy localStorage
+  const filterOutDummy = (items: any[]) => {
+    if (!Array.isArray(items)) return [];
+    return items.filter((item: any) => {
+      const name = (item.name || item.customer || item.customerName || item.restaurantName || '').toLowerCase();
+      const id = (item.id || item.orderId || item.restaurantId || '').toLowerCase();
+      const isDummy =
+        name.includes('victoria') ||
+        name.includes('vance') ||
+        name.includes('rostova') ||
+        name.includes('gilded fork') ||
+        name.includes('saffron royal') ||
+        name.includes('nippon kaiseki') ||
+        id.includes('ord-9824') ||
+        id.includes('ord-9825') ||
+        id.includes('ord-9826') ||
+        id.includes('ord-9827');
+      return !isDummy;
+    });
+  };
+
+  // Core App States initialized cleanly
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [restaurants, setRestaurants] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('admin_restaurants');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        return filterOutDummy(parsed);
       }
     } catch (e) {
       console.error('Failed to parse admin_restaurants from localStorage:', e);
     }
-    return initialRestaurants;
+    return [];
   });
 
   const [orders, setOrders] = useState<any[]>(() => {
@@ -104,12 +138,12 @@ export const AdminDashboard: React.FC = () => {
       const saved = localStorage.getItem('admin_orders');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        return filterOutDummy(parsed);
       }
     } catch (e) {
       console.error('Failed to parse admin_orders from localStorage:', e);
     }
-    return initialOrders;
+    return [];
   });
 
   const [activities, setActivities] = useState<any[]>(() => {
@@ -117,12 +151,12 @@ export const AdminDashboard: React.FC = () => {
       const saved = localStorage.getItem('admin_activities');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        return filterOutDummy(parsed);
       }
     } catch (e) {
       console.error('Failed to parse admin_activities from localStorage:', e);
     }
-    return initialActivities;
+    return [];
   });
 
   // S3 / DynamoDB Original AWS States
@@ -179,6 +213,74 @@ export const AdminDashboard: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Delivery Partner Database Management States
+  const [dbDeliveryPartners, setDbDeliveryPartners] = useState<any[]>([]);
+  const [isAddPartnerDrawerOpen, setIsAddPartnerDrawerOpen] = useState(false);
+  const [partnerForm, setPartnerForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    vehicleType: 'Bike',
+    vehicleNumber: ''
+  });
+  const [partnerFormError, setPartnerFormError] = useState<string | null>(null);
+  const [isSavingPartner, setIsSavingPartner] = useState(false);
+
+  const fetchDeliveryPartners = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/admin/delivery-partners`);
+      if (res.data.success) {
+        setDbDeliveryPartners(res.data.deliveryPartners || []);
+      }
+    } catch (err) {
+      console.warn('Error fetching delivery partners from DB:', err);
+    }
+  };
+
+  const handleSaveDeliveryPartner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPartnerFormError(null);
+    setIsSavingPartner(true);
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/admin/delivery-partners`, partnerForm);
+      if (res.data.success) {
+        showToast('success', `Registered Delivery Partner "${partnerForm.name}" in database.`);
+        setIsAddPartnerDrawerOpen(false);
+        setPartnerForm({ name: '', email: '', phone: '', password: '', vehicleType: 'Bike', vehicleNumber: '' });
+        fetchDeliveryPartners();
+      } else {
+        setPartnerFormError(res.data.error || 'Failed to create delivery partner account.');
+      }
+    } catch (err: any) {
+      setPartnerFormError(err.response?.data?.error || 'An error occurred while creating partner.');
+    } finally {
+      setIsSavingPartner(false);
+    }
+  };
+
+  const deleteDeliveryPartner = async (id: string) => {
+    if (!window.confirm('Are you sure you want to remove this Delivery Partner from the database?')) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/admin/delivery-partners/${id}`);
+      showToast('success', 'Delivery Partner removed.');
+      fetchDeliveryPartners();
+    } catch (err) {
+      console.error('Error deleting partner:', err);
+    }
+  };
+
+  const allDeliveryRiders = Array.from(new Set([
+    ...dbDeliveryPartners.map(p => p.name),
+    'Rider Sai Kumar',
+    'Rider Ramesh',
+    'Rider Shiva',
+    'Rider Rajesh',
+    'Rider Mahesh',
+    'Rider Venkatesh'
+  ]));
+
   // Sync state to local storage
   useEffect(() => {
     localStorage.setItem('admin_restaurants', JSON.stringify(restaurants));
@@ -193,28 +295,52 @@ export const AdminDashboard: React.FC = () => {
   }, [activities]);
 
   useEffect(() => {
-    // Check credentials
-    const adminAuthRaw = localStorage.getItem('adminAuth') || sessionStorage.getItem('adminAuth');
-    if (!adminAuthRaw) {
-      navigate('/admin', { replace: true });
+    // Check credentials using unified auth utility
+    const user = getCurrentUser();
+    if (!user || user.role !== 'ADMIN') {
+      navigate('/login', { replace: true });
       return;
     }
 
+    setAdminEmail(user.email);
+    // Load original AWS & Admin API data
+    fetchAWSStatus();
+    fetchDBItems();
+    fetchHeroVideos();
+    fetchAdminRestaurants();
+    fetchAdminOrders();
+    fetchDeliveryPartners();
+
+    // Auto-refresh restaurant status & live orders every 5s for real-time accuracy
+    const interval = setInterval(() => {
+      fetchAdminRestaurants();
+      fetchAdminOrders();
+      fetchDeliveryPartners();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchAdminRestaurants = async () => {
     try {
-      const auth = JSON.parse(adminAuthRaw);
-      if (auth.isLoggedIn && auth.role === 'admin') {
-        setAdminEmail(auth.email);
-        // Load original AWS API data
-        fetchAWSStatus();
-        fetchDBItems();
-        fetchHeroVideos();
-      } else {
-        navigate('/admin', { replace: true });
+      const response = await axios.get(`${API_BASE_URL}/admin/restaurants`);
+      if (response.data.success && Array.isArray(response.data.restaurants)) {
+        setRestaurants(response.data.restaurants);
       }
-    } catch (e) {
-      navigate('/admin', { replace: true });
+    } catch (err) {
+      console.error('Error fetching admin restaurants:', err);
     }
-  }, [navigate]);
+  };
+
+  const fetchAdminOrders = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/admin/orders`);
+      if (response.data.success && Array.isArray(response.data.orders)) {
+        setOrders(response.data.orders);
+      }
+    } catch (err) {
+      console.error('Error fetching admin orders:', err);
+    }
+  };
 
   // Original AWS Functions (Unchanged APIs)
   const fetchHeroVideos = async () => {
@@ -348,7 +474,8 @@ export const AdminDashboard: React.FC = () => {
     setActivities(prev => [newAct, ...prev.slice(0, 19)]);
   };
 
-  // Toast & Custom Delete Modal States
+  // Toast, Logout & Custom Delete Modal States
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [deleteResTarget, setDeleteResTarget] = useState<{ id: string; name: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
@@ -404,16 +531,23 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Handler: Manage Restaurant Toggle Status
-  const toggleRestaurantStatus = (resId: string) => {
-    setRestaurants(prev => prev.map(r => {
-      if (r.id === resId) {
-        const newStatus = r.status === 'active' ? 'inactive' : 'active';
-        addActivity('restaurant_status', `Restaurant "${r.name}" status set to ${newStatus.toUpperCase()}.`);
-        showToast('info', `Establishment "${r.name}" is now ${newStatus.toUpperCase()}.`);
-        return { ...r, status: newStatus };
-      }
-      return r;
-    }));
+  const toggleRestaurantStatus = async (resId: string) => {
+    const resItem = restaurants.find(r => r.id === resId);
+    if (!resItem) return;
+
+    const nextIsOpen = resItem.status !== 'active' && resItem.status !== 'open';
+    const newStatus = nextIsOpen ? 'active' : 'closed';
+
+    setRestaurants(prev => prev.map(r => r.id === resId ? { ...r, status: newStatus, isOpen: nextIsOpen } : r));
+
+    try {
+      await axios.put(`${API_BASE_URL}/restaurant/status/${resId}`, { isOpen: nextIsOpen });
+    } catch (e) {
+      console.warn('Backend update restaurant status failed:', e);
+    }
+
+    addActivity('restaurant_status', `Restaurant "${resItem.name}" status set to ${newStatus.toUpperCase()}.`);
+    showToast('info', `Establishment "${resItem.name}" is now ${nextIsOpen ? 'ONLINE / ACTIVE' : 'OFFLINE / CLOSED'}.`);
   };
 
   // Handler: Delete Restaurant (Opens custom confirmation modal, replaces window.confirm)
@@ -562,34 +696,29 @@ export const AdminDashboard: React.FC = () => {
     setResFormError(null);
   };
 
-  // Handler: Update Order Status
-  const handleUpdateOrderStatus = (orderId: string, status: string) => {
-    setOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        addActivity('order_status', `Order ${orderId} status updated to ${status.toUpperCase()}.`);
-        return { ...o, orderStatus: status };
-      }
-      return o;
-    }));
-  };
-
-  // Handler: Assign Rider
-  const handleAssignRider = (orderId: string) => {
-    const rider = selectedRiders[orderId];
-    if (!rider) return;
+  // Handler: Assign Delivery Boy / Rider to Order
+  const handleAssignRider = async (orderId: string, riderName?: string) => {
+    const targetRider = riderName || selectedRiders[orderId];
+    if (!targetRider) return;
 
     setOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        addActivity('order_assigned', `Order ${orderId} assigned to ${rider}.`);
+      if (o.id === orderId || (o as any).orderId === orderId) {
         return { 
           ...o, 
-          assignedRider: rider, 
-          orderStatus: 'assigned', 
-          assignmentTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+          assignedRider: targetRider,
+          assignmentTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
       }
       return o;
     }));
+
+    try {
+      await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: targetRider });
+      showToast('success', `Assigned delivery partner "${targetRider}" to Order #${orderId}.`);
+      addActivity('order_assigned', `Order #${orderId} assigned to delivery partner "${targetRider}".`);
+    } catch (e) {
+      console.error('Error assigning rider to order:', e);
+    }
   };
 
   // Handler: Admin Password Change mock
@@ -614,9 +743,16 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleLogout = () => {
+    setIsLogoutModalOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setIsLogoutModalOpen(false);
+    clearSession();
     localStorage.removeItem('adminAuth');
     sessionStorage.removeItem('adminAuth');
-    navigate('/admin', { replace: true });
+    logout();
+    navigate('/login', { replace: true });
   };
 
   // Analytics helper calculations
@@ -627,18 +763,25 @@ export const AdminDashboard: React.FC = () => {
   const ordersInDelivery = orders.filter(o => o.orderStatus === 'assigned' || o.orderStatus === 'picked up').length;
   const completedOrders = orders.filter(o => o.orderStatus === 'delivered').length;
 
-  // Filter Restaurants (Requirement 2: Search Restaurant only)
+  // Filter Restaurants
   const filteredRestaurants = restaurants.filter(r => {
-    return (r.name || '').toLowerCase().includes(resSearch.toLowerCase()) || 
-           (r.ownerName || '').toLowerCase().includes(resSearch.toLowerCase());
+    const q = (resSearch || '').toLowerCase();
+    return (r?.name || '').toLowerCase().includes(q) || 
+           (r?.ownerName || '').toLowerCase().includes(q);
   });
 
-  // Filter Orders
+  // Filter Orders safely
   const filteredOrders = orders.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
-                          o.customer.name.toLowerCase().includes(orderSearch.toLowerCase()) ||
-                          o.restaurant.toLowerCase().includes(orderSearch.toLowerCase());
-    const matchesStatus = orderStatusFilter === 'All' || o.orderStatus === orderStatusFilter.toLowerCase();
+    const q = (orderSearch || '').toLowerCase();
+    const ordId = (o?.id || o?.orderId || '').toString().toLowerCase();
+    const custName = (o?.customer?.name || o?.customerName || '').toString().toLowerCase();
+    const resName = (o?.restaurant || o?.restaurantName || '').toString().toLowerCase();
+
+    const matchesSearch = ordId.includes(q) || custName.includes(q) || resName.includes(q);
+    const ordStatus = (o?.orderStatus || o?.status || '').toString().toLowerCase();
+    const targetStatus = (orderStatusFilter || 'All').toLowerCase();
+    const matchesStatus = targetStatus === 'all' || ordStatus === targetStatus;
+
     return matchesSearch && matchesStatus;
   });
 
@@ -775,7 +918,7 @@ export const AdminDashboard: React.FC = () => {
       {/* Main Content Area */}
       <main 
         data-lenis-prevent
-        className="flex-grow min-w-0 min-h-screen lg:h-screen pt-24 lg:pt-10 px-4 md:px-8 pb-24 z-10 relative lg:overflow-y-auto max-w-7xl mx-auto w-full"
+        className="flex-grow min-w-0 min-h-screen lg:h-screen pt-20 lg:pt-10 px-4 md:px-8 pb-28 lg:pb-10 z-10 relative lg:overflow-y-auto max-w-7xl mx-auto w-full"
       >
         <ErrorBoundary>
           {/* ==================================================== */}
@@ -1567,17 +1710,17 @@ export const AdminDashboard: React.FC = () => {
                                 <button
                                   onClick={() => toggleRestaurantStatus(res.id)}
                                   className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${
-                                    res.status === 'active' ? 'bg-success' : 'bg-glass-subtle border border-glass'
+                                    (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-success' : 'bg-rose-600/80 border border-rose-500/40'
                                   }`}
                                 >
                                   <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                                    res.status === 'active' ? 'translate-x-3.5' : 'translate-x-0'
+                                    (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'translate-x-3.5' : 'translate-x-0'
                                   }`} />
                                 </button>
-                                <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                                  res.status === 'active' ? 'text-success' : 'text-text-muted'
+                                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                                  (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'text-success' : 'text-rose-400'
                                 }`}>
-                                  {res.status}
+                                  {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'active' : 'closed'}
                                 </span>
                               </div>
                             </td>
@@ -1649,17 +1792,17 @@ export const AdminDashboard: React.FC = () => {
                             <button
                               onClick={() => toggleRestaurantStatus(res.id)}
                               className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${
-                                res.status === 'active' ? 'bg-success' : 'bg-glass-subtle border border-glass'
+                                (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-success' : 'bg-rose-600/80 border border-rose-500/40'
                               }`}
                             >
                               <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                                res.status === 'active' ? 'translate-x-3.5' : 'translate-x-0'
+                                (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'translate-x-3.5' : 'translate-x-0'
                               }`} />
                             </button>
-                            <span className={`text-[10px] font-bold uppercase tracking-wider ${
-                              res.status === 'active' ? 'text-success' : 'text-text-muted'
+                            <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
+                              (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'text-success' : 'text-rose-400'
                             }`}>
-                              {res.status}
+                              {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'active' : 'closed'}
                             </span>
                           </div>
 
@@ -1702,10 +1845,15 @@ export const AdminDashboard: React.FC = () => {
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                         <div className="absolute top-3 right-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase border tracking-wider backdrop-blur-md ${
-                            res.status === 'active' ? 'bg-success/80 border-success/30 text-white' : 'bg-error/80 border-error/30 text-white'
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border tracking-wider backdrop-blur-md shadow-md ${
+                            (res.status === 'active' || res.status === 'open') && res.isOpen !== false
+                              ? 'bg-emerald-500/90 border-emerald-400/40 text-white'
+                              : 'bg-rose-600/90 border-rose-500/40 text-white'
                           }`}>
-                            {res.status}
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-white animate-pulse' : 'bg-white/60'
+                            }`} />
+                            {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'ACTIVE' : 'CLOSED'}
                           </span>
                         </div>
                       </div>
@@ -1824,65 +1972,94 @@ export const AdminDashboard: React.FC = () => {
                         <th className="p-4 font-semibold">Order ID</th>
                         <th className="p-4 font-semibold">Customer Details</th>
                         <th className="p-4 font-semibold">Restaurant</th>
-                        <th className="p-4 font-semibold">Items</th>
+                        <th className="p-4 font-semibold">Items Breakdown</th>
                         <th className="p-4 font-semibold text-right">Total</th>
                         <th className="p-4 font-semibold text-center">Payment</th>
                         <th className="p-4 font-semibold text-center">Order Status</th>
                         <th className="p-4 font-semibold">Assigned Rider</th>
-                        <th className="p-4 font-semibold text-right">Placed At</th>
+                        <th className="p-4 font-semibold text-center">Full Details</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-glass font-medium">
                       {filteredOrders.map((order) => (
                         <tr key={order.id} className="hover:bg-glass-subtle transition-colors">
                           <td className="p-4 font-mono font-bold text-primary">{order.id}</td>
-                          <td className="p-4">
-                            <p className="text-text-primary font-bold">{order.customer?.name || 'Guest'}</p>
-                            <span className="text-[10px] text-text-muted leading-relaxed block">{order.customer?.phone || 'N/A'}</span>
-                            <span className="text-[10px] text-text-muted truncate block max-w-[155px]" title={order.customer?.address || 'N/A'}>{order.customer?.address || 'N/A'}</span>
+                          <td className="p-4 space-y-0.5">
+                            <p className="text-text-primary font-extrabold">{order.customer?.name || order.customerName || 'Valued Customer'}</p>
+                            <span className="text-[10px] text-text-muted leading-relaxed block font-mono">
+                              📞 {order.customer?.phone || order.customerPhone || 'N/A'}
+                            </span>
+                            <span className="text-[10px] text-text-muted block max-w-[170px] leading-snug" title={order.customer?.address || order.customerAddress || 'N/A'}>
+                              📍 {order.customer?.address || order.customerAddress || 'N/A'}
+                            </span>
                           </td>
-                          <td className="p-4 text-text-secondary">{order.restaurant}</td>
-                          <td className="p-4 text-text-muted text-[11px] max-w-[180px] leading-relaxed truncate" title={order.items}>
-                            {order.items}
+                          <td className="p-4">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary font-bold text-xs">
+                              <Store size={12} />
+                              <span>{order.restaurant || order.restaurantName || 'Partner Restaurant'}</span>
+                            </span>
+                          </td>
+                          <td className="p-4 text-text-muted text-[11px] max-w-[200px] leading-relaxed">
+                            {Array.isArray(order.items) && order.items.length > 0 ? (
+                              <div className="space-y-1">
+                                {order.items.map((it: any, idx: number) => (
+                                  <div key={idx} className="text-[11px] font-semibold text-text-primary">
+                                    • {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              String(order.items || 'N/A')
+                            )}
                           </td>
                           <td className="p-4 text-right font-black font-display text-primary text-sm">
-                            ${(order.total || 0).toFixed(2)}
+                            ₹{(order.total || 0).toFixed(2)}
                           </td>
                           <td className="p-4 text-center">
                             <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border ${
                               order.paymentStatus === 'paid' ? 'bg-success/15 border-success/30 text-success' : 'bg-warning/15 border-warning/30 text-warning'
                             }`}>
-                              {order.paymentStatus}
+                              {order.paymentStatus || 'Pending'}
                             </span>
                           </td>
                           <td className="p-4 text-center">
-                            <select
-                              value={order.orderStatus}
-                              onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                              className="px-2 py-1 bg-bg-dark border border-glass rounded text-[10px] font-bold text-text-secondary outline-none focus:border-primary/40 uppercase tracking-wider"
+                            <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase border shadow-sm ${
+                              (order.orderStatus || order.status || '').toLowerCase() === 'delivered' || (order.orderStatus || order.status || '').toLowerCase() === 'completed'
+                                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                                : (order.orderStatus || order.status || '').toLowerCase() === 'accepted' || (order.orderStatus || order.status || '').toLowerCase() === 'preparing' || (order.orderStatus || order.status || '').toLowerCase() === 'ready'
+                                ? 'bg-blue-500/15 border-blue-500/30 text-blue-600 dark:text-blue-400'
+                                : (order.orderStatus || order.status || '').toLowerCase() === 'rejected' || (order.orderStatus || order.status || '').toLowerCase() === 'cancelled'
+                                ? 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                                : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                            }`}>
+                              {order.orderStatus || order.status || 'Pending'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-1.5">
+                              <Bike size={14} className="text-primary shrink-0" />
+                              <select
+                                value={order.assignedRider || 'Unassigned'}
+                                onChange={(e) => handleAssignRider(order.id || order.orderId, e.target.value)}
+                                className="px-2 py-1 bg-slate-100 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-800 dark:text-text-primary outline-none focus:border-primary cursor-pointer shadow-sm"
+                              >
+                                <option value="Unassigned">Unassigned</option>
+                                {allDeliveryRiders.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/admin/orders/${order.id || order.orderId}`)}
+                              className="px-3.5 py-1.5 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-black font-extrabold text-xs transition-all inline-flex items-center gap-1.5 border border-primary/30 shadow-sm cursor-pointer"
+                              title="Open order details page"
                             >
-                              <option value="pending">Pending</option>
-                              <option value="accepted">Accepted</option>
-                              <option value="preparing">Preparing</option>
-                              <option value="ready">Ready</option>
-                              <option value="assigned">Assigned</option>
-                              <option value="picked up">Picked Up</option>
-                              <option value="delivered">Delivered</option>
-                              <option value="cancelled">Cancelled</option>
-                            </select>
-                          </td>
-                          <td className="p-4 text-text-secondary text-[11px]">
-                            {order.assignedRider ? (
-                              <span className="inline-flex items-center gap-1.5 font-bold">
-                                <Bike size={12} className="text-primary" />
-                                {order.assignedRider}
-                              </span>
-                            ) : (
-                              <span className="text-warning/80 text-[10px] font-semibold italic">Unassigned</span>
-                            )}
-                          </td>
-                          <td className="p-4 text-right text-text-muted text-[10px]">
-                            {new Date(order.createdTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              <Eye size={13} />
+                              <span>View Order</span>
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -1913,52 +2090,72 @@ export const AdminDashboard: React.FC = () => {
 
                       <div className="text-[10px]">
                         <span className="text-text-muted uppercase tracking-wider block mb-0.5">Ordered Items:</span>
-                        <p className="text-text-secondary leading-relaxed bg-bg-dark/40 p-2.5 rounded-lg border border-glass/20 font-medium">{order.items}</p>
+                        <div className="text-text-secondary leading-relaxed bg-bg-dark/40 p-2.5 rounded-lg border border-glass/20 font-medium space-y-1">
+                          {Array.isArray(order.items) && order.items.length > 0 ? (
+                            order.items.map((it: any, idx: number) => (
+                              <div key={idx} className="text-xs font-semibold text-text-primary">
+                                • {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
+                              </div>
+                            ))
+                          ) : typeof order.items === 'string' ? (
+                            order.items
+                          ) : (
+                            <span className="text-text-muted italic">No items listed</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center justify-between border-t border-glass/40 pt-3">
                         <div>
                           <span className="text-text-muted text-[9px] uppercase tracking-wider block">Total Amount:</span>
-                          <span className="text-sm font-black font-display text-primary">${(order.total || 0).toFixed(2)}</span>
+                          <span className="text-sm font-black font-display text-primary">₹{(order.total || 0).toFixed(2)}</span>
                         </div>
                         <div>
                           <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border ${
                             order.paymentStatus === 'paid' ? 'bg-success/15 border-success/30 text-success' : 'bg-warning/15 border-warning/30 text-warning'
                           }`}>
-                            {order.paymentStatus}
+                            {order.paymentStatus || 'Pending'}
                           </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-between border-t border-glass/40 pt-3">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-text-muted text-[9px] uppercase tracking-wider">Order Status:</span>
-                          <select
-                            value={order.orderStatus}
-                            onChange={(e) => handleUpdateOrderStatus(order.id, e.target.value)}
-                            className="px-2 py-1.5 bg-bg-dark border border-glass rounded text-[10px] font-bold text-text-secondary outline-none focus:border-primary/40 uppercase tracking-wider"
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="preparing">Preparing</option>
-                            <option value="ready">Ready</option>
-                            <option value="assigned">Assigned</option>
-                            <option value="picked up">Picked Up</option>
-                            <option value="delivered">Delivered</option>
-                            <option value="cancelled">Cancelled</option>
-                          </select>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/admin/orders/${order.id || order.orderId}`)}
+                        className="w-full mt-1 py-2.5 px-4 rounded-xl bg-primary/10 hover:bg-primary text-primary hover:text-black font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 border border-primary/30 shadow-sm cursor-pointer"
+                      >
+                        <Eye size={14} />
+                        <span>View Full Order Details</span>
+                      </button>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-glass/40 pt-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-text-muted text-[9px] uppercase tracking-wider font-bold">Status:</span>
+                          <span className={`px-2.5 py-0.5 rounded text-[9px] font-black uppercase border ${
+                            (order.orderStatus || order.status || '').toLowerCase() === 'delivered' || (order.orderStatus || order.status || '').toLowerCase() === 'completed'
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                              : (order.orderStatus || order.status || '').toLowerCase() === 'accepted' || (order.orderStatus || order.status || '').toLowerCase() === 'preparing' || (order.orderStatus || order.status || '').toLowerCase() === 'ready'
+                              ? 'bg-blue-500/15 border-blue-500/30 text-blue-400'
+                              : (order.orderStatus || order.status || '').toLowerCase() === 'rejected' || (order.orderStatus || order.status || '').toLowerCase() === 'cancelled'
+                              ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
+                              : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                          }`}>
+                            {order.orderStatus || order.status || 'Pending'}
+                          </span>
                         </div>
 
-                        <div className="text-[10px] text-right">
-                          <span className="text-text-muted uppercase tracking-wider block">Assigned Rider:</span>
-                          {order.assignedRider ? (
-                            <span className="inline-flex items-center gap-1.5 text-text-secondary font-bold mt-1">
-                              <Bike size={12} className="text-primary" />
-                              {order.assignedRider}
-                            </span>
-                          ) : (
-                            <span className="text-warning/80 font-bold italic mt-1 block">Unassigned</span>
-                          )}
+                        <div className="flex items-center gap-1.5">
+                          <Bike size={13} className="text-primary shrink-0" />
+                          <select
+                            value={order.assignedRider || 'Unassigned'}
+                            onChange={(e) => handleAssignRider(order.id || order.orderId, e.target.value)}
+                            className="px-2 py-1 bg-bg-dark border border-glass rounded-lg text-[10px] font-bold text-text-primary outline-none focus:border-primary cursor-pointer"
+                          >
+                            <option value="Unassigned">Assign Delivery Boy...</option>
+                            {allDeliveryRiders.map((r) => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
@@ -1974,9 +2171,80 @@ export const AdminDashboard: React.FC = () => {
         {/* ==================================================== */}
         {activeTab === 'delivery' && (
           <div className="space-y-8 animate-fadeIn">
-            <div>
-              <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Courier Operations</span>
-              <h1 className="text-3xl font-black font-display text-primary tracking-tight">Rider Assignments</h1>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-glass pb-4">
+              <div>
+                <span className="text-amber-600 dark:text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
+                <h1 className="text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight">Delivery Fleet & Live Assignments</h1>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsAddPartnerDrawerOpen(true)}
+                className="px-5 py-3 rounded-xl bg-amber-500 dark:bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/20 dark:hover:shadow-primary/20 hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+              >
+                <Bike size={16} />
+                <span>+ Create Delivery Partner</span>
+              </button>
+            </div>
+
+            {/* Registered Delivery Partners stored in DB */}
+            <div className="p-6 rounded-3xl bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass space-y-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+                    <UserCheck size={18} className="text-amber-600 dark:text-primary" />
+                    <span>Registered Delivery Partners (Stored in Database)</span>
+                  </h3>
+                  <p className="text-xs text-slate-600 dark:text-text-muted mt-0.5 font-medium">
+                    Delivery partners can log in at the central <code className="text-amber-600 dark:text-primary font-mono font-bold">/login</code> page using their credentials.
+                  </p>
+                </div>
+                <span className="px-3 py-1 rounded-full text-xs font-black uppercase bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-primary">
+                  {dbDeliveryPartners.length} Partners Registered
+                </span>
+              </div>
+
+              {dbDeliveryPartners.length === 0 ? (
+                <div className="p-8 text-center rounded-2xl border border-dashed border-slate-300 dark:border-glass text-slate-600 dark:text-text-muted text-xs font-semibold bg-slate-50/50 dark:bg-bg-dark/40">
+                  No custom delivery partners created yet. Click "+ Create Delivery Partner" above to add a new delivery role in the database.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {dbDeliveryPartners.map((partner) => (
+                    <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-slate-50 dark:bg-bg-dark/70 border border-slate-200 dark:border-glass/40 flex flex-col justify-between gap-3 relative hover:border-amber-500/40 dark:hover:border-primary/30 transition-all">
+                      <div className="flex justify-between items-start">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-900 dark:text-white text-sm">{partner.name}</span>
+                            <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
+                              Active Partner
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 dark:text-text-muted">{partner.email}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-text-muted font-mono">{partner.phone || 'No phone'}</p>
+                        </div>
+                        <button
+                          onClick={() => deleteDeliveryPartner(partner.id || partner.userId)}
+                          className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                          title="Remove Partner"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200 dark:border-glass/30 flex items-center justify-between text-[10px] text-slate-600 dark:text-text-muted font-medium">
+                        <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-text-secondary">
+                          <Bike size={12} className="text-amber-600 dark:text-primary" />
+                          {partner.vehicleType} • {partner.vehicleNumber}
+                        </span>
+                        <span className="font-mono text-amber-700 dark:text-primary font-bold">
+                          ID: {partner.userId}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Column Board Grid Layout */}
@@ -1984,48 +2252,48 @@ export const AdminDashboard: React.FC = () => {
               
               {/* Column 1: Waiting for Rider */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-glass pb-2">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-text-secondary">Waiting for Rider</h2>
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-text-secondary">Waiting for Rider</h2>
                   </div>
-                  <span className="text-[10px] font-bold bg-glass-subtle px-2 py-0.5 rounded-full text-text-muted border border-glass">
+                  <span className="text-[10px] font-bold bg-slate-200/60 dark:bg-glass-subtle px-2 py-0.5 rounded-full text-slate-700 dark:text-text-muted border border-slate-300 dark:border-glass">
                     {orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length}
                   </span>
                 </div>
 
                 <div className="space-y-4">
                   {orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length === 0 ? (
-                    <div className="py-8 text-center text-text-muted text-[11px] font-medium border border-dashed border-glass rounded-xl bg-glass-subtle/10">
+                    <div className="py-8 text-center text-slate-500 dark:text-text-muted text-[11px] font-medium border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
                       No orders waiting for riders.
                     </div>
                   ) : (
                     orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').map((order) => (
-                      <div key={order.id} className="glass-panel border border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-primary/20 transition-all">
-                        <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-warning">{order.orderStatus}</span>
+                      <div key={order.id} className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-amber-500/30 dark:hover:border-primary/20 transition-all">
+                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
+                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
+                          <span className="uppercase font-extrabold text-amber-600 dark:text-warning">{order.orderStatus}</span>
                         </div>
                         <div className="space-y-2 text-[10px] leading-relaxed">
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
                         </div>
-                        <div className="pt-3 border-t border-glass/30 flex gap-2 items-center">
+                        <div className="pt-3 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
                           <select
                             value={selectedRiders[order.id] || ''}
                             onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-bg-dark border border-glass rounded text-[10px] font-bold text-text-secondary outline-none focus:border-primary/40"
+                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
                           >
                             <option value="">Select Rider...</option>
-                            {ridersList.map(r => (
+                            {allDeliveryRiders.map(r => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </select>
                           <button
                             onClick={() => handleAssignRider(order.id)}
                             disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
+                            className="py-1.5 px-3 rounded bg-amber-500 dark:bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
                           >
                             Assign
                           </button>
@@ -2038,50 +2306,50 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Column 2: Assigned Orders */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-glass pb-2">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-text-secondary">Assigned Orders</h2>
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-text-secondary">Assigned Orders</h2>
                   </div>
-                  <span className="text-[10px] font-bold bg-glass-subtle px-2 py-0.5 rounded-full text-text-muted border border-glass">
+                  <span className="text-[10px] font-bold bg-slate-200/60 dark:bg-glass-subtle px-2 py-0.5 rounded-full text-slate-700 dark:text-text-muted border border-slate-300 dark:border-glass">
                     {orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length}
                   </span>
                 </div>
 
                 <div className="space-y-4">
                   {orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length === 0 ? (
-                    <div className="py-8 text-center text-text-muted text-[11px] font-medium border border-dashed border-glass rounded-xl bg-glass-subtle/10">
+                    <div className="py-8 text-center text-slate-500 dark:text-text-muted text-[11px] font-medium border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
                       No active courier transits.
                     </div>
                   ) : (
                     orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').map((order) => (
-                      <div key={order.id} className="glass-panel border border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-primary/20 transition-all">
-                        <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-primary">{order.orderStatus}</span>
+                      <div key={order.id} className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-amber-500/30 dark:hover:border-primary/20 transition-all">
+                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
+                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
+                          <span className="uppercase font-extrabold text-blue-600 dark:text-primary">{order.orderStatus}</span>
                         </div>
                         <div className="space-y-2 text-[10px] leading-relaxed">
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-amber-700 dark:text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-slate-700 dark:text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
                         </div>
-                        <div className="pt-3 border-t border-glass/30 flex gap-2 items-center">
+                        <div className="pt-3 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
                           <select
                             value={selectedRiders[order.id] || ''}
                             onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-bg-dark border border-glass rounded text-[10px] font-bold text-text-secondary outline-none focus:border-primary/40"
+                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
                           >
                             <option value="">Reassign Rider...</option>
-                            {ridersList.filter(r => r !== order.assignedRider).map(r => (
+                            {allDeliveryRiders.filter(r => r !== order.assignedRider).map(r => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </select>
                           <button
                             onClick={() => handleAssignRider(order.id)}
                             disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded bg-glass border border-glass hover:border-primary/40 text-text-secondary hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0"
+                            className="py-1.5 px-3 rounded bg-slate-100 dark:bg-glass border border-slate-300 dark:border-glass hover:border-amber-500 dark:hover:border-primary/40 text-slate-700 dark:text-text-secondary hover:text-amber-700 dark:hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
                           >
                             Reassign
                           </button>
@@ -2094,33 +2362,33 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Column 3: Delivered Orders */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-glass pb-2">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-success" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-text-secondary">Delivered Orders</h2>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-text-secondary">Delivered Orders</h2>
                   </div>
-                  <span className="text-[10px] font-bold bg-glass-subtle px-2 py-0.5 rounded-full text-text-muted border border-glass">
+                  <span className="text-[10px] font-bold bg-slate-200/60 dark:bg-glass-subtle px-2 py-0.5 rounded-full text-slate-700 dark:text-text-muted border border-slate-300 dark:border-glass">
                     {orders.filter(o => o.orderStatus === 'delivered').length}
                   </span>
                 </div>
 
                 <div className="space-y-4">
                   {orders.filter(o => o.orderStatus === 'delivered').length === 0 ? (
-                    <div className="py-8 text-center text-text-muted text-[11px] font-medium border border-dashed border-glass rounded-xl bg-glass-subtle/10">
+                    <div className="py-8 text-center text-slate-500 dark:text-text-muted text-[11px] font-medium border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
                       No orders successfully delivered yet.
                     </div>
                   ) : (
                     orders.filter(o => o.orderStatus === 'delivered').map((order) => (
-                      <div key={order.id} className="glass-panel border border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-success/10 transition-all opacity-85 hover:opacity-100">
-                        <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-success flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
+                      <div key={order.id} className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-emerald-500/20 transition-all opacity-85 hover:opacity-100">
+                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
+                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
+                          <span className="uppercase font-extrabold text-emerald-600 dark:text-success flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
                         </div>
                         <div className="space-y-2 text-[10px] leading-relaxed">
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-success font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-success font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
                         </div>
                       </div>
                     ))
@@ -2561,6 +2829,372 @@ export const AdminDashboard: React.FC = () => {
         </AnimatePresence>
 
       </main>
+
+      {/* Right Side Slide-Over Drawer for Create Delivery Partner */}
+      <AnimatePresence>
+        {isAddPartnerDrawerOpen && (
+          <>
+            {/* Backdrop Overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAddPartnerDrawerOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99998] cursor-pointer"
+            />
+
+            {/* Slide-over Right Panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 right-0 w-full max-w-md sm:max-w-lg z-[99999] bg-white dark:bg-bg-darkSec border-l border-slate-200 dark:border-glass shadow-2xl flex flex-col justify-between overflow-y-auto"
+            >
+              {/* Drawer Top Header */}
+              <div className="p-6 border-b border-slate-200 dark:border-glass/50 flex items-center justify-between bg-slate-50/80 dark:bg-bg-dark/50 backdrop-blur-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-primary shrink-0 shadow-inner">
+                    <Bike size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                      Create Delivery Partner
+                    </h2>
+                    <p className="text-xs text-slate-600 dark:text-text-muted font-medium">
+                      Store new rider credentials in database
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsAddPartnerDrawerOpen(false)}
+                  className="p-2 rounded-xl bg-slate-200/60 dark:bg-glass hover:bg-slate-300 dark:hover:bg-glass-subtle text-slate-700 dark:text-text-muted hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer"
+                  title="Close Drawer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Drawer Body Form */}
+              <div className="p-6 sm:p-8 space-y-6 flex-1">
+                {partnerFormError && (
+                  <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-2.5">
+                    <AlertTriangle size={18} className="text-rose-500 shrink-0" />
+                    <span>{partnerFormError}</span>
+                  </div>
+                )}
+
+                <form id="create-partner-drawer-form" onSubmit={handleSaveDeliveryPartner} className="space-y-5 text-xs font-semibold">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
+                      <User size={14} className="text-amber-600 dark:text-primary" />
+                      <span>Full Name *</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={partnerForm.name}
+                      onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                      placeholder="e.g. Ramesh Kumar"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
+                      <Mail size={14} className="text-amber-600 dark:text-primary" />
+                      <span>Email Address *</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={partnerForm.email}
+                      onChange={(e) => setPartnerForm({ ...partnerForm, email: e.target.value })}
+                      placeholder="rider@mkdelivery.com"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
+                      <Phone size={14} className="text-amber-600 dark:text-primary" />
+                      <span>Phone Number *</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={partnerForm.phone}
+                      onChange={(e) => setPartnerForm({ ...partnerForm, phone: e.target.value })}
+                      placeholder="+91 9876543210"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
+                      <Lock size={14} className="text-amber-600 dark:text-primary" />
+                      <span>Password *</span>
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={partnerForm.password}
+                      onChange={(e) => setPartnerForm({ ...partnerForm, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
+                        <Bike size={14} className="text-amber-600 dark:text-primary" />
+                        <span>Vehicle Type</span>
+                      </label>
+                      <select
+                        value={partnerForm.vehicleType}
+                        onChange={(e) => setPartnerForm({ ...partnerForm, vehicleType: e.target.value })}
+                        className="w-full px-3.5 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm cursor-pointer"
+                      >
+                        <option value="Bike">Motorcycle / Bike</option>
+                        <option value="Scooter">Scooter</option>
+                        <option value="Bicycle">E-Bicycle</option>
+                        <option value="Car">Delivery Car</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
+                        <span>Reg Number</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={partnerForm.vehicleNumber}
+                        onChange={(e) => setPartnerForm({ ...partnerForm, vehicleNumber: e.target.value })}
+                        placeholder="TS-09-AB-1234"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                      />
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              {/* Drawer Footer Actions */}
+              <div className="p-6 border-t border-slate-200 dark:border-glass/50 flex items-center gap-3 bg-slate-50/80 dark:bg-bg-dark/50 backdrop-blur-md">
+                <button
+                  type="button"
+                  onClick={() => setIsAddPartnerDrawerOpen(false)}
+                  className="w-1/3 py-3 px-4 rounded-xl border border-slate-300 dark:border-glass bg-slate-100 dark:bg-glass hover:bg-slate-200 dark:hover:bg-glass-subtle text-slate-700 dark:text-text-muted font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  form="create-partner-drawer-form"
+                  disabled={isSavingPartner}
+                  className="w-2/3 py-3 px-4 rounded-xl bg-amber-500 dark:bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/20 dark:hover:shadow-primary/20 hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isSavingPartner ? (
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <ShieldCheck size={16} />
+                      <span>Save Partner</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+
+
+      {/* Logout Confirmation Modal - Root Level Full Screen Overlay covering entire window & sidebar */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 w-screen h-screen z-[99999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.92, opacity: 0 }}
+            className="bg-white text-slate-900 rounded-[2rem] p-7 sm:p-8 max-w-md w-full shadow-2xl space-y-6"
+          >
+            {/* Header with red soft-square icon and title */}
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center text-red-500 shrink-0">
+                <LogOut size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-black font-display text-slate-900 tracking-tight leading-tight">
+                  Confirm Logout
+                </h2>
+                <span className="text-xs text-slate-400 font-semibold block mt-0.5">Confirmation</span>
+              </div>
+            </div>
+
+            <div className="border-b border-slate-100 w-full" />
+
+            {/* Body message */}
+            <p className="text-sm font-semibold text-slate-600 leading-relaxed">
+              Are you sure you want to logout?
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLogoutModalOpen(false)}
+                className="flex-1 py-3.5 px-4 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-extrabold text-xs uppercase tracking-wider transition-all text-center shadow-sm"
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLogout}
+                className="flex-1 py-3.5 px-4 rounded-2xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-extrabold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/30"
+              >
+                <LogOut size={15} />
+                <span>LOGOUT</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      {/* Admin Mobile Bottom Navigation Bar */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-bg-darkSec/95 border-t border-slate-200 dark:border-glass backdrop-blur-xl px-2 py-2 flex items-center justify-around shadow-2xl">
+        {/* Dashboard Tab */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab('dashboard'); setIsMoreMenuOpen(false); }}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === 'dashboard' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <LayoutGrid size={20} />
+          <span className="mt-1">Dashboard</span>
+        </button>
+
+        {/* Restaurants Tab */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab('restaurants'); setIsMoreMenuOpen(false); }}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === 'restaurants' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Store size={20} />
+          <span className="mt-1">Restaurants</span>
+        </button>
+
+        {/* Orders Tab */}
+        <button
+          type="button"
+          onClick={() => { setActiveTab('orders'); setIsMoreMenuOpen(false); }}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === 'orders' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <ShoppingBag size={20} />
+          <span className="mt-1">Orders</span>
+        </button>
+
+        {/* More Tab */}
+        <button
+          type="button"
+          onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+            activeTab === 'delivery' || activeTab === 'settings' || isMoreMenuOpen
+              ? 'text-amber-600 dark:text-primary font-black'
+              : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+          }`}
+        >
+          <Settings size={20} />
+          <span className="mt-1">More</span>
+        </button>
+      </nav>
+
+      {/* Admin Slide-up "More" Drawer */}
+      <AnimatePresence>
+        {isMoreMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMoreMenuOpen(false)}
+              className="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[99990] cursor-pointer"
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="lg:hidden fixed bottom-16 left-0 right-0 z-[99991] bg-white dark:bg-bg-darkSec border-t border-slate-200 dark:border-glass rounded-t-3xl p-6 space-y-4 shadow-2xl"
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-3">
+                <span className="text-xs font-black uppercase text-amber-600 dark:text-primary tracking-widest">
+                  Admin Console Menu
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsMoreMenuOpen(false)}
+                  className="p-1 rounded-lg text-slate-500 dark:text-text-muted"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('delivery'); setIsMoreMenuOpen(false); }}
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
+                    activeTab === 'delivery'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
+                      : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <Bike size={20} className="text-amber-600 dark:text-primary" />
+                  <span>Delivery Assignments</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('settings'); setIsMoreMenuOpen(false); }}
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
+                    activeTab === 'settings'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
+                      : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <Settings size={20} className="text-amber-600 dark:text-primary" />
+                  <span>Settings</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="p-4 rounded-2xl border border-slate-200 dark:border-glass bg-slate-50 dark:bg-bg-dark/60 text-slate-800 dark:text-white text-left flex flex-col gap-2 cursor-pointer"
+                >
+                  {theme === 'light' ? <Moon size={20} className="text-slate-700" /> : <Sun size={20} className="text-amber-400" />}
+                  <span>{theme === 'light' ? 'Dark Theme' : 'Light Theme'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setIsLogoutModalOpen(true); setIsMoreMenuOpen(false); }}
+                  className="p-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 text-left flex flex-col gap-2 cursor-pointer"
+                >
+                  <LogOut size={20} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
