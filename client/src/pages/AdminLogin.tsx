@@ -140,7 +140,7 @@ export const AdminLogin: React.FC = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
+                placeholder="Enter Strong Password"
                 className="w-full pl-11 pr-11 py-3 rounded-lg border border-glass bg-glass-subtle focus:bg-glass focus:border-primary/80 focus:ring-1 focus:ring-primary/40 outline-none text-sm transition-all duration-300 placeholder:text-text-muted"
               />
               <button
