@@ -12,10 +12,13 @@ interface CartContextType {
   removeFromCart: (dishId: string) => void;
   reduceQuantity: (dishId: string) => void;
   clearCart: () => void;
+  getItemQuantity: (dishId: string) => number;
   totalAmount: number;
   totalItemsCount: number;
   isCartOpen: boolean;
   setCartOpen: (open: boolean) => void;
+  lastAddedItem: { name: string; quantity: number; image: string; price: number } | null;
+  dismissToast: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -23,6 +26,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setCartOpen] = useState(false);
+  const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number } | null>(null);
 
   // Load cart from localStorage on init
   useEffect(() => {
@@ -41,15 +45,37 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('mk_cart', JSON.stringify(cartItems));
   }, [cartItems]);
 
+  const getItemQuantity = (dishId: string): number => {
+    const found = cartItems.find(item => item.dish.id === dishId);
+    return found ? found.quantity : 0;
+  };
+
   const addToCart = (dish: DishItem) => {
+    if (dish.isAvailable === false || (dish as any).isOpen === false || (dish as any).restaurantIsOpen === false) {
+      alert('This restaurant is currently closed or offline and not accepting orders.');
+      return;
+    }
     setCartItems((prevItems) => {
       const existingItem = prevItems.find((item) => item.dish.id === dish.id);
+      let newQty = 1;
+      let newItems: CartItem[];
       if (existingItem) {
-        return prevItems.map((item) =>
-          item.dish.id === dish.id ? { ...item, quantity: item.quantity + 1 } : item
+        newQty = existingItem.quantity + 1;
+        newItems = prevItems.map((item) =>
+          item.dish.id === dish.id ? { ...item, quantity: newQty } : item
         );
+      } else {
+        newItems = [...prevItems, { dish, quantity: 1 }];
       }
-      return [...prevItems, { dish, quantity: 1 }];
+
+      setLastAddedItem({
+        name: dish.name,
+        quantity: newQty,
+        image: dish.image,
+        price: dish.price
+      });
+
+      return newItems;
     });
   };
 
@@ -60,9 +86,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (existingItem.quantity === 1) {
           return prevItems.filter((item) => item.dish.id !== dishId);
         }
-        return prevItems.map((item) =>
+        const updated = prevItems.map((item) =>
           item.dish.id === dishId ? { ...item, quantity: item.quantity - 1 } : item
         );
+        const updatedItem = updated.find(i => i.dish.id === dishId);
+        if (updatedItem) {
+          setLastAddedItem({
+            name: updatedItem.dish.name,
+            quantity: updatedItem.quantity,
+            image: updatedItem.dish.image,
+            price: updatedItem.dish.price
+          });
+        }
+        return updated;
       }
       return prevItems;
     });
@@ -74,6 +110,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearCart = () => {
     setCartItems([]);
+    setLastAddedItem(null);
+  };
+
+  const dismissToast = () => {
+    setLastAddedItem(null);
   };
 
   const totalAmount = cartItems.reduce(
@@ -91,10 +132,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         removeFromCart,
         reduceQuantity,
         clearCart,
+        getItemQuantity,
         totalAmount,
         totalItemsCount,
         isCartOpen,
         setCartOpen,
+        lastAddedItem,
+        dismissToast,
       }}
     >
       {children}

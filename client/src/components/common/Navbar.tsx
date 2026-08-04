@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, User, Sun, Moon, Home, Compass, LogOut } from 'lucide-react';
+import { ShoppingBag, User as UserIcon, Sun, Moon, Home, Compass, LogOut, Package } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
 
 interface NavbarProps {
   onOpenAuth: (type: 'login' | 'register') => void;
@@ -16,40 +17,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
   const { totalItemsCount, setCartOpen } = useCart();
   const { theme, toggleTheme } = useTheme();
+  const { user, role, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
-
-  useEffect(() => {
-    const adminAuthRaw = localStorage.getItem('adminAuth') || sessionStorage.getItem('adminAuth');
-    if (adminAuthRaw) {
-      try {
-        const auth = JSON.parse(adminAuthRaw);
-        setIsAdmin(!!(auth.isLoggedIn && auth.role === 'admin'));
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    } else {
-      setIsAdmin(false);
-    }
-
-    const userAuthRaw = localStorage.getItem('userAuth') || sessionStorage.getItem('userAuth');
-    if (userAuthRaw) {
-      try {
-        const auth = JSON.parse(userAuthRaw);
-        if (auth.isLoggedIn) {
-          setUser({ name: auth.name, email: auth.email });
-        } else {
-          setUser(null);
-        }
-      } catch (e) {
-        setUser(null);
-      }
-    } else {
-      setUser(null);
-    }
-  }, [location.pathname]);
 
   const navLinks = [
     { name: 'Home', id: 'home', hash: 'home' },
@@ -95,6 +65,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const handleNavClick = (e: React.MouseEvent, link: typeof navLinks[0]) => {
     e.preventDefault();
 
+    if (link.id === 'restaurants') {
+      navigate('/restaurants');
+      setActiveSection('restaurants');
+      return;
+    }
+
     if (location.pathname !== '/') {
       navigate('/#' + link.hash);
       setActiveSection(link.id);
@@ -105,6 +81,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         setActiveSection(link.id);
       }
     }
+  };
+
+  const handleLogoutClick = () => {
+    logout();
+    navigate('/login');
   };
 
   return (
@@ -176,7 +157,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3">
-            {/* Theme Toggle Button - Hidden on mobile, shown on desktop */}
+            {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
               className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
@@ -189,21 +170,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
               )}
             </button>
 
-            {/* Logout Button - Mobile View */}
-            {(isAdmin || user) && (
+            {/* Mobile Logout Button */}
+            {isAuthenticated && (
               <button
-                onClick={() => {
-                  if (isAdmin) {
-                    localStorage.removeItem('adminAuth');
-                    sessionStorage.removeItem('adminAuth');
-                    setIsAdmin(false);
-                  } else {
-                    localStorage.removeItem('userAuth');
-                    sessionStorage.removeItem('userAuth');
-                    setUser(null);
-                  }
-                  navigate('/');
-                }}
+                onClick={handleLogoutClick}
                 className="lg:hidden p-2.5 text-text-secondary hover:text-error transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-error/20 group"
                 aria-label="Logout"
               >
@@ -214,8 +184,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             {/* Cart Button */}
             {!location.pathname.startsWith('/admin') && (
               <button
-                onClick={() => setCartOpen(true)}
-                className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
+                onClick={() => navigate('/cart')}
+                className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
+                title="View Shopping Cart"
               >
                 <ShoppingBag size={18} className="group-hover:scale-110 transition-transform duration-300" />
                 <AnimatePresence>
@@ -235,53 +206,56 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
             {/* Auth Buttons - Desktop */}
             <div className="hidden sm:flex items-center space-x-3 pl-3 border-l border-glass">
-              {isAdmin ? (
+              {isAuthenticated && user ? (
                 <>
-                  {location.pathname !== '/admin/dashboard' && (
+                  {role === 'ADMIN' && location.pathname !== '/admin/dashboard' && (
                     <Link
                       to="/admin/dashboard"
                       className="text-xs font-bold tracking-[0.12em] uppercase text-primary hover:text-primary-dark transition-colors mr-2"
                     >
-                      Console
+                      Admin Dashboard
+                    </Link>
+                  )}
+                  {role === 'RESTAURANT' && location.pathname !== '/restaurant/dashboard' && (
+                    <Link
+                      to="/restaurant/dashboard"
+                      className="text-xs font-bold tracking-[0.12em] uppercase text-primary hover:text-primary-dark transition-colors mr-2"
+                    >
+                      Restaurant Portal
                     </Link>
                   )}
                   <button
-                    onClick={() => {
-                      localStorage.removeItem('adminAuth');
-                      sessionStorage.removeItem('adminAuth');
-                      setIsAdmin(false);
-                      navigate('/');
-                    }}
-                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
+                    onClick={() => navigate('/orders')}
+                    className="inline-flex items-center space-x-1 text-xs font-bold uppercase tracking-wider text-text-secondary hover:text-primary transition-colors mr-2 cursor-pointer"
+                    title="My Orders & Status"
                   >
-                    Logout
+                    <Package size={14} />
+                    <span>My Orders</span>
                   </button>
-                </>
-              ) : user ? (
-                <>
-                  <span className="text-xs font-bold text-text-secondary mr-2">
-                    Hi, {user.name.split(' ')[0]}
-                  </span>
+
+                  {/* Profile Indicator */}
+                  <div className="flex items-center space-x-2 bg-glass-subtle border border-glass rounded-xl px-3 py-1.5">
+                    <UserIcon size={14} className="text-primary" />
+                    <span className="text-xs font-bold text-text-secondary">
+                      Hi, {user.name.split(' ')[0]}
+                    </span>
+                  </div>
+
                   <button
-                    onClick={() => {
-                      localStorage.removeItem('userAuth');
-                      sessionStorage.removeItem('userAuth');
-                      setUser(null);
-                      navigate('/');
-                    }}
-                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
+                    onClick={handleLogoutClick}
+                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300 text-error hover:bg-error/10"
                   >
                     Logout
                   </button>
                 </>
               ) : (
                 <>
-                  <button
-                    onClick={() => onOpenAuth('login')}
+                  <Link
+                    to="/login"
                     className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
                   >
                     Login
-                  </button>
+                  </Link>
                   <button
                     onClick={() => onOpenAuth('register')}
                     className="btn-primary text-[10px] font-bold py-2.5 px-5 rounded-xl uppercase tracking-wider transition-all duration-300"
@@ -291,8 +265,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                 </>
               )}
             </div>
-
-            {/* Removed Hamburger toggle button */}
           </div>
         </div>
       </header>
@@ -346,18 +318,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         {/* Profile */}
         <button
           onClick={() => {
-            if (!user && !isAdmin) {
-              onOpenAuth('login');
+            if (!isAuthenticated) {
+              navigate('/login');
             }
           }}
           className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
-            user ? 'text-primary' : 'text-text-muted hover:text-text-primary'
+            isAuthenticated ? 'text-primary' : 'text-text-muted hover:text-text-primary'
           }`}
           aria-label="User Account"
         >
-          <User size={18} />
+          <UserIcon size={18} />
           <span className="text-[9px] font-bold mt-1 tracking-wider">
-            {isAdmin ? 'Admin' : user ? user.name.split(' ')[0] : 'Account'}
+            {isAuthenticated && user ? user.name.split(' ')[0] : 'Account'}
           </span>
         </button>
 

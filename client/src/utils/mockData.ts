@@ -25,6 +25,7 @@ export interface DishItem {
   rating: number;
   image: string;
   type: 'veg' | 'non-veg';
+  isVeg?: boolean;
   category: string;
   description: string;
   isAvailable?: boolean;

@@ -16,6 +16,7 @@ import {
   Clock,
   AlertTriangle,
   UploadCloud,
+  Star,
   Sun,
   Moon,
   ChevronRight,
@@ -25,13 +26,17 @@ import {
   ToggleRight,
   Check,
   ArrowLeft,
-  Globe
+  Globe,
+  ChefHat,
+  XCircle
 } from 'lucide-react';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+import { API_BASE_URL } from '../utils/api';
+import { getCurrentUser, clearSession } from '../utils/auth.utils';
+import { useAuth } from '../hooks/useAuth';
+import socketService from '../services/socket.service';
 
 // Types
 interface FoodItem {
@@ -45,6 +50,7 @@ interface FoodItem {
   isVeg: boolean;
   image: string;
   isAvailable: boolean;
+  isCategoryFavourite?: boolean;
   status: 'active' | 'disabled';
 }
 
@@ -65,6 +71,7 @@ export const RestaurantDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
+  const { logout: authLogout } = useAuth();
 
   // Auth & Restaurant Profile state
   const [restaurant, setRestaurant] = useState<any>(null);
@@ -93,20 +100,63 @@ export const RestaurantDashboard: React.FC = () => {
   const [foodForm, setFoodForm] = useState({
     name: '',
     description: '',
-    category: 'Starters',
+    category: '',
     price: '',
     prepTime: '15-20 mins',
     isVeg: true,
     image: '',
-    isAvailable: true
+    isAvailable: true,
+    isCategoryFavourite: false
   });
 
-  // Categories State
-  const [categories, setCategories] = useState<string[]>(['Starters', 'Main Course', 'Breads', 'Desserts', 'Beverages']);
+  // Categories State (Dynamic from Database)
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+
+  const [editingCategoryTarget, setEditingCategoryTarget] = useState<string | null>(null);
+  const [editingCategoryValue, setEditingCategoryValue] = useState<string>('');
+
+  const SUGGESTED_CATEGORIES = [
+    'Starters',
+    'Main Course',
+    'Biryani',
+    'Fast Food',
+    'Beverages',
+    'Desserts',
+    ' Combos'
+  ];
+
+  const normCat = (s: string) =>
+    (s || '')
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+      .trim()
+      .toLowerCase();
+
+  const openAddCategoryModal = () => {
+    const activeSuggestions = SUGGESTED_CATEGORIES.filter(sugg =>
+      categories.some(c => c.toLowerCase() === sugg.toLowerCase() || normCat(c) === normCat(sugg))
+    );
+    setSelectedSuggestions(activeSuggestions);
+    setNewCategoryName('');
+    setCategoryError(null);
+    setIsAddCategoryOpen(true);
+  };
+
+  const toggleSuggestion = (cat: string) => {
+    const targetNorm = normCat(cat);
+    setSelectedSuggestions(prev => {
+      const exists = prev.some(c => c === cat || normCat(c) === targetNorm);
+      if (exists) {
+        return prev.filter(c => c !== cat && normCat(c) !== targetNorm);
+      } else {
+        return [...prev, cat];
+      }
+    });
+  };
 
   // Orders State
   const [orders, setOrders] = useState<OrderItem[]>([]);
@@ -140,38 +190,48 @@ export const RestaurantDashboard: React.FC = () => {
 
   // 1. Initial Load & Auth check
   useEffect(() => {
-    const rawAuth = localStorage.getItem('restaurantAuth') || sessionStorage.getItem('restaurantAuth');
-    if (!rawAuth) {
-      navigate('/restaurant/login');
+    const user = getCurrentUser();
+    if (!user || user.role !== 'RESTAURANT') {
+      navigate('/login', { replace: true });
       return;
     }
-    try {
-      const parsed = JSON.parse(rawAuth);
-      if (parsed && parsed.restaurant) {
-        setRestaurant(parsed.restaurant);
-        setProfileForm({
-          name: parsed.restaurant.name || '',
-          ownerName: parsed.restaurant.ownerName || '',
-          email: parsed.restaurant.email || '',
-          phone: parsed.restaurant.phone || '',
-          address: parsed.restaurant.address || '',
-          openingTime: parsed.restaurant.openingTime || '11:00 AM',
-          closingTime: parsed.restaurant.closingTime || '11:00 PM',
-          image: parsed.restaurant.image || '',
-          description: parsed.restaurant.description || 'Gourmet establishment serving handcrafted culinary delights.',
-          cuisine: parsed.restaurant.cuisine || 'Multi-Cuisine'
-        });
-        if (typeof parsed.restaurant.isOpen === 'boolean') {
-          setIsRestaurantOpen(parsed.restaurant.isOpen);
-        }
-        loadRestaurantData(parsed.restaurant.id || parsed.restaurant.name);
-      } else {
-        navigate('/restaurant/login');
-      }
-    } catch (e) {
-      navigate('/restaurant/login');
+
+    const rawAuth = localStorage.getItem('restaurantAuth') || sessionStorage.getItem('restaurantAuth');
+    let restProfile = null;
+    if (rawAuth) {
+      try {
+        const parsed = JSON.parse(rawAuth);
+        restProfile = parsed.restaurant;
+      } catch (e) { }
     }
-  }, [navigate]);
+
+    if (!restProfile) {
+      restProfile = {
+        id: user.restaurantId || user.id,
+        name: user.name,
+        email: user.email,
+        ownerName: user.name
+      };
+    }
+
+    setRestaurant(restProfile);
+    setProfileForm({
+      name: restProfile.name || '',
+      ownerName: restProfile.ownerName || '',
+      email: restProfile.email || '',
+      phone: restProfile.phone || '',
+      address: restProfile.address || '',
+      openingTime: restProfile.openingTime || '',
+      closingTime: restProfile.closingTime || '',
+      image: restProfile.image || '',
+      description: restProfile.description || '',
+      cuisine: restProfile.cuisine || ''
+    });
+    if (typeof restProfile.isOpen === 'boolean') {
+      setIsRestaurantOpen(restProfile.isOpen);
+    }
+    loadRestaurantData(restProfile.id || user.id);
+  }, []);
 
   // Load Menu, Categories, Orders and Restaurant Status
   const loadRestaurantData = async (resId: string) => {
@@ -188,7 +248,7 @@ export const RestaurantDashboard: React.FC = () => {
     // Load Categories
     try {
       const catResp = await axios.get(`${API_BASE_URL}/restaurant/categories/${resId}`);
-      if (catResp.data.success && catResp.data.categories && catResp.data.categories.length > 0) {
+      if (catResp.data.success && Array.isArray(catResp.data.categories)) {
         setCategories(catResp.data.categories);
       }
     } catch (e) {
@@ -207,18 +267,65 @@ export const RestaurantDashboard: React.FC = () => {
       setMenuItems(getInitialMenuItems(resId));
     }
 
-    // Load Orders
+    // Load Orders from DynamoDB database
     try {
       const resp = await axios.get(`${API_BASE_URL}/restaurant/orders/${resId}`);
-      if (resp.data.success && resp.data.orders && resp.data.orders.length > 0) {
+      if (resp.data.success && Array.isArray(resp.data.orders)) {
         setOrders(resp.data.orders);
       } else {
-        setOrders(getInitialOrders(resId));
+        setOrders([]);
       }
     } catch (e) {
-      setOrders(getInitialOrders(resId));
+      console.warn('Failed to fetch orders from database:', e);
+      setOrders([]);
     }
   };
+
+  // Socket.io Real-Time Room Join & Order Event Subscriptions
+  useEffect(() => {
+    const resId = restaurant?.id || 'RES-001';
+    socketService.joinRestaurant(resId);
+
+    // Phase 1: Real-Time Order Creation Listener (0ms UI Update + Sound + Toast)
+    const unsubscribeCreated = socketService.onOrderCreated((newOrder: any) => {
+      console.log('⚡ [Real-Time Socket Event: ORDER_CREATED] Received:', newOrder);
+
+      const formattedOrder: OrderItem = {
+        id: newOrder.orderId || newOrder.id,
+        customerName: newOrder.customerName || 'Valued Customer',
+        customerPhone: newOrder.customerPhone || 'N/A',
+        customerAddress: newOrder.deliveryAddress || 'Address Not Specified',
+        items: newOrder.items || [],
+        total: Number(newOrder.totalAmount || newOrder.total || 0),
+        paymentStatus: newOrder.paymentStatus === 'SUCCESS' ? 'paid' : 'pending',
+        orderStatus: newOrder.status || 'Pending',
+        time: 'Just Now',
+        restaurantId: newOrder.restaurantId
+      };
+
+      // Prepend order to top of list instantly without page refresh!
+      setOrders(prev => [formattedOrder, ...prev.filter(o => o.id !== formattedOrder.id)]);
+
+      // Play audio chime alert
+      try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.play().catch(() => {});
+      } catch (e) {}
+
+      logActivity('order', `New order #${formattedOrder.id} received from ${formattedOrder.customerName}!`);
+    });
+
+    // Phase 4: Rider status updates listener
+    const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
+      const orderId = updatedOrder.orderId || updatedOrder.id;
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, orderStatus: updatedOrder.status } : o));
+    });
+
+    return () => {
+      unsubscribeCreated();
+      unsubscribeRider();
+    };
+  }, [restaurant?.id]);
 
   // Toggle Restaurant Open / Close Status
   const handleToggleRestaurantStatus = async () => {
@@ -257,12 +364,10 @@ export const RestaurantDashboard: React.FC = () => {
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) return;
 
-    const trimmed = newCategoryName.trim();
-    if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
-      setCategoryError('Category already exists!');
-      return;
+    const categoriesToSave = [...selectedSuggestions];
+    if (newCategoryName.trim() && !categoriesToSave.some(c => c.toLowerCase() === newCategoryName.trim().toLowerCase())) {
+      categoriesToSave.push(newCategoryName.trim());
     }
 
     setIsSavingCategory(true);
@@ -270,30 +375,104 @@ export const RestaurantDashboard: React.FC = () => {
 
     const resId = restaurant?.id || restaurant?.name || 'RES-001';
 
-    try {
-      const resp = await axios.post(`${API_BASE_URL}/restaurant/categories/${resId}`, {
-        name: trimmed
-      });
+    // 1. Identify categories that were DESELECTED and need to be deleted
+    const categoriesToRemove = categories.filter(existing =>
+      !categoriesToSave.some(saving => existing === saving || normCat(existing) === normCat(saving))
+    );
 
-      if (resp.data.success && resp.data.categories) {
-        setCategories(resp.data.categories);
-        logActivity('menu', `Added new category "${trimmed}".`);
-        setNewCategoryName('');
-        setIsAddCategoryOpen(false);
+    // 2. Identify new categories that need to be saved
+    const categoriesToAdd = categoriesToSave.filter(saving =>
+      !categories.some(existing => existing === saving || normCat(existing) === normCat(saving))
+    );
+
+    let updatedCatList = [...categoriesToSave];
+
+    try {
+      // Execute deletions for deselected categories
+      for (const removeCat of categoriesToRemove) {
+        try {
+          await axios.delete(`${API_BASE_URL}/restaurant/categories/${resId}/${encodeURIComponent(removeCat)}`);
+        } catch (e) {
+          console.warn('Failed removing category during sync:', removeCat, e);
+        }
       }
+
+      // Execute additions for newly selected categories
+      for (const addCat of categoriesToAdd) {
+        try {
+          const resp = await axios.post(`${API_BASE_URL}/restaurant/categories/${resId}`, {
+            name: addCat
+          });
+          if (resp.data.success && resp.data.categories) {
+            updatedCatList = resp.data.categories;
+          }
+        } catch (e) {
+          console.warn('Failed adding category during sync:', addCat, e);
+        }
+      }
+
+      setCategories(updatedCatList);
+      logActivity('menu', `Updated menu categories.`);
+      setNewCategoryName('');
+      setIsAddCategoryOpen(false);
     } catch (err: any) {
-      const errorMsg = err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to add category.';
+      const errorMsg = err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to update categories.';
       setCategoryError(errorMsg);
     } finally {
       setIsSavingCategory(false);
     }
   };
 
+  const handleRenameCategorySubmit = async (oldName: string) => {
+    if (!editingCategoryValue.trim() || editingCategoryValue.trim() === oldName) {
+      setEditingCategoryTarget(null);
+      return;
+    }
+
+    const newName = editingCategoryValue.trim();
+    const resId = restaurant?.id || restaurant?.name || 'RES-001';
+
+    try {
+      const resp = await axios.put(`${API_BASE_URL}/restaurant/categories/${resId}`, {
+        oldName,
+        newName
+      });
+
+      if (resp.data.success && resp.data.categories) {
+        setCategories(resp.data.categories);
+        setMenuItems(prev => prev.map(m => (m.category === oldName || normCat(m.category) === normCat(oldName)) ? { ...m, category: newName } : m));
+        logActivity('menu', `Renamed category "${oldName}" to "${newName}".`);
+      }
+    } catch (err: any) {
+      console.error('Failed to rename category:', err);
+    } finally {
+      setEditingCategoryTarget(null);
+      setEditingCategoryValue('');
+    }
+  };
+
+  const handleDeleteCategorySubmit = async (catName: string) => {
+    const resId = restaurant?.id || restaurant?.name || 'RES-001';
+    const targetNorm = normCat(catName);
+
+    // Instant UI update
+    setCategories(prev => prev.filter(c => c !== catName && normCat(c) !== targetNorm));
+    setSelectedSuggestions(prev => prev.filter(s => s !== catName && normCat(s) !== targetNorm));
+    setMenuItems(prev => prev.map(m => (m.category === catName || normCat(m.category) === targetNorm) ? { ...m, category: 'Uncategorized' } : m));
+
+    try {
+      const resp = await axios.delete(`${API_BASE_URL}/restaurant/categories/${resId}/${encodeURIComponent(catName)}`);
+      if (resp.data.success && Array.isArray(resp.data.categories)) {
+        setCategories(resp.data.categories);
+      }
+      logActivity('menu', `Deleted category "${catName}".`);
+    } catch (err: any) {
+      console.error('Failed to delete category on backend:', err);
+    }
+  };
+
   // Initial Menu Fallback
   const getInitialMenuItems = (_resId: string): FoodItem[] => [];
-
-  // Initial Orders Fallback
-  const getInitialOrders = (_resId: string): OrderItem[] => [];
 
   // Helper: Activity logger
   const logActivity = (type: string, title: string) => {
@@ -306,10 +485,12 @@ export const RestaurantDashboard: React.FC = () => {
   };
 
   const confirmLogout = () => {
-    localStorage.removeItem('restaurantAuth');
-    sessionStorage.removeItem('restaurantAuth');
+    clearSession();
+    if (authLogout) {
+      authLogout();
+    }
     setIsLogoutModalOpen(false);
-    navigate('/restaurant/login');
+    navigate('/login', { replace: true });
   };
 
   // --------------------------------------------------------------------------
@@ -320,12 +501,13 @@ export const RestaurantDashboard: React.FC = () => {
     setFoodForm({
       name: '',
       description: '',
-      category: 'Main Course',
+      category: categories[0] || '',
       price: '',
       prepTime: '15-20 mins',
       isVeg: true,
       image: '',
-      isAvailable: true
+      isAvailable: true,
+      isCategoryFavourite: false
     });
     setFoodFormError(null);
     setFoodImageUploadSuccess(false);
@@ -342,14 +524,15 @@ export const RestaurantDashboard: React.FC = () => {
       prepTime: item.prepTime,
       isVeg: item.isVeg,
       image: item.image,
-      isAvailable: item.isAvailable
+      isAvailable: item.isAvailable,
+      isCategoryFavourite: item.isCategoryFavourite || false
     });
     setFoodFormError(null);
     setFoodImageUploadSuccess(false);
     setIsFoodModalOpen(true);
   };
 
-  // Image Upload handler for Food Modal using S3 Endpoint
+  // Image Upload handler for Food Modal using S3 Endpoint with Base64 Fallback
   const handleFoodImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -367,14 +550,17 @@ export const RestaurantDashboard: React.FC = () => {
             fileData: base64Data
           });
 
-          if (resp.data.success && resp.data.fileUrl) {
+          if (resp.data && resp.data.fileUrl) {
             setFoodForm(prev => ({ ...prev, image: resp.data.fileUrl }));
+            setFoodImageUploadSuccess(true);
+          } else {
+            setFoodForm(prev => ({ ...prev, image: base64Data }));
             setFoodImageUploadSuccess(true);
           }
         } catch (err) {
-          console.warn('S3 upload failed, using local preview:', err);
+          console.warn('S3 image upload error, using local base64 preview:', err);
           setFoodForm(prev => ({ ...prev, image: reader.result as string }));
-          setFoodImageUploadSuccess(false);
+          setFoodImageUploadSuccess(true);
         } finally {
           setIsFoodImageUploading(false);
         }
@@ -386,21 +572,25 @@ export const RestaurantDashboard: React.FC = () => {
     e.preventDefault();
     setFoodFormError(null);
 
-    const { name, description, category, price, prepTime, isVeg, image, isAvailable } = foodForm;
+    const { name, description, category, price, prepTime, isVeg, image, isAvailable, isCategoryFavourite } = foodForm;
 
     if (!name.trim()) {
-      setFoodFormError('Food name is required.');
+      setFoodFormError('Food Item Name is required.');
       return;
     }
     if (!price || isNaN(Number(price)) || Number(price) <= 0) {
-      setFoodFormError('Please enter a valid positive price.');
+      setFoodFormError('Please enter a valid price greater than 0.');
       return;
     }
 
-    const defaultImg = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=85';
+    const defaultImg = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800';
     const finalImage = image.trim() || defaultImg;
 
     const resId = restaurant?.id || 'RES-001';
+
+    if (category && !categories.includes(category)) {
+      setCategories(prev => [...prev, category]);
+    }
 
     if (editingFood) {
       // Edit mode
@@ -414,13 +604,22 @@ export const RestaurantDashboard: React.FC = () => {
         isVeg,
         image: finalImage,
         isAvailable,
+        isCategoryFavourite,
         status: isAvailable ? 'active' : 'disabled'
       };
 
       setMenuItems(prev => prev.map(m => m.id === editingFood.id ? updatedItem : m));
 
       try {
-        await axios.post(`${API_BASE_URL}/restaurant/menu`, updatedItem);
+        const resp = await axios.post(`${API_BASE_URL}/restaurant/menu`, updatedItem);
+        if (resp.data && resp.data.success && resp.data.item) {
+          const saved = resp.data.item;
+          setMenuItems(prev => prev.map(m => (m.id === editingFood.id || m.name.toLowerCase() === updatedItem.name.toLowerCase()) ? {
+            ...updatedItem,
+            id: saved.id || saved.menuItemId || updatedItem.id,
+            image: saved.image || saved.foodImage || updatedItem.image
+          } : m));
+        }
       } catch (err) {
         console.warn('Backend update failed:', err);
       }
@@ -428,8 +627,9 @@ export const RestaurantDashboard: React.FC = () => {
       logActivity('menu', `Food item "${updatedItem.name}" was updated.`);
     } else {
       // Add mode
+      const tempId = `food_${Date.now()}`;
       const newItem: FoodItem = {
-        id: `food_${Date.now()}`,
+        id: tempId,
         restaurantId: resId,
         name: name.trim(),
         description: description.trim(),
@@ -439,13 +639,22 @@ export const RestaurantDashboard: React.FC = () => {
         isVeg,
         image: finalImage,
         isAvailable,
+        isCategoryFavourite,
         status: isAvailable ? 'active' : 'disabled'
       };
 
       setMenuItems(prev => [newItem, ...prev]);
 
       try {
-        await axios.post(`${API_BASE_URL}/restaurant/menu`, newItem);
+        const resp = await axios.post(`${API_BASE_URL}/restaurant/menu`, newItem);
+        if (resp.data && resp.data.success && resp.data.item) {
+          const saved = resp.data.item;
+          setMenuItems(prev => prev.map(m => m.id === tempId ? {
+            ...newItem,
+            id: saved.id || saved.menuItemId || tempId,
+            image: saved.image || saved.foodImage || newItem.image
+          } : m));
+        }
       } catch (err) {
         console.warn('Backend save failed:', err);
       }
@@ -486,16 +695,129 @@ export const RestaurantDashboard: React.FC = () => {
   // --------------------------------------------------------------------------
   // ORDER HANDLERS
   // --------------------------------------------------------------------------
-  const updateOrderStatus = async (orderId: string, newStatus: OrderItem['orderStatus']) => {
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setOrders(prev => prev.map(o => {
-      if (o.id === orderId) {
-        const updated = { ...o, orderStatus: newStatus };
+      if (o.id === orderId || (o as any).orderId === orderId) {
+        const updated = { ...o, orderStatus: newStatus as any, status: newStatus };
         axios.put(`${API_BASE_URL}/restaurant/orders/${orderId}/status`, { status: newStatus, restaurantId: restaurant?.id }).catch(() => { });
         logActivity('order', `Order ${orderId} status changed to ${newStatus}.`);
         return updated;
       }
       return o;
     }));
+  };
+
+  const renderRestaurantOrderAction = (o: OrderItem) => {
+    const status = (o.orderStatus || (o as any).status || '').toString().toLowerCase();
+
+    if (status === 'pending') {
+      return (
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => updateOrderStatus(o.id, 'Accepted')}
+            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+            title="Accept Order"
+          >
+            <Check size={14} />
+            <span>Accept Order</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => updateOrderStatus(o.id, 'Rejected')}
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+            title="Reject Order"
+          >
+            <X size={14} />
+            <span>Reject</span>
+          </button>
+        </div>
+      );
+    }
+
+    if (status === 'accepted') {
+      return (
+        <div className="flex items-center gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => updateOrderStatus(o.id, 'Preparing')}
+            className="px-3.5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Start Preparing Food in Kitchen"
+          >
+            <ChefHat size={14} />
+            <span>Start Preparing</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => updateOrderStatus(o.id, 'Rejected')}
+            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 cursor-pointer"
+            title="Reject Order"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      );
+    }
+
+    if (status === 'preparing') {
+      return (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => updateOrderStatus(o.id, 'Ready')}
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            title="Mark Food Ready for Pickup / Delivery"
+          >
+            <CheckCircle size={14} />
+            <span>Food Ready for Pickup</span>
+          </button>
+        </div>
+      );
+    }
+
+    if (status === 'ready') {
+      return (
+        <div className="flex items-center justify-end">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase">
+            <Clock size={14} />
+            <span>Food Ready (Awaiting Courier)</span>
+          </span>
+        </div>
+      );
+    }
+
+    if (status === 'rejected') {
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase">
+          <XCircle size={13} />
+          <span>Rejected</span>
+        </span>
+      );
+    }
+
+    if (status === 'completed' || status === 'delivered') {
+      return (
+        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase">
+          <CheckCircle size={13} />
+          <span>Completed</span>
+        </span>
+      );
+    }
+
+    return (
+      <select
+        value={o.orderStatus}
+        onChange={(e) => updateOrderStatus(o.id, e.target.value as any)}
+        className="px-3 py-1.5 rounded-lg bg-bg-dark border border-glass text-xs font-bold text-text-primary outline-none focus:border-primary/50 cursor-pointer"
+      >
+        <option value="Pending">Pending</option>
+        <option value="Accepted">Accepted</option>
+        <option value="Preparing">Preparing</option>
+        <option value="Ready">Ready</option>
+        <option value="Completed">Completed</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+    );
   };
 
   // Filtered Orders
@@ -629,8 +951,8 @@ export const RestaurantDashboard: React.FC = () => {
                 key={item.id}
                 onClick={() => setActiveTab(item.id as any)}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${isActive
-                    ? 'bg-primary text-bg-dark shadow-luxury font-black'
-                    : 'text-text-secondary hover:bg-glass hover:text-primary'
+                  ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                  : 'text-text-secondary hover:bg-glass hover:text-primary'
                   }`}
               >
                 <div className="flex items-center gap-3">
@@ -748,7 +1070,7 @@ export const RestaurantDashboard: React.FC = () => {
       {/* ==================================================== */}
       <main
         data-lenis-prevent="true"
-        className="flex-1 p-4 sm:p-6 lg:p-8 pt-20 lg:pt-8 lg:h-screen lg:overflow-y-auto w-full min-w-0"
+        className="flex-1 p-4 sm:p-6 lg:p-8 pt-20 lg:pt-8 pb-28 lg:pb-8 lg:h-screen lg:overflow-y-auto w-full min-w-0"
       >
         {/* ==================================================== */}
         {/* DASHBOARD TAB */}
@@ -791,13 +1113,13 @@ export const RestaurantDashboard: React.FC = () => {
 
             {/* Restaurant Status Card (Placed below Manage Menu button) */}
             <div className={`glass-panel border rounded-2xl p-5 shadow-luxury transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isRestaurantOpen
-                ? 'border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/20'
-                : 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-950/20'
+              ? 'border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/20'
+              : 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-950/20'
               }`}>
               <div className="flex items-center gap-4">
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isRestaurantOpen
-                    ? 'bg-emerald-500/20 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
-                    : 'bg-rose-500/20 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                  ? 'bg-emerald-500/20 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                  : 'bg-rose-500/20 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
                   }`}>
                   <span className="relative flex h-3.5 w-3.5">
                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isRestaurantOpen ? 'bg-emerald-400' : 'bg-rose-400'
@@ -814,8 +1136,8 @@ export const RestaurantDashboard: React.FC = () => {
                       {isRestaurantOpen ? t('restaurant_open') : t('restaurant_closed')}
                     </span>
                     <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${isRestaurantOpen
-                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
-                        : 'bg-rose-500/10 text-rose-500 border-rose-500/30'
+                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-500 border-rose-500/30'
                       }`}>
                       {isRestaurantOpen ? t('badge_open') : t('badge_closed')}
                     </span>
@@ -927,46 +1249,34 @@ export const RestaurantDashboard: React.FC = () => {
                               <div className="font-bold text-text-primary">{o.customerName}</div>
                               <div className="text-[10px] text-text-muted">{o.time}</div>
                             </td>
-                            <td className="p-4 max-w-xs truncate">{o.items}</td>
-                            <td className="p-4 font-bold text-text-primary">₹{o.total.toFixed(2)}</td>
+                            <td className="p-4 max-w-xs">
+                              {Array.isArray(o.items) && o.items.length > 0 ? (
+                                <div className="space-y-0.5">
+                                  {o.items.map((it: any, idx: number) => (
+                                    <div key={idx} className="text-xs font-semibold text-text-primary">
+                                      {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : typeof o.items === 'string' ? (
+                                o.items
+                              ) : (
+                                <span className="text-text-muted italic text-[11px]">No items listed</span>
+                              )}
+                            </td>
+                            <td className="p-4 font-bold text-text-primary">₹{Number(o.total || 0).toFixed(2)}</td>
                             <td className="p-4">
                               <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${o.orderStatus === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                                  o.orderStatus === 'Preparing' || o.orderStatus === 'Accepted' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                    o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                      o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
-                                        'bg-error/10 text-error border border-error/20'
+                                o.orderStatus === 'Preparing' || o.orderStatus === 'Accepted' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                  o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                    o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
+                                      'bg-error/10 text-error border border-error/20'
                                 }`}>
                                 {o.orderStatus}
                               </span>
                             </td>
                             <td className="p-4 text-right">
-                              {o.orderStatus === 'Pending' && (
-                                <button
-                                  onClick={() => updateOrderStatus(o.id, 'Accepted')}
-                                  className="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-dark text-bg-dark text-[10px] font-black uppercase tracking-wider transition-all"
-                                >
-                                  Accept
-                                </button>
-                              )}
-                              {o.orderStatus === 'Accepted' && (
-                                <button
-                                  onClick={() => updateOrderStatus(o.id, 'Preparing')}
-                                  className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-[10px] font-black uppercase tracking-wider transition-all"
-                                >
-                                  Prepare
-                                </button>
-                              )}
-                              {o.orderStatus === 'Preparing' && (
-                                <button
-                                  onClick={() => updateOrderStatus(o.id, 'Ready')}
-                                  className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-[10px] font-black uppercase tracking-wider transition-all"
-                                >
-                                  Mark Ready
-                                </button>
-                              )}
-                              {(o.orderStatus === 'Ready' || o.orderStatus === 'Completed' || o.orderStatus === 'Rejected') && (
-                                <span className="text-[10px] text-text-muted italic">No action</span>
-                              )}
+                              {renderRestaurantOrderAction(o)}
                             </td>
                           </tr>
                         ))}
@@ -1106,9 +1416,30 @@ export const RestaurantDashboard: React.FC = () => {
                           onChange={(e) => setFoodForm({ ...foodForm, isAvailable: e.target.checked })}
                           className="w-4 h-4 rounded border-glass text-primary focus:ring-primary/30 accent-primary"
                         />
-                        <span className="font-bold text-sm text-text-primary">Available for Customer Orders</span>
+                        <span className="font-bold text-sm text-text-primary">Available for Orders</span>
                       </label>
                     </div>
+                  </div>
+
+                  {/* One Category One Favourite Checkbox Option */}
+                  <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={foodForm.isCategoryFavourite}
+                        onChange={(e) => setFoodForm({ ...foodForm, isCategoryFavourite: e.target.checked })}
+                        className="w-4 h-4 rounded border-amber-500 text-amber-500 focus:ring-amber-500/30 accent-amber-500"
+                      />
+                      <div className="flex flex-col">
+                        <span className="font-extrabold text-xs text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                          <Star size={14} className="fill-amber-400 text-amber-400" />
+                          <span>One Category One Favourite</span>
+                        </span>
+                        <span className="text-[10px] text-text-muted mt-0.5">
+                          Feature this dish under "One Category One Favourite" on the customer landing page.
+                        </span>
+                      </div>
+                    </label>
                   </div>
 
                   <div>
@@ -1208,7 +1539,7 @@ export const RestaurantDashboard: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button
-                    onClick={() => { setIsAddCategoryOpen(true); setCategoryError(null); }}
+                    onClick={openAddCategoryModal}
                     className="flex items-center gap-2 px-4 py-3 rounded-xl border border-glass bg-glass hover:bg-glass-subtle text-text-primary hover:text-primary font-bold text-xs uppercase tracking-wider transition-all"
                   >
                     <PlusCircle size={16} />
@@ -1326,19 +1657,31 @@ export const RestaurantDashboard: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Card Actions (FEATURE 3: Toggle switch beside Edit button) */}
+                    {/* Card Actions (Interactive Toggle Switch beside Edit & Delete buttons) */}
                     <div className="p-3 bg-glass-subtle/30 border-t border-glass flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => toggleFoodAvailability(item.id)}
-                        className={`px-3 py-1.5 rounded-lg border font-bold text-[11px] transition-all flex items-center gap-1.5 ${item.isAvailable
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                            : 'border-rose-500/40 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
+                        className={`px-2.5 py-1.5 rounded-xl border transition-all duration-300 flex items-center gap-2 select-none group cursor-pointer ${item.isAvailable
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
                           }`}
-                        title={item.isAvailable ? t('available') : t('out_of_stock')}
+                        title={item.isAvailable ? 'Click to mark Out of Stock' : 'Click to mark Available'}
                       >
-                        <span className={`w-2 h-2 rounded-full ${item.isAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-                        <span>{item.isAvailable ? t('available') : t('out_of_stock')}</span>
+                        {/* iOS-Style Animated Toggle Switch */}
+                        <div
+                          className={`w-8 h-4 sm:w-9 sm:h-5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${item.isAvailable ? 'bg-emerald-500' : 'bg-slate-700'
+                            }`}
+                        >
+                          <div
+                            className={`w-3 h-3 sm:w-4 sm:h-4 rounded-full bg-white shadow-md transform transition-transform duration-300 ${item.isAvailable ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                          />
+                        </div>
+
+                        <span className="font-extrabold text-[11px] uppercase tracking-wider">
+                          {item.isAvailable ? 'In Stock' : 'Out of Stock'}
+                        </span>
                       </button>
 
                       <button
@@ -1432,8 +1775,22 @@ export const RestaurantDashboard: React.FC = () => {
                           <div className="font-bold text-text-primary">{o.customerName}</div>
                           <div className="text-[10px] text-text-muted">{o.customerPhone} • {o.customerAddress}</div>
                         </td>
-                        <td className="p-4 max-w-xs">{o.items}</td>
-                        <td className="p-4 font-bold text-text-primary">${o.total.toFixed(2)}</td>
+                        <td className="p-4 max-w-xs">
+                          {Array.isArray(o.items) && o.items.length > 0 ? (
+                            <div className="space-y-1">
+                              {o.items.map((it: any, idx: number) => (
+                                <div key={idx} className="text-xs font-semibold text-text-primary">
+                                  {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : typeof o.items === 'string' ? (
+                            o.items
+                          ) : (
+                            <span className="text-text-muted italic text-[11px]">No items listed</span>
+                          )}
+                        </td>
+                        <td className="p-4 font-bold text-text-primary">₹{Number(o.total || 0).toFixed(2)}</td>
                         <td className="p-4">
                           <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                             {o.paymentStatus}
@@ -1441,27 +1798,16 @@ export const RestaurantDashboard: React.FC = () => {
                         </td>
                         <td className="p-4">
                           <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${o.orderStatus === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                              o.orderStatus === 'Accepted' || o.orderStatus === 'Preparing' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                  o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
-                                    'bg-error/10 text-error border border-error/20'
+                            o.orderStatus === 'Accepted' || o.orderStatus === 'Preparing' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                              o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
+                                  'bg-error/10 text-error border border-error/20'
                             }`}>
                             {o.orderStatus}
                           </span>
                         </td>
                         <td className="p-4 text-right">
-                          <select
-                            value={o.orderStatus}
-                            onChange={(e) => updateOrderStatus(o.id, e.target.value as any)}
-                            className="px-3 py-1.5 rounded-lg bg-bg-dark border border-glass text-xs font-bold text-text-primary outline-none focus:border-primary/50"
-                          >
-                            <option value="Pending">Pending</option>
-                            <option value="Accepted">Accepted</option>
-                            <option value="Preparing">Preparing</option>
-                            <option value="Ready">Ready (For Delivery)</option>
-                            <option value="Completed">Completed</option>
-                            <option value="Rejected">Rejected</option>
-                          </select>
+                          {renderRestaurantOrderAction(o)}
                         </td>
                       </tr>
                     ))}
@@ -1716,12 +2062,12 @@ export const RestaurantDashboard: React.FC = () => {
             >
               <div className="flex items-center justify-between border-b border-glass pb-4 mb-6">
                 <div>
-                  <h3 className="text-xl font-bold font-display text-primary tracking-tight">Add New Category</h3>
-                  <p className="text-xs text-text-muted mt-0.5">Create a custom culinary category for your menu.</p>
+                  <h3 className="text-xl font-bold font-display text-primary tracking-tight">Add Categories</h3>
+                  <p className="text-xs text-text-muted mt-0.5">Select from suggestions or create custom categories.</p>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsAddCategoryOpen(false)}
+                  onClick={() => { setIsAddCategoryOpen(false); setSelectedSuggestions([]); setNewCategoryName(''); }}
                   className="p-2 rounded-lg bg-glass text-text-muted hover:text-primary transition-colors"
                 >
                   <X size={18} />
@@ -1736,11 +2082,39 @@ export const RestaurantDashboard: React.FC = () => {
               )}
 
               <form onSubmit={handleAddCategory} className="space-y-5 text-xs font-semibold text-text-secondary">
+                {/* Category Suggestions Section (Select / Deselect) */}
                 <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Category Name *</label>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                    Quick Suggestions (Click to Select / Deselect)
+                  </label>
+                  <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-bg-dark/50 border border-glass">
+                    {SUGGESTED_CATEGORIES.map((cat) => {
+                      const isSelected = selectedSuggestions.some(s => s === cat || normCat(s) === normCat(cat));
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => toggleSuggestion(cat)}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 border cursor-pointer ${isSelected
+                            ? 'bg-primary text-black border-primary shadow-md shadow-primary/20 scale-[1.02]'
+                            : 'bg-glass hover:bg-glass-subtle border-glass text-text-secondary hover:text-text-primary'
+                            }`}
+                        >
+                          <span>{cat}</span>
+                          {isSelected && <CheckCircle size={14} className="text-black shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Category Input */}
+                <div>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                    Or Enter Custom Category Name
+                  </label>
                   <input
                     type="text"
-                    required
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
                     placeholder="e.g. Chef Specials, Tandoori, Soups..."
@@ -1748,22 +2122,82 @@ export const RestaurantDashboard: React.FC = () => {
                   />
                 </div>
 
-                {/* Display Current Categories */}
-                <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Existing Categories ({categories.length})</label>
-                  <div className="flex flex-wrap gap-1.5 p-3 rounded-xl bg-bg-dark/50 border border-glass max-h-32 overflow-y-auto">
-                    {categories.map((cat) => (
-                      <span key={cat} className="px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[10px] font-extrabold">
-                        {cat}
-                      </span>
-                    ))}
+                {/* Display Current Active Categories with Edit & Delete Controls */}
+                {categories.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                        Active Categories ({categories.length})
+                      </label>
+                      <span className="text-[10px] text-text-muted">Click edit icon to rename or trash icon to delete</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 p-3.5 rounded-xl bg-bg-dark/50 border border-glass max-h-40 overflow-y-auto">
+                      {categories.map((cat) => (
+                        <div
+                          key={cat}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs font-bold transition-all group"
+                        >
+                          {editingCategoryTarget === cat ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={editingCategoryValue}
+                                onChange={(e) => setEditingCategoryValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleRenameCategorySubmit(cat);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingCategoryTarget(null);
+                                  }
+                                }}
+                                className="px-2 py-0.5 rounded bg-bg-dark border border-primary text-text-primary text-xs outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRenameCategorySubmit(cat)}
+                                className="px-2 py-0.5 rounded bg-primary text-black font-extrabold text-[10px] uppercase"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <span>{cat}</span>
+                              <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity pl-1.5 border-l border-primary/20">
+                                <button
+                                  type="button"
+                                  title="Rename Category"
+                                  onClick={() => {
+                                    setEditingCategoryTarget(cat);
+                                    setEditingCategoryValue(cat);
+                                  }}
+                                  className="p-1 hover:text-white transition-colors"
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Delete Category"
+                                  onClick={() => handleDeleteCategorySubmit(cat)}
+                                  className="p-1 hover:text-rose-400 transition-colors"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="pt-4 border-t border-glass flex gap-3">
                   <button
                     type="button"
-                    onClick={() => setIsAddCategoryOpen(false)}
+                    onClick={() => { setIsAddCategoryOpen(false); setSelectedSuggestions([]); setNewCategoryName(''); }}
                     className="flex-1 py-3 rounded-xl border border-glass bg-glass-subtle text-text-secondary font-bold text-xs uppercase tracking-wider"
                   >
                     Cancel
@@ -1771,9 +2205,9 @@ export const RestaurantDashboard: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isSavingCategory}
-                    className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all"
+                    className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all flex items-center justify-center gap-1.5"
                   >
-                    {isSavingCategory ? 'Saving...' : 'Save Category'}
+                    {isSavingCategory ? 'Saving...' : 'Save Selected'}
                   </button>
                 </div>
               </form>
@@ -1884,6 +2318,53 @@ export const RestaurantDashboard: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+      {/* Restaurant Mobile Bottom Navigation Bar */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-bg-darkSec/95 border-t border-slate-200 dark:border-glass backdrop-blur-xl px-2 py-2 flex items-center justify-around shadow-2xl">
+        <button
+          type="button"
+          onClick={() => setActiveTab('dashboard')}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'dashboard' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted'
+            }`}
+        >
+          <LayoutDashboard size={20} />
+          <span className="mt-1">Dashboard</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('menu')}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'menu' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted'
+            }`}
+        >
+          <Utensils size={20} />
+          <span className="mt-1">Menu</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('orders')}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer relative ${activeTab === 'orders' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted'
+            }`}
+        >
+          <ClipboardList size={20} />
+          <span className="mt-1">Orders</span>
+          {pendingCount > 0 && (
+            <span className="absolute top-1 right-2 bg-rose-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+              {pendingCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('profile')}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'profile' || activeTab === 'settings' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted'
+            }`}
+        >
+          <User size={20} />
+          <span className="mt-1">Profile</span>
+        </button>
+      </nav>
     </div>
   );
 };

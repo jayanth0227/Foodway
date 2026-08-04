@@ -1,7 +1,9 @@
 import express, { Request, Response } from 'express';
+import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import "./config/firebase";
 import fs from 'fs';
 
 // Import AWS SDK Command helpers
@@ -11,12 +13,26 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName } from './config/aws';
+import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName, menuItemsTableName, ordersTableName } from './config/aws';
 import { uploadAndSeedVideos } from './utils/videoUploader';
-import { ensureUsersTableExists } from './utils/setupUsersTable';
+import { ensureAllTablesExist } from './utils/setupTables';
 import restaurantRouter from './routes/restaurant.routes';
+import authRouter from './routes/auth.routes';
+import notificationRouter from './routes/notification.routes';
+import { menuService } from './services/menu.service';
+import { orderService } from './services/order.service';
+import { orderItemRepository } from './repositories/orderItem.repository';
+import { RestaurantStatus } from './types/enums';
+import { restaurantService } from './services/restaurant.service';
+import { userService } from './services/user.service';
+import { hashPassword } from './utils/hash.utils';
+import { generateUserId } from './utils/idGenerator';
+import { socketService } from './services/socket.service';
 
 const app = express();
+const httpServer = createServer(app);
+socketService.initialize(httpServer);
+
 const PORT = process.env.PORT || 5000;
 
 // Enable CORS
@@ -29,6 +45,10 @@ app.use(cors({
 // Body parsing middleware with limit for base64 file uploads
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Unified Authentication & Notification API Routes
+app.use('/api/auth', authRouter);
+app.use('/api/notifications', notificationRouter);
 
 // Health Check API
 app.get('/api/health', (req: Request, res: Response) => {
@@ -91,6 +111,412 @@ app.post('/api/admin/login', (req: Request, res: Response) => {
   }
 });
 
+// Fetch all restaurants for Admin from foodway-restaurants table
+app.get('/api/admin/restaurants', async (req: Request, res: Response) => {
+  try {
+    const rawRestaurants = await restaurantService.getAllRestaurants();
+    const mapped = rawRestaurants.map((r: any) => {
+      const isClosed = r.isOpen === false || r.status === 'closed' || r.status === 'inactive';
+      return {
+        ...r,
+        id: r.restaurantId,
+        name: r.restaurantName,
+        ownerName: r.ownerName || r.restaurantName,
+        email: r.email,
+        phone: r.phone || '',
+        address: r.address || '',
+        category: r.cuisine || 'Gourmet',
+        image: r.logo || r.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
+        isOpen: !isClosed,
+        status: isClosed ? 'closed' : 'active'
+      };
+    });
+    res.json({ success: true, restaurants: mapped });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch restaurants.', details: error.message });
+  }
+});
+
+// Update Restaurant Open / Close Status (Called when toggling Offline / Closed)
+app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => {
+  try {
+    const { resId } = req.params;
+    const { isOpen } = req.body;
+
+    const nextStatus: RestaurantStatus = isOpen ? 'ACTIVE' : 'INACTIVE';
+
+    // 1. Scan and update in foodway-restaurants table
+    const allRestaurants = await restaurantService.getAllRestaurants();
+    const targetRes = allRestaurants.find((r: any) =>
+      r.restaurantId === resId ||
+      r.id === resId ||
+      (r.email && r.email.toLowerCase() === resId.toLowerCase()) ||
+      (r.restaurantName && r.restaurantName.toLowerCase() === resId.toLowerCase())
+    );
+
+    if (targetRes) {
+      await restaurantService.updateProfile(targetRes.restaurantId, {
+        isOpen,
+        status: nextStatus
+      });
+    }
+
+    // 2. Also update in main table if present
+    if (tableName) {
+      try {
+        const scanCommand = new ScanCommand({ TableName: tableName });
+        const response = await dynamoDocClient.send(scanCommand);
+        const mainResItems = (response.Items || []).filter(
+          (item: any) =>
+            item.type === 'restaurant' &&
+            (item.id === resId || item.restaurantId === resId || (item.name && item.name.toLowerCase() === resId.toLowerCase()) || (item.email && item.email.toLowerCase() === resId.toLowerCase()))
+        );
+
+        for (const resItem of mainResItems) {
+          await dynamoDocClient.send(
+            new PutCommand({
+              TableName: tableName,
+              Item: {
+                ...resItem,
+                isOpen,
+                status: nextStatus,
+                updatedAt: new Date().toISOString()
+              }
+            })
+          );
+        }
+      } catch (e) {}
+    }
+
+    res.json({ success: true, message: `Restaurant status updated to ${nextStatus}.`, isOpen, status: nextStatus });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to update restaurant status.', details: error.message });
+  }
+});
+
+// Public Endpoint: Fetch All Restaurants directly from DynamoDB
+app.get('/api/public/restaurants', async (req: Request, res: Response) => {
+  try {
+    const rawRestaurants = await restaurantService.getAllRestaurants();
+    const mapped = rawRestaurants.map((r: any) => {
+      const isClosed = r.isOpen === false || r.status === 'closed' || r.status === 'inactive';
+      return {
+        id: r.restaurantId,
+        name: r.restaurantName,
+        cuisine: r.cuisine || 'Multi-Cuisine',
+        rating: r.rating || 4.8,
+        deliveryTime: '20-30 mins',
+        image: r.logo || r.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
+        isOpen: !isClosed,
+        status: isClosed ? 'closed' : 'active',
+        address: r.address || '',
+        phone: r.phone || '',
+        description: r.description || ''
+      };
+    });
+    res.json({ success: true, restaurants: mapped });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch public restaurants.' });
+  }
+});
+
+// Public Endpoint: Fetch All Dishes / Menu Items directly from DynamoDB
+app.get('/api/public/dishes', async (req: Request, res: Response) => {
+  try {
+    const scanCommand = new ScanCommand({ TableName: menuItemsTableName });
+    const response = await dynamoDocClient.send(scanCommand);
+    const items = response.Items || [];
+
+    const mapped = items.map((item: any) => ({
+      id: item.menuItemId,
+      name: item.foodName,
+      description: item.description || '',
+      price: Number(item.price),
+      category: item.category || 'Main Course',
+      image: item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+      isVeg: item.isVeg !== undefined ? item.isVeg : true,
+      isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
+      status: item.isAvailable === false || item.status === 'UNAVAILABLE' ? 'disabled' : 'active',
+      rating: item.rating || 4.8,
+      prepTime: item.preparationTime || '15-20 mins',
+      restaurantId: item.restaurantId
+    }));
+
+    res.json({ success: true, dishes: mapped });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch public dishes.' });
+  }
+});
+
+// Public Endpoint: Fetch All Unique Categories dynamically from DynamoDB
+app.get('/api/public/categories', async (req: Request, res: Response) => {
+  try {
+    const scanCommand = new ScanCommand({ TableName: menuItemsTableName });
+    const response = await dynamoDocClient.send(scanCommand);
+    const items = response.Items || [];
+
+    const categoryMap: Record<string, { id: string; name: string; description: string; itemCount: number; image: string }> = {};
+
+    items.forEach((item: any) => {
+      const catName = item.category || 'Main Course';
+      if (!categoryMap[catName]) {
+        categoryMap[catName] = {
+          id: `cat_${catName.toLowerCase().replace(/\s+/g, '_')}`,
+          name: catName,
+          description: `Signature selection of ${catName} items from top kitchens.`,
+          itemCount: 1,
+          image: item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+        };
+      } else {
+        categoryMap[catName].itemCount += 1;
+      }
+    });
+
+    const categories = Object.values(categoryMap);
+    res.json({ success: true, categories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch public categories.' });
+  }
+});
+
+// Fetch all orders for Admin (Enriched with full items breakdown, restaurant name, and customer details)
+app.get('/api/admin/orders', async (req: Request, res: Response) => {
+  try {
+    let allOrders: any[] = [];
+    if (ordersTableName) {
+      const command = new ScanCommand({ TableName: ordersTableName });
+      const resp = await dynamoDocClient.send(command);
+      allOrders = resp.Items || [];
+    } else {
+      allOrders = await orderService.getOrdersByRestaurant('all');
+    }
+
+    let allRestaurants: any[] = [];
+    try {
+      allRestaurants = await restaurantService.getAllRestaurants();
+    } catch (e) {}
+
+    const enriched = await Promise.all(allOrders.map(async (o: any) => {
+      let itemsList = o.items || o.rawItems || [];
+      if (!Array.isArray(itemsList) || itemsList.length === 0) {
+        try {
+          const dbItems = await orderItemRepository.findByOrderId(o.orderId);
+          if (dbItems && dbItems.length > 0) {
+            itemsList = dbItems.map((di: any) => ({
+              id: di.menuItemId || di.orderItemId,
+              foodName: di.foodName || 'Food Item',
+              name: di.foodName || 'Food Item',
+              quantity: Number(di.quantity || 1),
+              price: Number(di.price || 0),
+              image: di.foodImage || ''
+            }));
+          }
+        } catch (e) {}
+      }
+
+      // Resolve human-readable restaurant name
+      let resName = o.restaurantName;
+      if (!resName || resName === 'RES_DEFAULT' || resName === 'Partner Restaurant') {
+        const found = allRestaurants.find((r: any) => r.id === o.restaurantId || r.restaurantId === o.restaurantId);
+        if (found && found.name) {
+          resName = found.name;
+        } else if (allRestaurants.length > 0 && allRestaurants[0]?.name) {
+          resName = allRestaurants[0].name;
+        } else {
+          resName = 'Likhith foods';
+        }
+      }
+
+      return {
+        ...o,
+        id: o.orderId,
+        orderId: o.orderId,
+        restaurant: resName,
+        restaurantName: resName,
+        restaurantId: o.restaurantId,
+        customerName: o.customerName || 'Valued Customer',
+        customerPhone: o.customerPhone || '',
+        customerAddress: o.deliveryAddress || '',
+        customer: {
+          name: o.customerName || 'Valued Customer',
+          phone: o.customerPhone || '',
+          address: o.deliveryAddress || ''
+        },
+        items: itemsList,
+        total: Number(o.totalAmount || 0),
+        orderStatus: o.status || 'pending',
+        createdTime: o.orderedAt || o.createdAt || new Date().toISOString()
+      };
+    }));
+
+    res.json({ success: true, orders: enriched });
+  } catch (error: any) {
+    console.error('Error fetching admin orders:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch orders.', details: error.message });
+  }
+});
+
+// Create New Customer Order (Persists directly to DynamoDB foodway-orders & foodway-order-items tables)
+app.post('/api/orders', async (req: Request, res: Response) => {
+  try {
+    const {
+      customerId,
+      customerName,
+      customerPhone,
+      deliveryAddress,
+      paymentMethod,
+      items,
+      totalAmount,
+      subtotal,
+      deliveryFee,
+      taxes,
+      restaurantId: bodyResId,
+      restaurantName: bodyResName
+    } = req.body;
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: 'Order must contain at least one item.' });
+    }
+
+    // Extract restaurant ID & Name from first item or body
+    const targetRestaurantId = bodyResId || items[0]?.restaurantId || 'RES_DEFAULT';
+    const targetRestaurantName = bodyResName || items[0]?.restaurantName || 'Partner Restaurant';
+
+    const orderData = {
+      customerId: customerId || `CUST_${Date.now()}`,
+      restaurantId: targetRestaurantId,
+      restaurantName: targetRestaurantName,
+      customerName: customerName || 'Valued Customer',
+      customerPhone: customerPhone || '',
+      deliveryAddress: deliveryAddress || '',
+      paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
+      items: items.map((i: any) => ({
+        menuItemId: i.id || i.menuItemId || `item_${Date.now()}`,
+        foodName: i.name || i.foodName || 'Food Item',
+        quantity: Number(i.quantity || 1),
+        price: Number(i.price || 0),
+        image: i.image || ''
+      })),
+      subtotal: Number(subtotal || totalAmount),
+      deliveryCharge: Number(deliveryFee || 0),
+      tax: Number(taxes || 0),
+      totalAmount: Number(totalAmount),
+      rawItems: items
+    };
+
+    const created = await orderService.createOrder(orderData as any);
+
+    // Attach raw items to order object for instant client rendering
+    (created.order as any).items = items;
+
+    res.status(201).json({
+      success: true,
+      message: 'Order created and saved to DynamoDB successfully.',
+      orderId: created.order.orderId,
+      order: created.order,
+      items: created.orderItems
+    });
+  } catch (error: any) {
+    console.error('Error creating order in DynamoDB:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save order to DynamoDB database.',
+      details: error.message
+    });
+  }
+});
+
+// Update Order Status (PATCH & PUT /api/orders/:orderId/status & /api/restaurant/orders/:orderId/status)
+const handleOrderStatusUpdate = async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { status, cancelledBy } = req.body;
+
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'Status field is required.' });
+    }
+
+    const upperStatus = String(status).toUpperCase() as any;
+    const updated = await orderService.updateOrderStatus(orderId, upperStatus, cancelledBy);
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: `Order [${orderId}] not found.` });
+    }
+
+    return res.json({
+      success: true,
+      message: `Order status updated to ${upperStatus}.`,
+      order: updated
+    });
+  } catch (error: any) {
+    console.error('Error updating order status:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update order status.', details: error.message });
+  }
+};
+
+app.patch('/api/orders/:orderId/status', handleOrderStatusUpdate);
+app.put('/api/orders/:orderId/status', handleOrderStatusUpdate);
+app.patch('/api/restaurant/orders/:orderId/status', handleOrderStatusUpdate);
+app.put('/api/restaurant/orders/:orderId/status', handleOrderStatusUpdate);
+
+// Fetch Orders for a specific Customer
+app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) => {
+  try {
+    const { customerId } = req.params;
+    const orders = await orderService.getOrdersByCustomer(customerId);
+    
+    // Fetch all restaurants to resolve human-readable names
+    let allRestaurants: any[] = [];
+    try {
+      allRestaurants = await restaurantService.getAllRestaurants();
+    } catch (e) {}
+
+    const enriched = await Promise.all(orders.map(async (o: any) => {
+      let itemsList = o.items || o.rawItems || [];
+      if (!Array.isArray(itemsList) || itemsList.length === 0) {
+        try {
+          const dbItems = await orderItemRepository.findByOrderId(o.orderId);
+          if (dbItems && dbItems.length > 0) {
+            itemsList = dbItems.map((di: any) => ({
+              id: di.menuItemId || di.orderItemId,
+              foodName: di.foodName || 'Food Item',
+              name: di.foodName || 'Food Item',
+              quantity: Number(di.quantity || 1),
+              price: Number(di.price || 0),
+              image: di.foodImage || ''
+            }));
+          }
+        } catch (e) {
+          console.warn(`Error fetching items for order ${o.orderId}:`, e);
+        }
+      }
+
+      // Resolve human-readable restaurant name
+      let resName = o.restaurantName;
+      if (!resName || resName === 'RES_DEFAULT' || resName === 'Partner Restaurant') {
+        const found = allRestaurants.find((r: any) => r.id === o.restaurantId || r.restaurantId === o.restaurantId);
+        if (found && found.name) {
+          resName = found.name;
+        } else if (allRestaurants.length > 0 && allRestaurants[0]?.name) {
+          resName = allRestaurants[0].name;
+        } else {
+          resName = 'Likhith foods';
+        }
+      }
+
+      return {
+        ...o,
+        restaurantName: resName,
+        items: itemsList
+      };
+    }));
+
+    res.json({ success: true, orders: enriched });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch customer orders.', details: error.message });
+  }
+});
+
 // Fetch items from DynamoDB table
 app.get('/api/admin/db-items', async (req: Request, res: Response) => {
   try {
@@ -106,9 +532,9 @@ app.get('/api/admin/db-items', async (req: Request, res: Response) => {
     res.json(response.Items || []);
   } catch (error: any) {
     console.error('Error scanning DynamoDB table:', error);
-    res.status(500).json({ 
-      error: 'Failed to fetch items from DynamoDB.', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Failed to fetch items from DynamoDB.',
+      details: error.message
     });
   }
 });
@@ -173,9 +599,9 @@ app.post('/api/admin/seed-db', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error seeding database:', error);
-    res.status(500).json({ 
-      error: 'Failed to seed items to DynamoDB.', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Failed to seed items to DynamoDB.',
+      details: error.message
     });
   }
 });
@@ -196,7 +622,7 @@ app.post('/api/admin/upload-s3', async (req: Request, res: Response) => {
     // Clean base64 string
     const base64Data = fileData.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, 'base64');
-    
+
     const uniqueFileName = `uploads/${Date.now()}_${fileName}`;
     const s3Region = process.env.AWS_S3_REGION || 'ap-south-2';
 
@@ -218,58 +644,110 @@ app.post('/api/admin/upload-s3', async (req: Request, res: Response) => {
       fileUrl
     });
   } catch (error: any) {
-    res.status(500).json({ 
-      error: 'Failed to upload file to S3.', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Failed to upload file to S3.',
+      details: error.message
     });
   }
 });
 
-// Save or Update Restaurant record in DynamoDB
+// Alias for S3 Image Upload (/api/upload/image)
+app.post('/api/upload/image', async (req: Request, res: Response) => {
+  try {
+    const { fileName, fileType, fileData, image } = req.body;
+
+    if (!bucketName) {
+      return res.status(400).json({ error: 'AWS S3 bucket name is not configured.' });
+    }
+
+    const payloadData = fileData || image;
+    if (!payloadData) {
+      return res.status(400).json({ error: 'Missing file payload.' });
+    }
+
+    const name = fileName || `image_${Date.now()}.jpg`;
+    const type = fileType || 'image/jpeg';
+
+    const base64Data = payloadData.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    const uniqueFileName = `uploads/${Date.now()}_${name}`;
+    const s3Region = process.env.AWS_S3_REGION || 'ap-south-2';
+
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: uniqueFileName,
+      Body: buffer,
+      ContentType: type,
+    });
+
+    await s3Client.send(command);
+
+    const fileUrl = `https://${bucketName}.s3.${s3Region}.amazonaws.com/${uniqueFileName}`;
+
+    res.json({
+      success: true,
+      message: 'File uploaded successfully to S3.',
+      fileUrl
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: 'Failed to upload file to S3.',
+      details: error.message
+    });
+  }
+});
+
+// Save or Update Restaurant record in DynamoDB table "foodway-restaurants"
 app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
   try {
-    const restaurant = req.body;
+    const data = req.body;
+    const name = data.name || data.restaurantName;
+    const email = data.email;
 
-    if (!restaurant || !restaurant.id || !restaurant.name) {
+    if (!data || !name || !email) {
       return res.status(400).json({ success: false, error: 'Missing required restaurant parameters.' });
     }
 
-    const isAwsConfigured = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && tableName);
-    
-    if (isAwsConfigured && tableName) {
-      const command = new PutCommand({
-        TableName: tableName,
-        Item: {
-          ...restaurant,
-          pk: `RESTAURANT#${restaurant.id}`,
-          type: 'restaurant',
-          updatedAt: new Date().toISOString()
-        }
-      });
+    const result = await restaurantService.registerRestaurant({
+      restaurantName: name,
+      ownerName: data.ownerName || name,
+      email: email,
+      password: data.password || 'restaurant123',
+      phone: data.phone || '',
+      address: data.address || '',
+      cuisine: data.category || data.cuisine || 'Multi-Cuisine',
+      openingTime: data.openingTime || '11:00 AM',
+      closingTime: data.closingTime || '11:00 PM',
+      logo: data.image || data.logo || '',
+      bannerImage: data.image || data.bannerImage || ''
+    });
 
-      await dynamoDocClient.send(command);
+    const saved = result.restaurant;
 
-      return res.json({
-        success: true,
-        message: 'Restaurant saved to DynamoDB successfully.',
-        storedInDynamoDB: true,
-        restaurant
-      });
-    }
-
-    // Fallback if AWS DynamoDB table is not configured
-    res.json({
+    return res.json({
       success: true,
-      message: 'Restaurant saved locally (DynamoDB not configured in environment).',
-      storedInDynamoDB: false,
-      restaurant
+      message: 'Restaurant saved to foodway-restaurants table in DynamoDB successfully.',
+      storedInDynamoDB: true,
+      restaurant: {
+        ...data,
+        id: saved.restaurantId,
+        restaurantId: saved.restaurantId,
+        ownerUserId: result.ownerUser.userId,
+        name: saved.restaurantName,
+        email: saved.email,
+        phone: saved.phone,
+        address: saved.address,
+        category: saved.cuisine,
+        image: saved.logo || data.image
+      }
     });
   } catch (error: any) {
     console.error('Error saving restaurant to DynamoDB:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to save restaurant to DynamoDB.', 
-      details: error.message 
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save restaurant to foodway-restaurants table in DynamoDB.',
+      details: error.message
     });
   }
 });
@@ -525,17 +1003,18 @@ app.post('/api/restaurant/login', async (req: Request, res: Response) => {
 app.get('/api/restaurant/menu/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
-    if (!tableName) {
-      return res.json({ success: true, items: [] });
-    }
+    const items = await menuService.getMenuByRestaurantId(restaurantId);
 
-    const command = new ScanCommand({ TableName: tableName });
-    const response = await dynamoDocClient.send(command);
-    const menuItems = (response.Items || []).filter(
-      (item: any) => item.type === 'menu_item' && item.restaurantId === restaurantId
-    );
+    // Map fields for frontend compatibility
+    const mapped = items.map(item => ({
+      ...item,
+      id: item.menuItemId,
+      name: item.foodName,
+      image: item.foodImage,
+      prepTime: item.preparationTime
+    }));
 
-    res.json({ success: true, items: menuItems });
+    res.json({ success: true, items: mapped });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch menu items.', details: error.message });
   }
@@ -544,27 +1023,38 @@ app.get('/api/restaurant/menu/:restaurantId', async (req: Request, res: Response
 // Save or Update Menu Item
 app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
   try {
-    const menuItem = req.body;
-    if (!menuItem || !menuItem.name || !menuItem.restaurantId) {
+    const menuItemData = req.body;
+    const name = menuItemData.name || menuItemData.foodName;
+    const restaurantId = menuItemData.restaurantId;
+
+    if (!menuItemData || !name || !restaurantId) {
       return res.status(400).json({ success: false, error: 'Missing required menu item fields.' });
     }
 
-    if (tableName) {
-      const itemId = menuItem.id || `food_${Date.now()}`;
-      const command = new PutCommand({
-        TableName: tableName,
-        Item: {
-          ...menuItem,
-          id: itemId,
-          pk: `MENU#${itemId}`,
-          type: 'menu_item',
-          updatedAt: new Date().toISOString()
-        }
-      });
-      await dynamoDocClient.send(command);
-    }
+    const saved = await menuService.saveMenuItem({
+      menuItemId: menuItemData.id || menuItemData.menuItemId,
+      restaurantId,
+      foodName: name,
+      description: menuItemData.description,
+      category: menuItemData.category,
+      price: menuItemData.price,
+      preparationTime: menuItemData.prepTime || menuItemData.preparationTime,
+      isVeg: menuItemData.isVeg,
+      foodImage: menuItemData.image || menuItemData.foodImage,
+      isAvailable: menuItemData.isAvailable
+    });
 
-    res.json({ success: true, message: 'Menu item saved successfully.', item: menuItem });
+    res.json({
+      success: true,
+      message: 'Menu item saved successfully.',
+      item: {
+        ...saved,
+        id: saved.menuItemId,
+        name: saved.foodName,
+        image: saved.foodImage,
+        prepTime: saved.preparationTime
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to save menu item.', details: error.message });
   }
@@ -574,63 +1064,314 @@ app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
 app.delete('/api/restaurant/menu/:itemId', async (req: Request, res: Response) => {
   try {
     const { itemId } = req.params;
-    if (tableName) {
-      const command = new DeleteCommand({
-        TableName: tableName,
-        Key: { pk: `MENU#${itemId}`, email: `MENU#${itemId}` }
-      });
-      await dynamoDocClient.send(command);
-    }
+    await menuService.deleteMenuItem(itemId);
     res.json({ success: true, message: 'Menu item deleted successfully.' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to delete menu item.', details: error.message });
   }
 });
 
-// Fetch Orders for a specific Restaurant
+// Fetch Orders for a specific Restaurant (Smart multi-field matching & item enrichment)
 app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
-    if (!tableName) {
-      return res.json({ success: true, orders: [] });
+    
+    // 1. Fetch all orders from DynamoDB
+    let allOrders: any[] = [];
+    if (ordersTableName) {
+      const command = new ScanCommand({ TableName: ordersTableName });
+      const resp = await dynamoDocClient.send(command);
+      allOrders = resp.Items || [];
+    } else {
+      allOrders = await orderService.getOrdersByRestaurant('all');
     }
 
-    const command = new ScanCommand({ TableName: tableName });
-    const response = await dynamoDocClient.send(command);
-    const orders = (response.Items || []).filter(
-      (item: any) => item.type === 'order' && (item.restaurantId === restaurantId || item.restaurant === restaurantId)
-    );
+    // 2. Fetch target restaurant details to get name, email, pk, id
+    let targetRestaurant: any = null;
+    try {
+      const allRes = await restaurantService.getAllRestaurants();
+      targetRestaurant = allRes.find((r: any) => 
+        r.id === restaurantId ||
+        r.restaurantId === restaurantId ||
+        r.email === restaurantId ||
+        r.pk === `RESTAURANT#${restaurantId}`
+      );
+    } catch (e) {}
 
-    res.json({ success: true, orders });
+    const resName = targetRestaurant?.name?.toLowerCase() || '';
+    const resIdStr = restaurantId.toLowerCase();
+
+    // 3. Filter orders belonging to this restaurant
+    const filteredOrders = allOrders.filter((ord: any) => {
+      if (restaurantId === 'all') return true;
+
+      const ordResId = (ord.restaurantId || '').toLowerCase();
+      const ordResName = (ord.restaurantName || '').toLowerCase();
+
+      // Direct match on restaurantId
+      if (ordResId && (ordResId === resIdStr || ordResId === targetRestaurant?.id?.toLowerCase() || ordResId === targetRestaurant?.restaurantId?.toLowerCase())) {
+        return true;
+      }
+
+      // Name match
+      if (resName && ordResName && (ordResName.includes(resName) || resName.includes(ordResName))) {
+        return true;
+      }
+
+      // Fallback for single restaurant or RES_DEFAULT
+      if (ordResId === 'res_default' || !ordResId) {
+        return true;
+      }
+
+      return false;
+    });
+
+    // 4. Enrich orders with items if missing
+    const mapped = await Promise.all(filteredOrders.map(async (ord: any) => {
+      let itemsList = ord.items || ord.rawItems || [];
+      if (!Array.isArray(itemsList) || itemsList.length === 0) {
+        try {
+          const dbItems = await orderItemRepository.findByOrderId(ord.orderId);
+          if (dbItems && dbItems.length > 0) {
+            itemsList = dbItems.map((di: any) => ({
+              id: di.menuItemId || di.orderItemId,
+              name: di.foodName || 'Food Item',
+              foodName: di.foodName || 'Food Item',
+              quantity: Number(di.quantity || 1),
+              price: Number(di.price || 0)
+            }));
+          }
+        } catch (e) {}
+      }
+
+      return {
+        ...ord,
+        id: ord.orderId,
+        customerPhone: ord.customerPhone || '',
+        customerAddress: ord.deliveryAddress,
+        total: ord.totalAmount,
+        orderStatus: ord.status,
+        time: ord.orderedAt,
+        items: itemsList
+      };
+    }));
+
+    res.json({ success: true, orders: mapped });
   } catch (error: any) {
+    console.error('Error fetching restaurant orders:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch restaurant orders.', details: error.message });
   }
 });
 
-// Update Order Status
-app.put('/api/restaurant/orders/:orderId/status', async (req: Request, res: Response) => {
+// Admin Assign Delivery Boy / Rider to Order
+app.put('/api/admin/orders/:orderId/assign-rider', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { assignedRider } = req.body;
+
+    if (!ordersTableName) {
+      return res.status(400).json({ success: false, error: 'Orders table not configured.' });
+    }
+
+    const scanCmd = new ScanCommand({ TableName: ordersTableName });
+    const scanResp = await dynamoDocClient.send(scanCmd);
+    const existing = (scanResp.Items || []).find((o: any) => o.id === orderId || o.orderId === orderId);
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Order not found.' });
+    }
+
+    const updated = {
+      ...existing,
+      assignedRider,
+      updatedAt: new Date().toISOString()
+    };
+
+    const putCmd = new PutCommand({
+      TableName: ordersTableName,
+      Item: updated
+    });
+
+    await dynamoDocClient.send(putCmd);
+
+    res.json({
+      success: true,
+      message: `Assigned delivery partner ${assignedRider} to order ${orderId}.`,
+      orderId,
+      assignedRider
+    });
+  } catch (error: any) {
+    console.error('Error assigning rider to order:', error);
+    res.status(500).json({ success: false, error: 'Failed to assign rider to order.' });
+  }
+});
+
+// --------------------------------------------------------------------------
+// DELIVERY PARTNER MANAGEMENT ENDPOINTS
+// --------------------------------------------------------------------------
+
+// Create New Delivery Partner (Stored in DynamoDB foodway-users)
+app.post('/api/admin/delivery-partners', async (req: Request, res: Response) => {
+  try {
+    const { name, email, phone, password, vehicleType, vehicleNumber } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, error: 'Name, email, and password are required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check if user already exists
+    const existing = await userService.getUserByEmail(cleanEmail);
+    if (existing) {
+      return res.status(400).json({ success: false, error: 'A user with this email already exists.' });
+    }
+
+    const userId = generateUserId('DELIVERY_PARTNER');
+    const hashedPassword = await hashPassword(password);
+    const now = new Date().toISOString();
+
+    const newPartner = {
+      userId,
+      role: 'DELIVERY_PARTNER',
+      name,
+      email: cleanEmail,
+      phone: phone || '',
+      password: hashedPassword,
+      vehicleType: vehicleType || 'Bike',
+      vehicleNumber: vehicleNumber || '',
+      status: 'ACTIVE',
+      createdAt: now,
+      updatedAt: now
+    };
+
+    // Save to users table
+    if (usersTableName) {
+      await dynamoDocClient.send(
+        new PutCommand({
+          TableName: usersTableName,
+          Item: newPartner
+        })
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Delivery partner "${name}" created successfully.`,
+      partner: {
+        id: userId,
+        userId,
+        name,
+        email: cleanEmail,
+        phone,
+        vehicleType: vehicleType || 'Bike',
+        vehicleNumber: vehicleNumber || '',
+        status: 'ACTIVE',
+        role: 'DELIVERY_PARTNER'
+      }
+    });
+  } catch (error: any) {
+    console.error('Error creating delivery partner:', error);
+    res.status(500).json({ success: false, error: 'Failed to create delivery partner.', details: error.message });
+  }
+});
+
+// Get All Registered Delivery Partners for Admin
+app.get('/api/admin/delivery-partners', async (req: Request, res: Response) => {
+  try {
+    let partners: any[] = [];
+
+    if (usersTableName) {
+      const scanCmd = new ScanCommand({ TableName: usersTableName });
+      const scanResp = await dynamoDocClient.send(scanCmd);
+      const items = scanResp.Items || [];
+      partners = items
+        .filter((u: any) => u.role === 'DELIVERY_PARTNER' || u.role === 'DELIVERY' || (u.userId && u.userId.startsWith('DEL-')))
+        .map((p: any) => ({
+          id: p.userId || p.id,
+          userId: p.userId || p.id,
+          name: p.name,
+          email: p.email,
+          phone: p.phone || '',
+          vehicleType: p.vehicleType || 'Bike',
+          vehicleNumber: p.vehicleNumber || 'N/A',
+          status: p.status || 'ACTIVE',
+          role: 'DELIVERY_PARTNER'
+        }));
+    }
+
+    res.json({ success: true, deliveryPartners: partners });
+  } catch (error: any) {
+    console.error('Error fetching delivery partners:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch delivery partners.' });
+  }
+});
+
+// Delete Delivery Partner
+app.delete('/api/admin/delivery-partners/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (usersTableName) {
+      await dynamoDocClient.send(
+        new DeleteCommand({
+          TableName: usersTableName,
+          Key: { userId: id }
+        })
+      );
+    }
+    res.json({ success: true, message: 'Delivery partner removed.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to delete delivery partner.' });
+  }
+});
+
+// Get Assigned Orders for a Delivery Partner
+app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, res: Response) => {
+  try {
+    const { partnerIdentifier } = req.params;
+    const cleanId = decodeURIComponent(partnerIdentifier).toLowerCase();
+
+    if (!ordersTableName) {
+      return res.status(400).json({ success: false, error: 'Orders table not configured.' });
+    }
+
+    const scanCmd = new ScanCommand({ TableName: ordersTableName });
+    const scanResp = await dynamoDocClient.send(scanCmd);
+    const allOrders = scanResp.Items || [];
+
+    const assignedOrders = allOrders.filter((o: any) => {
+      const rider = (o.assignedRider || '').toLowerCase();
+      return rider.includes(cleanId) || cleanId.includes(rider);
+    });
+
+    res.json({ success: true, orders: assignedOrders });
+  } catch (error: any) {
+    console.error('Error fetching delivery partner orders:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch assigned orders.' });
+  }
+});
+
+// Update Order Status by Delivery Partner
+app.put('/api/delivery-partner/orders/:orderId/status', async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const { status } = req.body;
 
-    if (tableName) {
-      const getCommand = new GetCommand({ TableName: tableName, Key: { pk: `ORDER#${orderId}` } });
-      const getResp = await dynamoDocClient.send(getCommand);
-      if (getResp.Item) {
-        const updatedItem = {
-          ...getResp.Item,
-          orderStatus: status,
-          status: status,
-          updatedAt: new Date().toISOString()
-        };
-        const putCommand = new PutCommand({ TableName: tableName, Item: updatedItem });
-        await dynamoDocClient.send(putCommand);
-      }
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'Status field is required.' });
     }
 
-    res.json({ success: true, message: `Order status updated to ${status}.`, orderId, status });
+    const upperStatus = String(status).toUpperCase() as any;
+    const updated = await orderService.updateOrderStatus(orderId, upperStatus, 'DELIVERY');
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Order not found.' });
+    }
+
+    res.json({ success: true, message: `Order status updated to ${upperStatus}.`, order: updated });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: 'Failed to update order status.', details: error.message });
+    console.error('Error updating order status by delivery partner:', error);
+    res.status(500).json({ success: false, error: 'Failed to update order status.' });
   }
 });
 
@@ -640,50 +1381,56 @@ app.put('/api/restaurant/profile/:restaurantId', async (req: Request, res: Respo
     const { restaurantId } = req.params;
     const profileUpdates = req.body;
 
-    if (tableName) {
-      const putCommand = new PutCommand({
-        TableName: tableName,
-        Item: {
-          ...profileUpdates,
-          pk: `RESTAURANT#${restaurantId}`,
-          id: restaurantId,
-          type: 'restaurant',
-          updatedAt: new Date().toISOString()
-        }
-      });
-      await dynamoDocClient.send(putCommand);
-    }
+    const updated = await restaurantService.updateProfile(restaurantId, profileUpdates);
 
-    res.json({ success: true, message: 'Restaurant profile updated successfully.', profile: profileUpdates });
+    res.json({
+      success: true,
+      message: 'Restaurant profile updated successfully.',
+      profile: updated || profileUpdates
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to update restaurant profile.', details: error.message });
   }
 });
 
-// Fetch Categories for a specific Restaurant
+// Fetch Categories for a specific Restaurant (Dynamic from DynamoDB, no hardcoded defaults)
 app.get('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
-    const defaultCategories = ['Starters', 'Main Course', 'Breads', 'Desserts', 'Beverages'];
-    
-    if (!tableName) {
-      return res.json({ success: true, categories: defaultCategories });
+    const customCategories: string[] = [];
+
+    // 1. Scan main table for saved categories
+    if (tableName) {
+      const command = new ScanCommand({ TableName: tableName });
+      const response = await dynamoDocClient.send(command);
+      (response.Items || [])
+        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
+        .forEach((item: any) => {
+          if (item.name && !customCategories.includes(item.name.trim())) {
+            customCategories.push(item.name.trim());
+          }
+        });
     }
 
-    const command = new ScanCommand({ TableName: tableName });
-    const response = await dynamoDocClient.send(command);
-    const customCategories = (response.Items || [])
-      .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
-      .map((item: any) => item.name);
+    // 2. Scan foodway-menu-items table for categories on food items
+    try {
+      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      menuItems.forEach((item: any) => {
+        if (item.category && item.category.trim() && !customCategories.includes(item.category.trim())) {
+          customCategories.push(item.category.trim());
+        }
+      });
+    } catch (e) {
+      console.warn('Error fetching menu items for categories:', e);
+    }
 
-    const allCategories = Array.from(new Set([...defaultCategories, ...customCategories]));
-    res.json({ success: true, categories: allCategories });
+    res.json({ success: true, categories: customCategories });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch restaurant categories.', details: error.message });
   }
 });
 
-// Add New Category for a specific Restaurant
+// Add New Category for a specific Restaurant (Persists to DynamoDB)
 app.post('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
@@ -712,32 +1459,210 @@ app.post('/api/restaurant/categories/:restaurantId', async (req: Request, res: R
       await dynamoDocClient.send(command);
     }
 
-    const defaultCategories = ['Starters', 'Main Course', 'Breads', 'Desserts', 'Beverages'];
-    let allCategories = [...defaultCategories, categoryName];
+    // Gather all categories after adding
+    const customCategories: string[] = [categoryName];
 
     if (tableName) {
       const scanCommand = new ScanCommand({ TableName: tableName });
       const response = await dynamoDocClient.send(scanCommand);
-      const customCategories = (response.Items || [])
+      (response.Items || [])
         .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
-        .map((item: any) => item.name);
-      allCategories = Array.from(new Set([...defaultCategories, ...customCategories]));
+        .forEach((item: any) => {
+          if (item.name && !customCategories.includes(item.name.trim())) {
+            customCategories.push(item.name.trim());
+          }
+        });
     }
 
-    res.json({ success: true, message: 'Category added successfully.', category: categoryName, categories: allCategories });
+    try {
+      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      menuItems.forEach((item: any) => {
+        if (item.category && item.category.trim() && !customCategories.includes(item.category.trim())) {
+          customCategories.push(item.category.trim());
+        }
+      });
+    } catch (e) {}
+
+    res.json({ success: true, message: 'Category added successfully.', category: categoryName, categories: customCategories });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to save category.', details: error.message });
   }
 });
 
+// Update/Rename Category for a specific Restaurant
+app.put('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    const { oldName, newName } = req.body;
+
+    if (!oldName || !newName || !newName.trim()) {
+      return res.status(400).json({ success: false, error: 'Old and new category names are required.' });
+    }
+
+    const trimmedOld = oldName.trim();
+    const trimmedNew = newName.trim();
+
+    // 1. Update Category items in main table
+    if (tableName) {
+      const scanCommand = new ScanCommand({ TableName: tableName });
+      const response = await dynamoDocClient.send(scanCommand);
+      const categoryItems = (response.Items || []).filter(
+        (item: any) => item.type === 'category' && item.restaurantId === restaurantId && item.name === trimmedOld
+      );
+
+      for (const catItem of categoryItems) {
+        await dynamoDocClient.send(
+          new PutCommand({
+            TableName: tableName,
+            Item: { ...catItem, name: trimmedNew, updatedAt: new Date().toISOString() }
+          })
+        );
+      }
+    }
+
+    // 2. Update category field on any food items matching trimmedOld in foodway-menu-items table
+    try {
+      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      for (const item of menuItems) {
+        if (item.category === trimmedOld) {
+          await menuService.saveMenuItem({
+            ...item,
+            category: trimmedNew
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error updating menu item categories:', e);
+    }
+
+    // Fetch updated categories list
+    const updatedCategories: string[] = [];
+    if (tableName) {
+      const scanCommand = new ScanCommand({ TableName: tableName });
+      const response = await dynamoDocClient.send(scanCommand);
+      (response.Items || [])
+        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
+        .forEach((item: any) => {
+          if (item.name && !updatedCategories.includes(item.name.trim())) {
+            updatedCategories.push(item.name.trim());
+          }
+        });
+    }
+
+    try {
+      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      menuItems.forEach((item: any) => {
+        if (item.category && item.category.trim() && !updatedCategories.includes(item.category.trim())) {
+          updatedCategories.push(item.category.trim());
+        }
+      });
+    } catch (e) {}
+
+    res.json({ success: true, message: 'Category renamed successfully.', categories: updatedCategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to rename category.', details: error.message });
+  }
+});
+
+// Helper: normalize category string by removing emojis and trimming
+const normalizeCatName = (name: string) => {
+  return (name || '')
+    .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .trim()
+    .toLowerCase();
+};
+
+// Delete Category for a specific Restaurant (Deletes category item & updates food item categories)
+app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId, categoryName } = req.params;
+    const targetCat = decodeURIComponent(categoryName).trim();
+    const normalizedTarget = normalizeCatName(targetCat);
+
+    // 1. Delete matching category items from main table
+    if (tableName) {
+      const scanCommand = new ScanCommand({ TableName: tableName });
+      const response = await dynamoDocClient.send(scanCommand);
+      const categoryItems = (response.Items || []).filter(
+        (item: any) =>
+          item.type === 'category' &&
+          item.restaurantId === restaurantId &&
+          (item.name === targetCat || normalizeCatName(item.name) === normalizedTarget)
+      );
+
+      for (const catItem of categoryItems) {
+        await dynamoDocClient.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: { pk: catItem.pk, email: catItem.email }
+          })
+        );
+      }
+    }
+
+    // 2. Update food items in foodway-menu-items table matching targetCat
+    try {
+      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      for (const item of menuItems) {
+        if (item.category === targetCat || normalizeCatName(item.category) === normalizedTarget) {
+          await menuService.saveMenuItem({
+            ...item,
+            category: 'Uncategorized'
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error clearing food item categories on delete:', e);
+    }
+
+    // 3. Fetch remaining categories
+    const remainingCategories: string[] = [];
+    if (tableName) {
+      const scanCommand = new ScanCommand({ TableName: tableName });
+      const response = await dynamoDocClient.send(scanCommand);
+      (response.Items || [])
+        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
+        .forEach((item: any) => {
+          if (
+            item.name &&
+            item.name.trim() !== targetCat &&
+            normalizeCatName(item.name) !== normalizedTarget &&
+            !remainingCategories.includes(item.name.trim())
+          ) {
+            remainingCategories.push(item.name.trim());
+          }
+        });
+    }
+
+    try {
+      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      menuItems.forEach((item: any) => {
+        if (
+          item.category &&
+          item.category.trim() !== 'Uncategorized' &&
+          item.category.trim() !== targetCat &&
+          normalizeCatName(item.category) !== normalizedTarget &&
+          !remainingCategories.includes(item.category.trim())
+        ) {
+          remainingCategories.push(item.category.trim());
+        }
+      });
+    } catch (e) {}
+
+    res.json({ success: true, message: `Category "${targetCat}" deleted successfully.`, categories: remainingCategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to delete category.', details: error.message });
+  }
+});
+
 // Start the server
-app.listen(Number(PORT), '0.0.0.0', async () => {
-  console.log(`🚀 Foodway Secure Backend Server running on http://localhost:${PORT} and accepting local network requests`);
+httpServer.listen(Number(PORT), '0.0.0.0', async () => {
+  console.log(`🚀 Foodway Secure Backend Server with Real-Time WebSockets running on http://localhost:${PORT}`);
   console.log(`📦 AWS S3 client initialized (Bucket: ${bucketName || 'not set'}, Region: ${process.env.AWS_S3_REGION || 'ap-south-2'})`);
   console.log(`🗄️ AWS DynamoDB client initialized (Table: ${tableName || 'not set'}, Region: ${process.env.AWS_DYNAMODB_REGION || 'eu-north-1'})`);
-  
-  // Verify or create the DynamoDB users table
-  await ensureUsersTableExists();
+
+  // Verify or create all 6 DynamoDB tables
+  await ensureAllTablesExist();
 });
 
 export default app;

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, bucketName } from '../config/aws';
 import { restaurantService, RestaurantService } from '../services/restaurant.service';
+import { menuService } from '../services/menu.service';
 
 export class RestaurantController {
   private service: RestaurantService;
@@ -13,8 +14,15 @@ export class RestaurantController {
   getStatus = async (req: Request, res: Response): Promise<Response> => {
     try {
       const { restaurantId } = req.params;
-      const result = await this.service.getStatus(restaurantId);
-      return res.json(result);
+      const restaurant = await this.service.getRestaurantById(restaurantId);
+      const isOpen = restaurant?.isOpen !== undefined ? restaurant.isOpen : true;
+
+      return res.json({
+        success: true,
+        restaurantId,
+        isOpen,
+        status: isOpen ? 'ACTIVE' : 'INACTIVE'
+      });
     } catch (error: any) {
       console.error('[RestaurantController] Error fetching status:', error);
       return res.status(500).json({
@@ -29,8 +37,15 @@ export class RestaurantController {
     try {
       const { restaurantId } = req.params;
       const { isOpen } = req.body;
-      const result = await this.service.updateStatus(restaurantId, isOpen);
-      return res.json(result);
+      const updated = await this.service.updateStatus(restaurantId, !!isOpen);
+
+      return res.json({
+        success: true,
+        message: `Restaurant status updated to ${isOpen ? 'OPEN' : 'CLOSED'}.`,
+        restaurantId,
+        isOpen: updated?.isOpen !== undefined ? updated.isOpen : !!isOpen,
+        status: updated?.status || (isOpen ? 'ACTIVE' : 'INACTIVE')
+      });
     } catch (error: any) {
       console.error('[RestaurantController] Error updating status:', error);
       return res.status(500).json({
@@ -44,8 +59,18 @@ export class RestaurantController {
   getSettings = async (req: Request, res: Response): Promise<Response> => {
     try {
       const { restaurantId } = req.params;
-      const result = await this.service.getSettings(restaurantId);
-      return res.json(result);
+      const restaurant = await this.service.getRestaurantById(restaurantId);
+
+      return res.json({
+        success: true,
+        restaurantId,
+        settings: {
+          soundAlerts: true,
+          language: 'en',
+          currency: 'INR',
+          restaurant: restaurant || null
+        }
+      });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: 'Failed to fetch settings.', details: error.message });
     }
@@ -55,8 +80,16 @@ export class RestaurantController {
     try {
       const { restaurantId } = req.params;
       const settings = req.body;
-      const result = await this.service.updateSettings(restaurantId, settings);
-      return res.json(result);
+      if (settings.profile) {
+        await this.service.updateProfile(restaurantId, settings.profile);
+      }
+
+      return res.json({
+        success: true,
+        message: 'Settings updated successfully.',
+        restaurantId,
+        settings
+      });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: 'Failed to update settings.', details: error.message });
     }
@@ -66,8 +99,21 @@ export class RestaurantController {
     try {
       const { itemId } = req.params;
       const { isAvailable } = req.body;
-      const result = await this.service.updateAvailability(itemId, !!isAvailable);
-      return res.json(result);
+
+      const updated = await menuService.saveMenuItem({
+        menuItemId: itemId,
+        restaurantId: 'RES-001',
+        foodName: '',
+        price: 0,
+        isAvailable: !!isAvailable
+      });
+
+      return res.json({
+        success: true,
+        message: `Item availability updated.`,
+        itemId,
+        isAvailable: updated ? updated.isAvailable : !!isAvailable
+      });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: 'Failed to update availability.', details: error.message });
     }
