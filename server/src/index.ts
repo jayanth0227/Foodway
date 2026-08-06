@@ -185,7 +185,7 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
             })
           );
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.json({ success: true, message: `Restaurant status updated to ${nextStatus}.`, isOpen, status: nextStatus });
@@ -255,7 +255,7 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
     const response = await dynamoDocClient.send(scanCommand);
     const items = response.Items || [];
 
-    const categoryMap: Record<string, { id: string; name: string; description: string; itemCount: number; image: string }> = {};
+    const categoryMap: Record<string, { id: string; name: string; description: string; itemCount: number; restaurants: Set<string>; image: string }> = {};
 
     items.forEach((item: any) => {
       const catName = item.category || 'Main Course';
@@ -265,14 +265,26 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
           name: catName,
           description: `Signature selection of ${catName} items from top kitchens.`,
           itemCount: 1,
+          restaurants: new Set(item.restaurantId ? [item.restaurantId] : []),
           image: item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
         };
       } else {
         categoryMap[catName].itemCount += 1;
+        if (item.restaurantId) {
+          categoryMap[catName].restaurants.add(item.restaurantId);
+        }
       }
     });
 
-    const categories = Object.values(categoryMap);
+    const categories = Object.values(categoryMap).map(c => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      itemCount: c.itemCount,
+      restaurantCount: c.restaurants.size || 1,
+      image: c.image
+    }));
+
     res.json({ success: true, categories });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch public categories.' });
@@ -294,7 +306,7 @@ app.get('/api/admin/orders', async (req: Request, res: Response) => {
     let allRestaurants: any[] = [];
     try {
       allRestaurants = await restaurantService.getAllRestaurants();
-    } catch (e) {}
+    } catch (e) { }
 
     const enriched = await Promise.all(allOrders.map(async (o: any) => {
       let itemsList = o.items || o.rawItems || [];
@@ -311,7 +323,7 @@ app.get('/api/admin/orders', async (req: Request, res: Response) => {
               image: di.foodImage || ''
             }));
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // Resolve human-readable restaurant name
@@ -406,8 +418,37 @@ app.post('/api/orders', async (req: Request, res: Response) => {
 
     const created = await orderService.createOrder(orderData as any);
 
+    const newOrderObj = {
+      ...created.order,
+      orderId: created.order.orderId,
+      id: created.order.orderId,
+      restaurantId: targetRestaurantId,
+      restaurantName: targetRestaurantName,
+      customerName: customerName || 'Valued Customer',
+      customerPhone: customerPhone || '',
+      deliveryAddress: deliveryAddress || '',
+      totalAmount: Number(totalAmount),
+      total: Number(totalAmount),
+      status: 'Pending',
+      orderStatus: 'Pending',
+      items: items,
+      orderedAt: new Date().toISOString(),
+      time: 'Just Now'
+    };
+
     // Attach raw items to order object for instant client rendering
     (created.order as any).items = items;
+
+    // ⚡ Real-Time Socket Emission to Merchant Room & Broadcast
+    try {
+      if (socketService) {
+        socketService.emitOrderCreated(newOrderObj);
+        socketService.getIO().emit('order_created', newOrderObj);
+        console.log(`📡 [Real-Time Order Alert] Emitted order_created for Order #${created.order.orderId} to restaurant ${targetRestaurantId}`);
+      }
+    } catch (e: any) {
+      console.warn('⚠️ Socket emission error on order creation:', e?.message);
+    }
 
     res.status(201).json({
       success: true,
@@ -464,12 +505,12 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
   try {
     const { customerId } = req.params;
     const orders = await orderService.getOrdersByCustomer(customerId);
-    
+
     // Fetch all restaurants to resolve human-readable names
     let allRestaurants: any[] = [];
     try {
       allRestaurants = await restaurantService.getAllRestaurants();
-    } catch (e) {}
+    } catch (e) { }
 
     const enriched = await Promise.all(orders.map(async (o: any) => {
       let itemsList = o.items || o.rawItems || [];
@@ -1075,7 +1116,7 @@ app.delete('/api/restaurant/menu/:itemId', async (req: Request, res: Response) =
 app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
-    
+
     // 1. Fetch all orders from DynamoDB
     let allOrders: any[] = [];
     if (ordersTableName) {
@@ -1090,13 +1131,13 @@ app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Respon
     let targetRestaurant: any = null;
     try {
       const allRes = await restaurantService.getAllRestaurants();
-      targetRestaurant = allRes.find((r: any) => 
+      targetRestaurant = allRes.find((r: any) =>
         r.id === restaurantId ||
         r.restaurantId === restaurantId ||
         r.email === restaurantId ||
         r.pk === `RESTAURANT#${restaurantId}`
       );
-    } catch (e) {}
+    } catch (e) { }
 
     const resName = targetRestaurant?.name?.toLowerCase() || '';
     const resIdStr = restaurantId.toLowerCase();
@@ -1141,7 +1182,7 @@ app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Respon
               price: Number(di.price || 0)
             }));
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       return {
@@ -1481,7 +1522,7 @@ app.post('/api/restaurant/categories/:restaurantId', async (req: Request, res: R
           customCategories.push(item.category.trim());
         }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     res.json({ success: true, message: 'Category added successfully.', category: categoryName, categories: customCategories });
   } catch (error: any) {
@@ -1556,7 +1597,7 @@ app.put('/api/restaurant/categories/:restaurantId', async (req: Request, res: Re
           updatedCategories.push(item.category.trim());
         }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     res.json({ success: true, message: 'Category renamed successfully.', categories: updatedCategories });
   } catch (error: any) {
@@ -1647,7 +1688,7 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
           remainingCategories.push(item.category.trim());
         }
       });
-    } catch (e) {}
+    } catch (e) { }
 
     res.json({ success: true, message: `Category "${targetCat}" deleted successfully.`, categories: remainingCategories });
   } catch (error: any) {
@@ -1656,6 +1697,14 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
 });
 
 // Start the server
+httpServer.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use (EADDRINUSE). Please kill the process using port ${PORT} or set a different PORT in .env.`);
+  } else {
+    console.error('❌ Server error:', err);
+  }
+});
+
 httpServer.listen(Number(PORT), '0.0.0.0', async () => {
   console.log(`🚀 Foodway Secure Backend Server with Real-Time WebSockets running on http://localhost:${PORT}`);
   console.log(`📦 AWS S3 client initialized (Bucket: ${bucketName || 'not set'}, Region: ${process.env.AWS_S3_REGION || 'ap-south-2'})`);
@@ -1666,3 +1715,4 @@ httpServer.listen(Number(PORT), '0.0.0.0', async () => {
 });
 
 export default app;
+

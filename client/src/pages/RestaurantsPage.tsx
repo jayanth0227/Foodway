@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { Search, MapPin, Star, Clock, Store, ArrowLeft } from 'lucide-react';
+import { Search, MapPin, Star, Clock, Store, Plus, Heart } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { MobileShopCardSkeleton } from '../components/common/MobileSkeletonLoader';
 
 export const RestaurantsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,10 +13,16 @@ export const RestaurantsPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     fetchRestaurants();
   }, []);
+
+  const toggleFav = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const fetchRestaurants = async () => {
     setLoading(true);
@@ -36,11 +43,11 @@ export const RestaurantsPage: React.FC = () => {
 
   // Filtered Restaurants
   const cuisines = ['All', ...Array.from(new Set(restaurants.map(r => r.cuisine).filter(Boolean)))];
-  
+
   const filteredRestaurants = restaurants.filter(r => {
-    const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          (r.address && r.address.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                          (r.cuisine && r.cuisine.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.address && r.address.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (r.cuisine && r.cuisine.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCuisine = selectedCuisine === 'All' || r.cuisine === selectedCuisine;
     return matchesSearch && matchesCuisine;
   });
@@ -52,34 +59,34 @@ export const RestaurantsPage: React.FC = () => {
         <meta name="description" content="Browse all active restaurants and dining establishments available in our live database." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-28 pb-20 px-4 sm:px-6 lg:px-12 relative overflow-hidden">
+      <div className="min-h-screen bg-bg-dark pt-16 sm:pt-24 pb-24 sm:pb-16 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
         {/* Ambient background decoration */}
         <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-amber-500/5 blur-[150px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto space-y-10 relative z-10">
-          
+        <div className="max-w-7xl mx-auto space-y-5 sm:space-y-8 relative z-10">
+
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-glass pb-8">
-            <div className="space-y-3">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 border-b border-glass pb-4 sm:pb-6">
+            <div className="space-y-2 sm:space-y-3">
               <span className="text-primary font-bold text-xs uppercase tracking-widest block">Live Database Directory</span>
-              <h1 className="text-3xl sm:text-5xl font-black font-display text-gradient-gold tracking-tight">
+              <h1 className="text-2.5xl sm:text-5xl font-black font-display text-gradient-gold tracking-tight">
                 Available Restaurants
               </h1>
-              <p className="text-xs sm:text-sm text-text-muted font-medium max-w-xl">
+              <p className="text-xs sm:text-sm text-text-muted font-medium max-w-xl leading-relaxed">
                 Explore all verified partner restaurants registered in our system. View live statuses, menus, and order directly.
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="px-4 py-2 rounded-xl bg-glass border border-glass text-xs font-bold text-text-primary">
+              <span className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-glass border border-glass text-[11px] sm:text-xs font-bold text-text-primary">
                 {restaurants.length} Registered Establishments
               </span>
             </div>
           </div>
 
           {/* Search & Filter Bar */}
-          <div className="glass-panel border border-glass rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row gap-4 items-center justify-between shadow-luxury">
+          <div className="glass-panel border border-glass rounded-2xl p-3.5 sm:p-6 flex flex-col md:flex-row gap-3.5 sm:gap-4 items-center justify-between shadow-luxury">
             <div className="relative w-full md:w-96">
               <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
@@ -87,7 +94,7 @@ export const RestaurantsPage: React.FC = () => {
                 placeholder="Search restaurant by name, location, or cuisine..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 text-xs sm:text-sm font-semibold rounded-xl bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary placeholder-text-muted/60 outline-none transition-all"
+                className="w-full pl-11 pr-4 py-2.5 sm:py-3 text-[15px] sm:text-sm font-semibold rounded-xl bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary placeholder-text-muted/60 outline-none transition-all"
               />
             </div>
 
@@ -97,9 +104,8 @@ export const RestaurantsPage: React.FC = () => {
                 <button
                   key={c}
                   onClick={() => setSelectedCuisine(c)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                    selectedCuisine === c ? 'bg-primary text-black font-extrabold shadow-md' : 'bg-glass hover:bg-glass-subtle border border-glass text-text-secondary'
-                  }`}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${selectedCuisine === c ? 'bg-primary text-black font-extrabold shadow-md' : 'bg-glass hover:bg-glass-subtle border border-glass text-text-secondary'
+                    }`}
                 >
                   {c}
                 </button>
@@ -109,11 +115,7 @@ export const RestaurantsPage: React.FC = () => {
 
           {/* Restaurant Grid */}
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="glass-panel border border-glass rounded-3xl h-[380px] animate-pulse" />
-              ))}
-            </div>
+            <MobileShopCardSkeleton count={6} />
           ) : filteredRestaurants.length === 0 ? (
             <div className="py-20 text-center glass-panel border border-glass rounded-3xl p-12 max-w-lg mx-auto space-y-4">
               <Store size={48} className="mx-auto text-text-muted opacity-50" />
@@ -123,75 +125,99 @@ export const RestaurantsPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {filteredRestaurants.map(r => (
-                <motion.div
-                  key={r.id}
-                  onClick={() => navigate(`/restaurants/${r.id || r.restaurantId}`)}
-                  whileHover={{ y: -6 }}
-                  className="glass-panel border border-glass rounded-3xl overflow-hidden shadow-luxury cursor-pointer group flex flex-col justify-between h-[420px] transition-all duration-300 hover:border-primary/40"
-                >
-                  {/* Cover Image & Status Badge */}
-                  <div className="relative h-56 overflow-hidden bg-bg-darkSec">
-                    <img
-                      src={r.image}
-                      alt={r.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-transparent to-transparent opacity-80" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+              {filteredRestaurants.map((r) => {
+                const resId = r.id || r.restaurantId;
+                const resName = r.name || 'Partner Kitchen';
+                const resImage = r.image || r.logo || r.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
+                const resCuisine = r.cuisine || 'Multi-Cuisine';
+                const resRating = r.rating || 4.5;
+                const resTime = r.deliveryTime || '20-30 MINS';
+                const isOpen = r.isOpen !== false;
+                const isFav = !!favorites[resId];
 
-                    <div className="absolute top-4 left-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider backdrop-blur-md shadow-lg ${
-                        r.isOpen ? 'bg-emerald-500/90 text-white border border-emerald-400/40' : 'bg-rose-600/90 text-white border border-rose-500/40'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${r.isOpen ? 'bg-white animate-pulse' : 'bg-white/60'}`} />
-                        {r.isOpen ? 'OPEN FOR ORDERS' : 'CLOSED'}
-                      </span>
-                    </div>
+                return (
+                  <motion.div
+                    key={resId}
+                    onClick={() => navigate(`/restaurants/${resId}`)}
+                    whileHover={{ y: -6 }}
+                    className="group relative flex flex-col justify-between overflow-hidden cursor-pointer rounded-2xl sm:rounded-3xl bg-white dark:bg-bg-dark border border-slate-200/80 dark:border-glass shadow-md hover:shadow-luxury transition-all duration-300 hover:-translate-y-1.5 active:scale-[0.98]"
+                  >
+                    {/* Swiggy Image Section */}
+                    <div className="relative aspect-[16/10] overflow-hidden bg-bg-dark shrink-0">
+                      <img
+                        src={resImage}
+                        alt={resName}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/40" />
 
-                    <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between">
-                      <span className="px-3 py-1 rounded-lg bg-bg-dark/80 backdrop-blur-md border border-glass text-primary text-[10px] font-bold uppercase tracking-wider">
-                        {r.cuisine || 'Gourmet'}
-                      </span>
-                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/90 text-black text-[10px] font-extrabold shadow-md">
-                        <Star size={12} className="fill-black" />
-                        <span>{r.rating || 4.8}</span>
+                      {/* Top Right Action Icons */}
+                      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-10">
+                        <button
+                          type="button"
+                          onClick={(e) => toggleFav(resId, e)}
+                          className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-black/60 active:scale-95 transition-all shadow-md cursor-pointer"
+                          title="Favorite"
+                        >
+                          <Heart size={15} className={isFav ? "fill-rose-500 text-rose-500" : "text-white"} />
+                        </button>
+                      </div>
+
+                      {/* Bottom Right Floating Badge with Delivery Time & Open/Closed Status */}
+                      <div className="absolute bottom-0 right-0 z-10 bg-white dark:bg-[#1a1715] px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-tl-xl sm:rounded-tl-2xl border-t border-l border-slate-200 dark:border-glass shadow-xl text-right">
+                        <div className="flex items-center justify-end gap-1 sm:gap-1.5 text-slate-900 dark:text-white font-extrabold text-[11px] sm:text-xs tracking-tight">
+                          <Clock size={12} className="text-primary stroke-[2.5]" />
+                          <span className="text-slate-900 dark:text-white font-black">{resTime.toUpperCase()}</span>
+                        </div>
+                        <div className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider mt-0.5 flex items-center justify-end gap-1 ${isOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-500'
+                          }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                          <span>{isOpen ? 'OPEN NOW' : 'CLOSED'}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Info Content */}
-                  <div className="p-6 flex-grow flex flex-col justify-between space-y-4">
-                    <div>
-                      <h3 className="text-xl font-bold font-display text-text-primary group-hover:text-primary transition-colors tracking-tight line-clamp-1">
-                        {r.name}
-                      </h3>
-                      {r.address && (
-                        <p className="text-xs text-text-muted mt-1.5 flex items-center gap-1.5 line-clamp-1">
-                          <MapPin size={13} className="text-primary shrink-0" />
-                          <span>{r.address}</span>
-                        </p>
-                      )}
-                      {r.description && (
-                        <p className="text-xs text-text-secondary mt-2 line-clamp-2 leading-relaxed">
-                          {r.description}
-                        </p>
-                      )}
-                    </div>
+                    {/* Swiggy Card Body */}
+                    <div className="p-3.5 sm:p-5 flex flex-col justify-between flex-grow space-y-2.5 sm:space-y-3">
+                      <div>
+                        {/* Restaurant Title */}
+                        <h3 className="text-base sm:text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white group-hover:text-primary transition-colors tracking-tight line-clamp-1">
+                          {resName}
+                        </h3>
 
-                    <div className="pt-4 border-t border-glass flex items-center justify-between text-xs font-bold">
-                      <span className="text-text-muted flex items-center gap-1">
-                        <Clock size={13} className="text-primary" />
-                        <span>{r.deliveryTime || '20-30 mins'}</span>
-                      </span>
-                      <span className="text-primary group-hover:translate-x-1 transition-transform flex items-center gap-1 uppercase tracking-wider text-[11px] font-black">
-                        <span>Explore Menu</span>
-                        <ArrowLeft size={13} className="rotate-180" />
-                      </span>
+                        {/* Rating & Location Line */}
+                        <div className="flex items-center gap-1.5 text-xs sm:text-sm font-extrabold mt-1">
+                          <span className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 shadow-sm">
+                            <Star size={9} className="fill-white text-white" strokeWidth={0} />
+                          </span>
+                          <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{resRating}</span>
+                          <span className="text-slate-400 dark:text-slate-500 font-bold">•</span>
+                          <span className="truncate text-slate-800 dark:text-slate-200 font-bold">{r.address || 'Konaseema Central'}</span>
+                        </div>
+                      </div>
+
+                      {/* Bottom View Menu Pill Button */}
+                      <div className="pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-glass flex items-center justify-between sm:justify-end">
+                        <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate max-w-[120px] sm:hidden">
+                          {resCuisine}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/restaurants/${resId}`);
+                          }}
+                          className="px-3.5 py-1.5 sm:px-4 sm:py-1.5 rounded-full bg-white dark:bg-bg-dark border border-primary/70 hover:border-primary text-primary font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-sm hover:shadow-md hover:scale-[1.03] active:scale-95 transition-all duration-300 cursor-pointer"
+                        >
+                          <Plus size={14} className="text-primary stroke-[2.5]" />
+                          <span>View Menu</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>

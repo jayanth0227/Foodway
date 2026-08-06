@@ -275,62 +275,67 @@ export const TESTIMONIALS: TestimonialItem[] = [
 export const FAQS: FAQItem[] = [
   {
     id: 'faq-1',
-    question: 'What makes MK Delivery Services a luxury service?',
-    answer: 'We partner exclusively with top-tier establishments, Michelin-starred venues, and premium artisanal bakers. Our transport containers are temperature-controlled, hermetically sealed, and delivered by trained professional couriers, ensuring your food arrives exactly as the chef intended.',
+    question: 'How do I place an order?',
+    answer: 'Browse your favorite restaurants or stores, add items to your cart, choose your delivery address, and place your order in just a few clicks.'
   },
   {
     id: 'faq-2',
-    question: 'How does the temperature control technology work?',
-    answer: 'We utilize active thermal insulation modules in our delivery cases. They maintain precise temperature ranges—warm dishes stay heated at 65°C and cold items (like luxury desserts and ice creams) are kept chilled, preventing degradation during transport.',
+    question: 'How long does delivery take?',
+    answer: 'Most orders are delivered within 20–30 minutes, depending on the restaurant, traffic conditions, weather, and your delivery location.',
   },
   {
     id: 'faq-3',
-    question: 'Is there a minimum order value for delivery?',
-    answer: 'To maintain our premium delivery standard, we have a minimum order value of $25. This ensures that every delivery is afforded the highest degree of safety, packaging care, and logistics priority.',
+    question: 'Can I track my order?',
+    answer: 'Yes! You can track your order in real time from confirmation until it reaches your doorstep.',
   },
   {
     id: 'faq-4',
-    question: 'Do you offer catering services or private dining orders?',
-    answer: 'Yes. Through our MK Bespoke tier, you can order customized menus, private chef packages, and multi-course catered dinners delivered directly to your estate or corporate venue.',
+    question: 'Which areas do you currently serve?',
+    answer: 'MK Delivery proudly serves customers across Konaseema and is continuously expanding to more nearby towns and villages.',
+  },
+  {
+    id: 'faq-5',
+    question: 'Is my food delivered safely?',
+    answer: 'Absolutely. Every order is packed securely and handled with care by our trusted delivery partners to ensure it reaches you fresh and safely.',
   },
 ];
 
 export const TIMELINE_STEPS: TimelineStep[] = [
   {
     id: 1,
-    title: 'Curate & Place Order',
-    description: 'Browse our exclusive Michelin-recommended selection and place your request via our secure portal.',
-    timeEstimate: 'Instant',
+    title: 'Fresh & Quality Food',
+    description: 'We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care.',
+    timeEstimate: 'FRESH',
   },
   {
     id: 2,
-    title: 'Royal Acceptance',
-    description: 'The kitchen receives the order, and the Head Chef personally inspects the ingredient allocations.',
-    timeEstimate: '2 mins',
+    title: 'Fast Delivery',
+    description: 'Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting.',
+    timeEstimate: '20–30 MINS',
   },
   {
     id: 3,
-    title: 'Artisanal Preparation',
-    description: 'Your dish is curated with culinary mastery, using organic, premium-sourced ingredients.',
-    timeEstimate: '15-20 mins',
+    title: 'Live Order Tracking',
+    description: 'Track your order in real time from restaurant confirmation until it reaches your doorstep.',
+    timeEstimate: 'LIVE',
   },
   {
     id: 4,
-    title: 'Hermetic Packaging',
-    description: 'The food is packed in bespoke temperature-controlled containers to preserve moisture and plating layout.',
-    timeEstimate: '3 mins',
+    title: 'Safe & Reliable Delivery',
+    description: 'Every order is packed carefully and delivered safely by trusted delivery partners because your trust is our responsibility.',
+    timeEstimate: 'SAFE',
   },
   {
     id: 5,
-    title: 'White-Glove Courier Transit',
-    description: 'A dedicated MK Courier collects and transports your meal with active thermal containment.',
-    timeEstimate: '10-15 mins',
+    title: 'Local Service You Can Trust',
+    description: 'Proudly serving families across Konaseema with reliable delivery and friendly customer support every day.',
+    timeEstimate: 'TRUSTED',
   },
   {
     id: 6,
-    title: 'Pristine Presentation',
-    description: 'Arrives at your doorstep in pristine condition, ready for standard-setting dining.',
-    timeEstimate: 'Arrived',
+    title: 'Customer Happiness',
+    description: 'Your smile after every delivery is what motivates us to serve you better every day.',
+    timeEstimate: 'HAPPY',
   },
 ];
 

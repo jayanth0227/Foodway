@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, Sun, Moon, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, Sun, Moon, AlertCircle, CheckCircle2, User as UserIcon, Phone } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 
 export const Login: React.FC = () => {
+  const [authType, setAuthType] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
-  const { login, isLoading, isAuthenticated, role } = useAuth();
+  const { login, register, isLoading, isAuthenticated, role } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,30 +42,41 @@ export const Login: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!email.trim() || !password) {
-      setErrorMessage('Please enter both email address and password.');
-      return;
-    }
+    if (authType === 'login') {
+      if (!email.trim() || !password) {
+        setErrorMessage('Please enter both email address and password.');
+        return;
+      }
 
-    const result = await login(email, password);
+      const result = await login(email, password);
 
-    if (result.success && result.role) {
-      const userRole = result.role.toUpperCase();
-      
-      // Strict role-based redirection driven entirely by backend response
-      if (userRole === 'ADMIN') {
-        navigate('/admin/dashboard', { replace: true });
-      } else if (userRole === 'RESTAURANT') {
-        navigate('/restaurant/dashboard', { replace: true });
-      } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY') {
-        navigate('/delivery/dashboard', { replace: true });
+      if (result.success && result.role) {
+        const userRole = result.role.toUpperCase();
+        if (userRole === 'ADMIN') {
+          navigate('/admin/dashboard', { replace: true });
+        } else if (userRole === 'RESTAURANT') {
+          navigate('/restaurant/dashboard', { replace: true });
+        } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY') {
+          navigate('/delivery/dashboard', { replace: true });
+        } else {
+          const from = (location.state as any)?.from?.pathname || '/';
+          navigate(from === '/login' ? '/' : from, { replace: true });
+        }
       } else {
-        // Default to Home page for USER
-        const from = (location.state as any)?.from?.pathname || '/';
-        navigate(from === '/login' ? '/' : from, { replace: true });
+        setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
       }
     } else {
-      setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
+      if (!name.trim() || !email.trim() || !password) {
+        setErrorMessage('Please fill in all required registration fields.');
+        return;
+      }
+
+      const result = await register(name, email, password, phone);
+      if (result.success) {
+        navigate('/', { replace: true });
+      } else {
+        setErrorMessage(result.error || 'Registration failed. Please try again.');
+      }
     }
   };
 
@@ -84,64 +98,101 @@ export const Login: React.FC = () => {
       <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-secondary/10 rounded-full blur-[160px] pointer-events-none -z-10" />
 
       {/* Top Header Navigation */}
-      <header className="w-full max-w-7xl mx-auto px-6 py-6 flex items-center justify-between z-20">
-        <Link to="/" className="flex items-center space-x-3 group">
+      <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex items-center justify-between z-20">
+        <Link to="/" className="flex items-center space-x-2.5 group">
           <img
             src="/logo.jpeg"
-            alt="MK Delivery Services"
-            className="w-10 h-10 rounded-full object-cover border border-primary/30 group-hover:border-primary transition-all duration-300 shadow-md"
+            alt="Foodway"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-primary/30 group-hover:border-primary transition-all duration-300 shadow-md"
           />
           <div className="flex flex-col leading-none">
-            <span className="text-sm font-bold tracking-[0.2em] font-display text-text-primary uppercase group-hover:text-primary transition-colors">
-              MK
+            <span className="text-sm font-black tracking-[0.18em] font-display text-text-primary uppercase group-hover:text-primary transition-colors">
+              Foodway
             </span>
-            <span className="text-[9px] font-medium tracking-[0.25em] text-primary uppercase mt-0.5">
-              Delivery
+            <span className="text-[9px] font-bold tracking-[0.2em] text-primary uppercase mt-0.5">
+              Services
             </span>
           </div>
         </Link>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3">
           <Link
             to="/"
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-glass-subtle border border-glass hover:border-primary/40 hover:bg-glass text-xs font-bold text-text-secondary hover:text-primary transition-all duration-300 shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-glass-subtle border border-glass hover:border-primary/40 hover:bg-glass text-[11px] sm:text-xs font-bold text-text-secondary hover:text-primary transition-all duration-300 shadow-sm"
           >
-            <ArrowLeft size={15} />
-            <span>Back to Home</span>
+            <ArrowLeft size={14} />
+            <span>Home</span>
           </Link>
 
           <button
             onClick={toggleTheme}
-            className="p-2.5 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 text-text-secondary hover:text-primary transition-all duration-300"
+            className="p-2 sm:p-2.5 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 text-text-secondary hover:text-primary transition-all duration-300"
             aria-label="Toggle Theme"
           >
-            {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
           </button>
         </div>
       </header>
 
       {/* Main Login Card Center Container */}
-      <main className="flex-1 flex items-center justify-center px-4 py-8 z-10">
+      <main className="flex-1 flex items-center justify-center px-3.5 sm:px-4 py-4 sm:py-8 z-10 overflow-y-auto min-h-[calc(100dvh-70px)]">
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md"
+          className="w-full max-w-md my-auto"
         >
-          <div className="bg-glass-card backdrop-blur-2xl border border-glass rounded-3xl p-8 sm:p-10 shadow-luxury relative overflow-hidden group">
+          <div className="bg-glass-card backdrop-blur-2xl border border-glass rounded-3xl p-5 sm:p-10 shadow-luxury relative overflow-hidden group">
             {/* Ambient Card Glow Header */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary-dark" />
 
+            {/* Mode Switcher Tabs */}
+            <div className="flex bg-glass/60 p-1 rounded-2xl border border-glass mb-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setAuthType('login');
+                }}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'login'
+                  ? 'btn-primary shadow-md'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setAuthType('register');
+                }}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'register'
+                  ? 'btn-primary shadow-md'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                Register
+              </button>
+            </div>
+
             {/* Header Content */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary mb-4 shadow-sm">
-                <ShieldCheck size={28} />
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary mb-3 shadow-sm overflow-hidden p-1">
+                {/* Mobile: Foodway MK Logo Image */}
+                <img
+                  src="/logo.jpeg"
+                  alt="MK Logo"
+                  className="w-full h-full rounded-xl object-cover sm:hidden"
+                />
+                {/* Desktop: ShieldCheck Icon */}
+                <ShieldCheck size={26} className="hidden sm:block" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-display text-text-primary">
-                Welcome Back
+              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight font-display text-text-primary">
+                {authType === 'login' ? 'Welcome Back' : 'Join Foodway'}
               </h1>
-              <p className="text-xs text-text-muted mt-2 tracking-wide uppercase font-semibold">
-                Sign in to your MK Delivery account
+              <p className="text-[11px] sm:text-xs text-text-muted mt-1.5 tracking-wide uppercase font-semibold">
+                {authType === 'login' ? 'Sign in to access your account' : 'Register for gourmet food delivery & orders'}
               </p>
             </div>
 
@@ -150,70 +201,113 @@ export const Login: React.FC = () => {
               {errorMessage && (
                 <motion.div
                   initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
+                  animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  className="bg-error/10 border border-error/20 rounded-2xl p-4 flex items-start space-x-3 text-error text-xs overflow-hidden"
+                  className="bg-error/10 border border-error/20 rounded-2xl p-3.5 flex items-start space-x-2.5 text-error text-xs overflow-hidden"
                 >
-                  <AlertCircle size={18} className="shrink-0 mt-0.5" />
-                  <span className="font-medium leading-relaxed">{errorMessage}</span>
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <span className="font-semibold leading-relaxed">{errorMessage}</span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Login Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Auth Form */}
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
+              {authType === 'register' && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
+                      Full Name
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
+                        <UserIcon size={16} />
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Enter your full name"
+                        className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-4 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
+                      Phone Number (Optional)
+                    </label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
+                        <Phone size={16} />
+                      </div>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="Enter phone number"
+                        className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-4 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
               {/* Email Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
+              <div className="space-y-1">
+                <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
                   Email Address
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
-                    <Mail size={18} />
+                    <Mail size={16} />
                   </div>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@company.com"
-                    className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-3 pl-11 pr-4 text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner"
+                    placeholder="Enter your email address"
+                    className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-4 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
                   />
                 </div>
               </div>
 
               {/* Password Input */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <div className="flex items-center justify-between ml-1">
-                  <label className="text-xs font-bold uppercase tracking-wider text-text-secondary">
+                  <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary">
                     Password
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowForgotPasswordModal(true)}
-                    className="text-xs font-semibold text-primary hover:text-primary-dark transition-colors"
-                  >
-                    Forgot Password?
-                  </button>
+                  {authType === 'login' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPasswordModal(true)}
+                      className="text-[11px] sm:text-xs font-bold text-primary hover:text-primary-dark transition-colors"
+                    >
+                      Forgot Password?
+                    </button>
+                  )}
                 </div>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
-                    <Lock size={18} />
+                    <Lock size={16} />
                   </div>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-3 pl-11 pr-11 text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner"
+                    placeholder="Enter your password"
+                    className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-11 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-text-muted hover:text-text-primary transition-colors"
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-text-muted hover:text-text-primary transition-colors p-1"
                   >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
@@ -222,29 +316,29 @@ export const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full btn-primary py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center space-x-2 shadow-lg group relative overflow-hidden mt-2"
+                className="w-full py-3.5 rounded-2xl btn-primary text-black font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2 shadow-luxury hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer mt-2"
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
                 ) : (
                   <>
-                    <span>Sign In</span>
-                    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                    <span>{authType === 'login' ? 'Sign In' : 'Create Account'}</span>
+                    <ArrowRight size={16} className="stroke-[2.5] group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </button>
             </form>
 
             {/* Role Info Footnote */}
-            <div className="mt-8 pt-6 border-t border-glass text-center text-xs text-text-muted space-y-3">
-              <p>Supports Admin, Restaurant Partner & Customer access.</p>
+            <div className="mt-6 pt-5 border-t border-glass text-center text-[11px] text-text-muted space-y-2">
+              <p className="font-medium">Supports Admin, Merchant & Customer accounts.</p>
               <div>
                 <Link
                   to="/"
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-primary hover:underline transition-all"
+                  className="inline-flex items-center gap-1.5 font-bold text-primary hover:underline transition-all"
                 >
-                  <ArrowLeft size={13} />
-                  <span>Return to Home Landing Page</span>
+                  <ArrowLeft size={12} />
+                  <span>Return to Home Page</span>
                 </Link>
               </div>
             </div>

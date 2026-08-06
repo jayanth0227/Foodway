@@ -242,31 +242,31 @@ export class NotificationService {
           body = `Your order from ${restaurantName} has been accepted by the restaurant.`;
           break;
         case 'PREPARING':
-          title = '👨‍🍳 Chef is Preparing Meal';
+          title = 'Chef is Preparing Meal';
           body = `The chef is preparing your delicious meal at ${restaurantName}.`;
           break;
         case 'READY':
-          title = '🍔 Order Ready';
+          title = ' Order Ready';
           body = `Your order from ${restaurantName} is prepared and ready!`;
           break;
         case 'ASSIGNED':
-          title = '🛵 Rider Assigned';
+          title = ' Rider Assigned';
           body = `A delivery partner has been assigned to pick up your order.`;
           break;
         case 'PICKED_UP':
-          title = '🚚 Order On The Way';
+          title = 'Order On The Way';
           body = `Your order from ${restaurantName} is picked up and on the way to your address.`;
           break;
         case 'DELIVERED':
-          title = '🎉 Order Delivered';
+          title = ' Order Delivered';
           body = `Your order from ${restaurantName} has been delivered. Enjoy your meal!`;
           break;
         case 'CANCELLED':
-          title = '❌ Order Cancelled';
+          title = 'Order Cancelled';
           body = `Your order from ${restaurantName} was cancelled.`;
           break;
         default:
-          title = '📋 Order Update';
+          title = ' Order Update';
           body = `Your order #${orderId} status has been updated to ${status}.`;
       }
 
@@ -282,7 +282,7 @@ export class NotificationService {
         link: '/orders',
       });
     } catch (error) {
-      console.error('❌ Failed to send Customer Order Status Notification (non-blocking):', error);
+      console.error(' Failed to send Customer Order Status Notification (non-blocking):', error);
     }
   }
 
@@ -319,7 +319,7 @@ export class NotificationService {
         }
       }
     } catch (error) {
-      console.error('❌ Failed to send Delivery Partner Notification (non-blocking):', error);
+      console.error(' Failed to send Delivery Partner Notification (non-blocking):', error);
     }
   }
 
@@ -339,7 +339,7 @@ export class NotificationService {
       if (fcmToken) {
         await sendNotification({
           token: fcmToken,
-          title: '✅ Delivery Completed',
+          title: 'Delivery Completed',
           body: `Order #${orderId} has been successfully delivered to the customer.`,
           data: {
             orderId,
@@ -349,7 +349,7 @@ export class NotificationService {
         });
       }
     } catch (error) {
-      console.error('❌ Failed to send Delivery Completed Notification (non-blocking):', error);
+      console.error(' Failed to send Delivery Completed Notification (non-blocking):', error);
     }
   }
 
@@ -371,7 +371,7 @@ export class NotificationService {
         if (restaurant?.fcmToken) {
           await sendNotification({
             token: restaurant.fcmToken,
-            title: '❌ Order Cancelled',
+            title: 'Order Cancelled',
             body: `Customer cancelled order #${orderId}.`,
             data: { orderId, type: 'ORDER_CANCELLED' },
             link: '/restaurant/dashboard',
@@ -383,7 +383,7 @@ export class NotificationService {
         if (customer?.fcmToken) {
           await sendNotification({
             token: customer.fcmToken,
-            title: '❌ Order Cancelled',
+            title: ' Order Cancelled',
             body: `Restaurant cancelled order #${orderId}.`,
             data: { orderId, type: 'ORDER_CANCELLED' },
             link: '/orders',
@@ -391,7 +391,7 @@ export class NotificationService {
         }
       }
     } catch (error) {
-      console.error('❌ Failed to send Cancellation Notification (non-blocking):', error);
+      console.error(' Failed to send Cancellation Notification (non-blocking):', error);
     }
   }
 }

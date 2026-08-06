@@ -1986,11 +1986,13 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-4 font-mono font-bold text-primary">{order.id}</td>
                           <td className="p-4 space-y-0.5">
                             <p className="text-text-primary font-extrabold">{order.customer?.name || order.customerName || 'Valued Customer'}</p>
-                            <span className="text-[10px] text-text-muted leading-relaxed block font-mono">
-                              📞 {order.customer?.phone || order.customerPhone || 'N/A'}
+                            <span className="text-[10px] text-text-muted leading-relaxed flex items-center gap-1 font-mono">
+                              <Phone size={10} className="text-primary shrink-0" />
+                              <span>{order.customer?.phone || order.customerPhone || 'N/A'}</span>
                             </span>
-                            <span className="text-[10px] text-text-muted block max-w-[170px] leading-snug" title={order.customer?.address || order.customerAddress || 'N/A'}>
-                              📍 {order.customer?.address || order.customerAddress || 'N/A'}
+                            <span className="text-[10px] text-text-muted flex items-center gap-1 max-w-[170px] leading-snug" title={order.customer?.address || order.customerAddress || 'N/A'}>
+                              <MapPin size={10} className="text-primary shrink-0" />
+                              <span className="truncate">{order.customer?.address || order.customerAddress || 'N/A'}</span>
                             </span>
                           </td>
                           <td className="p-4">

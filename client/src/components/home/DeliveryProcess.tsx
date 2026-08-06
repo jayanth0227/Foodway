@@ -1,23 +1,23 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useSpring } from 'framer-motion';
 import { TIMELINE_STEPS } from '../../utils/mockData';
-
+ 
 export const DeliveryProcess: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  
+ 
   // Track scroll inside the timeline container
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ['start center', 'end center'],
   });
-
+ 
   // Smooth scroll progression line
   const scaleY = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
     restDelta: 0.001,
   });
-
+ 
   return (
     <section
       id="delivery-process"
@@ -25,35 +25,33 @@ export const DeliveryProcess: React.FC = () => {
       className="py-16 md:py-20 lg:py-30 bg-bg-darkSec border-t border-glass relative"
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
-        
+       
         {/* Section Header */}
         <div className="text-center max-w-2xl mx-auto mb-20 space-y-4">
-          <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-            Bespoke Logistics
-          </span>
+         
           <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
-            The Gourmet Journey
+          Why Choose MK Delivery..!
           </h2>
           <p className="text-xs md:text-sm text-text-secondary font-medium">
             Follow the meticulous progression of your gourmet order, from organic prep to temperature-sealed delivery.
           </p>
         </div>
-
+ 
         {/* Timeline Component Container */}
         <div className="relative mt-16 max-w-4xl mx-auto">
           {/* Vertical progress bar line */}
           <div className="absolute left-[16px] md:left-1/2 top-0 bottom-0 w-[2px] bg-glass-subtle -translate-x-[1px]" />
-          
+         
           <motion.div
             style={{ scaleY }}
             className="absolute left-[16px] md:left-1/2 top-0 bottom-0 w-[2px] bg-gradient-to-b from-primary to-accent -translate-x-[1px] origin-top z-10"
           />
-
+ 
           {/* Steps list */}
           <div className="space-y-16 relative z-20">
             {TIMELINE_STEPS.map((step, idx) => {
               const isEven = idx % 2 === 0;
-
+ 
               return (
                 <div
                   key={step.id}
@@ -75,7 +73,7 @@ export const DeliveryProcess: React.FC = () => {
                       className="w-3.5 h-3.5 rounded-full"
                     />
                   </div>
-
+ 
                   {/* Card Content Column */}
                   <div className={`w-full md:w-1/2 pl-12 md:pl-0 ${isEven ? 'md:pr-12 text-left md:text-right' : 'md:pl-12 text-left'}`}>
                     <motion.div
@@ -94,13 +92,13 @@ export const DeliveryProcess: React.FC = () => {
                           {step.timeEstimate}
                         </span>
                       </div>
-
+ 
                       <p className="text-xs text-text-muted mt-2 leading-relaxed font-medium">
                         {step.description}
                       </p>
                     </motion.div>
                   </div>
-
+ 
                   {/* Spacer column for desktop */}
                   <div className="hidden md:block w-1/2" />
                 </div>

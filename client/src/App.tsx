@@ -7,7 +7,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/common/Navbar';
-import { Footer } from './components/common/Footer';
+import Footer from "./components/common/Footer";
 import { CursorGlow } from './components/common/CursorGlow';
 import { CartSidebar } from './components/common/CartSidebar';
 import { AuthModals } from './components/common/AuthModals';
@@ -24,8 +24,9 @@ import { AdminOrderDetailsPage } from './pages/AdminOrderDetailsPage';
 import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartnerPage';
 import { RestaurantDashboard } from './pages/RestaurantDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
+import { CategoriesPage } from './pages/CategoriesPage';
+import { WishlistPage } from './pages/WishlistPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
-
 
 import { requestNotificationPermission } from "./utils/requestNotificationPermission";
 import { setupForegroundMessageListener } from "./utils/onForegroundMessage";
@@ -76,17 +77,24 @@ const AppContent: React.FC = () => {
   };
 
   const location = useLocation();
-  const isPortalRoute = location.pathname.startsWith('/admin') || 
-                        location.pathname.startsWith('/restaurant/') || 
-                        location.pathname === '/restaurant' || 
-                        location.pathname.startsWith('/delivery') ||
-                        location.pathname === '/login';
+
+  // Scroll window to top on every screen/route transition
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.body.scrollTop = 0;
+    document.documentElement.scrollTop = 0;
+  }, [location.pathname, location.search]);
+
+  const isPortalRoute = location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/restaurant/') ||
+    location.pathname === '/restaurant' ||
+    location.pathname.startsWith('/delivery') ||
+    location.pathname === '/login';
+
+  const isHomePage = location.pathname === '/';
 
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
-      {/* Background glow trail */}
-      <CursorGlow />
-
       {/* Global Elements */}
       {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
@@ -103,9 +111,11 @@ const AppContent: React.FC = () => {
       <main className="relative z-10">
         <Routes>
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
+          <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/restaurants" element={<RestaurantsPage />} />
           <Route path="/restaurants/:id" element={<RestaurantDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
+          <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/orders" element={<CustomerOrdersPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/admin" element={<Login />} />
@@ -165,7 +175,11 @@ const AppContent: React.FC = () => {
         </Routes>
       </main>
 
-      {!isPortalRoute && <Footer />}
+      {!isPortalRoute && (
+        <div className={!isHomePage ? 'hidden lg:block' : ''}>
+          <Footer />
+        </div>
+      )}
     </div>
   );
 };

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, User as UserIcon, Sun, Moon, Home, Compass, LogOut, Package } from 'lucide-react';
+import { ShoppingBag, User as UserIcon, Sun, Moon, Home, Compass, Store, Heart, Package, Bell, LayoutGrid, Utensils, ReceiptText, ShoppingCart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
+import { MobileProfileOverlay } from './MobileProfileOverlay';
 
 interface NavbarProps {
   onOpenAuth: (type: 'login' | 'register') => void;
@@ -14,8 +15,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const [activeSection, setActiveSection] = useState('home');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
-  const { totalItemsCount, setCartOpen } = useCart();
+  const { totalItemsCount } = useCart();
   const { theme, toggleTheme } = useTheme();
   const { user, role, isAuthenticated, logout } = useAuth();
   const location = useLocation();
@@ -27,30 +30,89 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
     { name: 'Contact', id: 'contact', hash: 'footer' },
   ];
 
-  // Track scroll position for header glass state and progress bar
+  // Detect mobile soft keyboard open/close state
+  useEffect(() => {
+    const checkKeyboard = () => {
+      if (window.visualViewport) {
+        // Keyboard open usually reduces visualViewport height by > 120px
+        const heightDiff = window.innerHeight - window.visualViewport.height;
+        setIsKeyboardOpen(heightDiff > 120);
+      } else {
+        setIsKeyboardOpen(false);
+      }
+    };
+
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '')) {
+        setIsKeyboardOpen(true);
+      }
+    };
+
+    const handleFocusOut = () => {
+      setTimeout(() => {
+        const isInputActive = ['INPUT', 'TEXTAREA', 'SELECT'].includes(
+          document.activeElement?.tagName || ''
+        );
+        if (!isInputActive) {
+          if (window.visualViewport) {
+            const heightDiff = window.innerHeight - window.visualViewport.height;
+            setIsKeyboardOpen(heightDiff > 120);
+          } else {
+            setIsKeyboardOpen(false);
+          }
+        }
+      }, 150);
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', checkKeyboard);
+      window.visualViewport.addEventListener('scroll', checkKeyboard);
+    }
+    window.addEventListener('focusin', handleFocusIn);
+    window.addEventListener('focusout', handleFocusOut);
+    window.addEventListener('resize', checkKeyboard);
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', checkKeyboard);
+        window.visualViewport.removeEventListener('scroll', checkKeyboard);
+      }
+      window.removeEventListener('focusin', handleFocusIn);
+      window.removeEventListener('focusout', handleFocusOut);
+      window.removeEventListener('resize', checkKeyboard);
+    };
+  }, []);
+
+  // Lock background body scroll when mobile profile overlay is open
+  useEffect(() => {
+    if (isProfileModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isProfileModalOpen]);
+
   useEffect(() => {
     const handleScroll = () => {
-      // Glass background toggle
-      if (window.scrollY > 20) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
+      const scrollPosition = window.scrollY;
+      const totalHeight = document.documentElement.scrollHeight - window.innerHeight;
 
-      // Scroll progress computation
-      const totalScroll = document.documentElement.scrollHeight - window.innerHeight;
-      if (totalScroll > 0) {
-        setScrollProgress((window.scrollY / totalScroll) * 100);
-      }
+      setIsScrolled(scrollPosition > 20);
+      setScrollProgress(totalHeight > 0 ? (scrollPosition / totalHeight) * 100 : 0);
 
-      // Active section highlight during scroll
+      // Simple section detection for single page navigation
       if (location.pathname === '/') {
-        for (const link of navLinks) {
-          const el = document.getElementById(link.hash);
+        const sections = ['home', 'featured-restaurants', 'categories', 'why-us', 'footer'];
+        for (const section of sections) {
+          const el = document.getElementById(section);
           if (el) {
             const rect = el.getBoundingClientRect();
-            if (rect.top <= 120 && rect.bottom >= 120) {
-              setActiveSection(link.id);
+            if (rect.top <= 150 && rect.bottom >= 150) {
+              setActiveSection(section);
               break;
             }
           }
@@ -58,22 +120,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [location.pathname]);
 
-  const handleNavClick = (e: React.MouseEvent, link: typeof navLinks[0]) => {
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: typeof navLinks[0]) => {
     e.preventDefault();
-
-    if (link.id === 'restaurants') {
-      navigate('/restaurants');
-      setActiveSection('restaurants');
-      return;
-    }
-
     if (location.pathname !== '/') {
-      navigate('/#' + link.hash);
-      setActiveSection(link.id);
+      navigate('/', { state: { scrollTo: link.hash } });
     } else {
       const el = document.getElementById(link.hash);
       if (el) {
@@ -91,11 +145,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${
-          isScrolled
-            ? 'bg-bg-dark/80 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury'
-            : 'bg-transparent py-6 border-b border-transparent'
-        }`}
+        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${isScrolled
+          ? 'bg-bg-dark/90 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury'
+          : 'bg-bg-dark/90 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury lg:bg-transparent lg:border-transparent lg:py-6 lg:shadow-none'
+          }`}
       >
         {/* Scroll Progress Bar */}
         <div
@@ -138,9 +191,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                   key={link.id}
                   href={`#${link.hash}`}
                   onClick={(e) => handleNavClick(e, link)}
-                  className={`text-xs font-bold tracking-[0.12em] uppercase transition-colors duration-300 relative py-2.5 ${
-                    isActive ? 'text-primary' : 'text-text-muted hover:text-text-primary'
-                  }`}
+                  className={`text-xs font-bold tracking-[0.12em] uppercase transition-colors duration-300 relative py-2.5 ${isActive ? 'text-primary' : 'text-text-muted hover:text-text-primary'
+                    }`}
                 >
                   {link.name}
                   {isActive && (
@@ -157,11 +209,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3">
-            {/* Theme Toggle Button */}
+            {/* Theme Toggle Button - Desktop Only */}
             <button
               onClick={toggleTheme}
-              className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group"
+              className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
               aria-label="Toggle theme"
+              title="Toggle Theme"
             >
               {theme === 'light' ? (
                 <Moon size={18} className="group-hover:scale-110 group-hover:rotate-[15deg] transition-all duration-500" />
@@ -170,22 +223,49 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
               )}
             </button>
 
-            {/* Mobile Logout Button */}
-            {isAuthenticated && (
-              <button
-                onClick={handleLogoutClick}
-                className="lg:hidden p-2.5 text-text-secondary hover:text-error transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-error/20 group"
-                aria-label="Logout"
-              >
-                <LogOut size={18} className="group-hover:scale-110 transition-transform duration-300" />
-              </button>
-            )}
+            {/* Notification Icon - Mobile Only */}
+            <button
+              onClick={() => {
+                if (isAuthenticated) {
+                  navigate('/orders');
+                } else {
+                  onOpenAuth('login');
+                }
+              }}
+              className="lg:hidden relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
+              title="Notifications"
+              aria-label="Notifications"
+            >
+              <Bell size={18} className="group-hover:scale-110 transition-transform duration-300" />
+            </button>
 
-            {/* Cart Button */}
+            {/* Profile Icon / User Initial Avatar - Mobile Only */}
+            <button
+              onClick={() => {
+                if (isAuthenticated) {
+                  setIsProfileModalOpen(true);
+                } else {
+                  onOpenAuth('login');
+                }
+              }}
+              className="lg:hidden relative p-2 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 group cursor-pointer shrink-0"
+              title="Profile & Account"
+              aria-label="Profile"
+            >
+              {isAuthenticated && user?.name ? (
+                <div className="w-6.5 h-6.5 min-w-[26px] min-h-[26px] rounded-full bg-primary text-black font-black text-xs flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <UserIcon size={18} className="group-hover:scale-110 transition-transform duration-300" />
+              )}
+            </button>
+
+            {/* Cart Button - Desktop Only */}
             {!location.pathname.startsWith('/admin') && (
               <button
                 onClick={() => navigate('/cart')}
-                className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
+                className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
                 title="View Shopping Cart"
               >
                 <ShoppingBag size={18} className="group-hover:scale-110 transition-transform duration-300" />
@@ -269,79 +349,115 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         </div>
       </header>
 
-      {/* Floating Bottom Navigation Bar for Mobile/Tablet */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 lg:hidden w-[calc(100%-32px)] max-w-sm premium-bottom-nav py-2 rounded-full flex items-center justify-around">
-        {/* Home */}
+      {/* Mobile Profile Page Overlay */}
+      <MobileProfileOverlay
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        user={user}
+        role={role}
+        onLogout={handleLogoutClick}
+      />
+
+      {/* Static Solid Bottom Navigation Bar for Mobile/Tablet */}
+      <div
+        className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-50 lg:hidden w-[calc(100%-24px)] max-w-md bg-white dark:bg-bg-cardSec border border-slate-200 dark:border-glass shadow-xl rounded-2xl px-2 py-1 flex items-center justify-around overflow-visible transition-all duration-300 ${isKeyboardOpen
+            ? 'opacity-0 pointer-events-none translate-y-12 scale-95'
+            : 'opacity-100 translate-y-0 scale-100'
+          }`}
+      >
+        {/* 1. Home */}
         <button
           onClick={() => {
+            navigate('/');
             window.scrollTo({ top: 0, behavior: 'smooth' });
             setActiveSection('home');
           }}
-          className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
-            activeSection === 'home' ? 'text-primary' : 'text-text-muted hover:text-text-primary'
-          }`}
+          className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/' && activeSection === 'home'
+              ? 'text-primary font-black'
+              : 'text-text-muted hover:text-text-primary'
+            }`}
           aria-label="Home"
         >
-          <Home size={18} />
-          <span className="text-[9px] font-bold mt-1 tracking-wider">Home</span>
+          <Home size={19} className={location.pathname === '/' && activeSection === 'home' ? 'text-primary fill-primary/20' : ''} />
+          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Home</span>
         </button>
 
-        {/* Explore / Restaurants */}
+        {/* 2. Explore Categories */}
         <button
-          onClick={(e) => handleNavClick(e, { name: 'Restaurants', id: 'restaurants', hash: 'featured-restaurants' })}
-          className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
-            activeSection === 'restaurants' ? 'text-primary' : 'text-text-muted hover:text-text-primary'
-          }`}
-          aria-label="Explore Restaurants"
+          onClick={() => navigate('/categories')}
+          className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/categories'
+              ? 'text-primary font-black'
+              : 'text-text-muted hover:text-text-primary'
+            }`}
+          aria-label="Explore Categories"
         >
-          <Compass size={18} />
-          <span className="text-[9px] font-bold mt-1 tracking-wider">Explore</span>
+          <LayoutGrid size={19} className={location.pathname === '/categories' ? 'text-primary fill-primary/20' : ''} />
+          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Explore</span>
         </button>
 
-        {/* Cart */}
-        {!location.pathname.startsWith('/admin') && (
-          <button
-            onClick={() => setCartOpen(true)}
-            className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300 relative"
-            aria-label="Shopping Cart"
+        {/* 3. CENTER ACTION BUTTON: Stores & Restaurants */}
+        <button
+          onClick={() => navigate('/restaurants')}
+          className="relative -top-3 flex flex-col items-center justify-center cursor-pointer group z-20 shrink-0"
+          aria-label="Stores & Restaurants"
+        >
+          {/* Solid Circular FAB Button */}
+          <div
+            className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/restaurants')
+                ? 'bg-gradient-to-r from-primary to-amber-400 text-black ring-2 ring-primary/40'
+                : 'bg-gradient-to-r from-primary to-amber-400 text-black hover:brightness-105'
+              }`}
           >
-            <ShoppingBag size={18} />
-            <span className="text-[9px] font-bold mt-1 tracking-wider">Cart</span>
-            {totalItemsCount > 0 && (
-              <span className="absolute top-1 right-2 bg-primary text-black text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_8px_rgba(197,147,99,0.3)]">
-                {totalItemsCount}
-              </span>
-            )}
-          </button>
-        )}
-
-        {/* Profile */}
-        <button
-          onClick={() => {
-            if (!isAuthenticated) {
-              navigate('/login');
-            }
-          }}
-          className={`flex flex-col items-center justify-center p-2 rounded-full transition-colors duration-300 ${
-            isAuthenticated ? 'text-primary' : 'text-text-muted hover:text-text-primary'
-          }`}
-          aria-label="User Account"
-        >
-          <UserIcon size={18} />
-          <span className="text-[9px] font-bold mt-1 tracking-wider">
-            {isAuthenticated && user ? user.name.split(' ')[0] : 'Account'}
+            <Utensils size={20} className="stroke-[2.5]" />
+          </div>
+          <span
+            className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/restaurants') ? 'text-primary' : 'text-text-muted group-hover:text-text-primary'
+              }`}
+          >
+            Stores
           </span>
         </button>
 
-        {/* Theme Toggle */}
+        {/* 4. My Orders */}
         <button
-          onClick={toggleTheme}
-          className="flex flex-col items-center justify-center p-2 rounded-full text-text-muted hover:text-text-primary transition-colors duration-300"
-          aria-label="Toggle Theme"
+          onClick={() => {
+            if (isAuthenticated) {
+              navigate('/orders');
+            } else {
+              onOpenAuth('login');
+            }
+          }}
+          className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/orders'
+              ? 'text-primary font-black'
+              : 'text-text-muted hover:text-text-primary'
+            }`}
+          aria-label="My Orders"
         >
-          {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-          <span className="text-[9px] font-bold mt-1 tracking-wider">Theme</span>
+          <ReceiptText size={19} className={location.pathname === '/orders' ? 'text-primary' : ''} />
+          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Orders</span>
         </button>
+
+        {/* 5. Cart */}
+        {!location.pathname.startsWith('/admin') && (
+          <button
+            onClick={() => navigate('/cart')}
+            className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/cart'
+                ? 'text-primary font-black'
+                : 'text-text-muted hover:text-text-primary'
+              }`}
+            aria-label="Shopping Cart"
+          >
+            <div className="relative">
+              <ShoppingCart size={19} className={location.pathname === '/cart' ? 'text-primary' : ''} />
+              {totalItemsCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 bg-primary text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-bg-dark shadow-sm">
+                  {totalItemsCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Cart</span>
+          </button>
+        )}
       </div>
     </>
   );

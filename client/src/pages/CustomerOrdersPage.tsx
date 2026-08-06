@@ -67,25 +67,25 @@ export const CustomerOrdersPage: React.FC = () => {
     const s = (status || 'PENDING').toUpperCase();
     switch (s) {
       case 'PENDING':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1.5"><Clock size={13} /> Order Placed & Pending</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Clock size={14} /> Order Placed & Pending</span>;
       case 'ACCEPTED':
       case 'CONFIRMED':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center gap-1.5"><CheckCircle2 size={13} /> Order Accepted</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><CheckCircle2 size={14} /> Order Accepted</span>;
       case 'PREPARING':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center gap-1.5"><Utensils size={13} /> Kitchen Preparing</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Utensils size={14} /> Kitchen Preparing</span>;
       case 'READY':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5"><Package size={13} /> Food Ready for Pickup</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Package size={14} /> Food Ready for Pickup</span>;
       case 'OUT_FOR_DELIVERY':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 flex items-center gap-1.5"><Package size={13} /> Out for Delivery</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Package size={14} /> Out for Delivery</span>;
       case 'REJECTED':
       case 'REJECT':
       case 'CANCELLED':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1.5"><AlertCircle size={13} /> Order Rejected</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><AlertCircle size={14} /> Order Rejected</span>;
       case 'DELIVERED':
       case 'COMPLETED':
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5"><CheckCircle2 size={13} /> Delivered & Completed</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><CheckCircle2 size={14} /> Delivered & Completed</span>;
       default:
-        return <span className="px-3 py-1 rounded-full text-xs font-black bg-glass text-text-muted border border-glass">{status}</span>;
+        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-glass text-text-muted border border-glass flex items-center justify-center whitespace-nowrap w-full">{status}</span>;
     }
   };
 
@@ -151,17 +151,31 @@ export const CustomerOrdersPage: React.FC = () => {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6">
             <div className="space-y-1">
+              {/* DESKTOP ONLY: Explore Restaurants Back Link */}
               <button
                 onClick={() => navigate('/restaurants')}
-                className="text-xs font-bold text-text-muted hover:text-primary transition-colors flex items-center gap-1 mb-2 cursor-pointer"
+                className="hidden sm:flex text-xs font-bold text-text-muted hover:text-primary transition-colors items-center gap-1 mb-2 cursor-pointer"
               >
                 <ArrowLeft size={14} />
                 <span>Explore Restaurants</span>
               </button>
-              <h1 className="text-3xl sm:text-4xl font-black font-display text-gradient-gold">
-                My Orders
-              </h1>
-              <p className="text-xs text-text-secondary">
+
+              {/* Title Section: Mobile shows Back Arrow button beside My Orders */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate('/restaurants')}
+                  className="sm:hidden p-2 rounded-2xl bg-glass border border-glass text-text-primary hover:text-primary transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center shrink-0"
+                  title="Back to Restaurants"
+                  aria-label="Back to Restaurants"
+                >
+                  <ArrowLeft size={18} className="text-primary" />
+                </button>
+                <h1 className="text-3xl sm:text-4xl font-black font-display text-gradient-gold">
+                  My Orders
+                </h1>
+              </div>
+
+              <p className="text-xs text-text-secondary pl-0.5 sm:pl-0">
                 Track live delivery updates and view your past order history directly from Database.
               </p>
             </div>
@@ -180,8 +194,8 @@ export const CustomerOrdersPage: React.FC = () => {
             <button
               onClick={() => setActiveTab('ACTIVE')}
               className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 ${activeTab === 'ACTIVE'
-                  ? 'bg-primary text-black font-black shadow-md'
-                  : 'bg-glass text-text-secondary hover:text-text-primary'
+                ? 'bg-primary text-black font-black shadow-md'
+                : 'bg-glass text-text-secondary hover:text-text-primary'
                 }`}
             >
               <Clock size={15} />
@@ -191,8 +205,8 @@ export const CustomerOrdersPage: React.FC = () => {
             <button
               onClick={() => setActiveTab('HISTORY')}
               className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer flex items-center gap-2 ${activeTab === 'HISTORY'
-                  ? 'bg-primary text-black font-black shadow-md'
-                  : 'bg-glass text-text-secondary hover:text-text-primary'
+                ? 'bg-primary text-black font-black shadow-md'
+                : 'bg-glass text-text-secondary hover:text-text-primary'
                 }`}
             >
               <Package size={15} />
@@ -200,11 +214,63 @@ export const CustomerOrdersPage: React.FC = () => {
             </button>
           </div>
 
-          {/* Orders List */}
+          {/* Orders List Skeleton Loader */}
           {loading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
+            <div className="space-y-4 sm:space-y-6">
+              {[1, 2].map(i => (
+                <div
+                  key={i}
+                  className="glass-panel border border-glass rounded-3xl p-4 sm:p-6 space-y-4 shadow-luxury animate-pulse"
+                >
+                  {/* Top Line Skeleton: Order ID & Restaurant pill */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-28 h-4 bg-primary/20 rounded-md" />
+                      <div className="w-16 h-3 bg-glass rounded-md" />
+                    </div>
+                    <div className="w-28 h-6 bg-primary/15 rounded-xl" />
+                  </div>
+
+                  {/* Mobile Status Badge & Reorder button row skeleton */}
+                  <div className="sm:hidden flex items-center justify-between gap-2.5 w-full">
+                    <div className="flex-1 h-10 bg-blue-500/15 rounded-2xl" />
+                    <div className="w-24 h-10 bg-primary/25 rounded-2xl" />
+                  </div>
+
+                  {/* Desktop Status Badge skeleton */}
+                  <div className="hidden sm:block w-48 h-10 bg-blue-500/15 rounded-2xl" />
+
+                  <div className="h-px bg-glass/60" />
+
+                  {/* Food items breakdown skeleton */}
+                  <div className="space-y-2.5">
+                    <div className="w-36 h-3 bg-glass rounded-md" />
+                    <div className="p-3 rounded-2xl bg-glass/40 border border-glass flex items-center justify-between gap-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 bg-glass rounded-xl shrink-0" />
+                        <div className="space-y-1.5">
+                          <div className="w-32 h-3.5 bg-glass rounded-md" />
+                          <div className="w-20 h-3 bg-primary/20 rounded-md" />
+                        </div>
+                      </div>
+                      <div className="w-14 h-4 bg-glass rounded-md" />
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-glass/60" />
+
+                  {/* Footer skeleton */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <div className="w-16 h-2.5 bg-glass rounded-md" />
+                      <div className="w-20 h-5 bg-primary/30 rounded-md" />
+                    </div>
+                    <div className="space-y-1 text-right">
+                      <div className="w-20 h-2.5 bg-glass rounded-md" />
+                      <div className="w-28 h-5 bg-emerald-500/20 rounded-xl" />
+                    </div>
+                  </div>
+                </div>
               ))}
             </div>
           ) : displayedOrders.length === 0 ? (
@@ -270,7 +336,20 @@ export const CustomerOrdersPage: React.FC = () => {
                         )}
                       </div>
 
-                      <div className="shrink-0">{getStatusBadge(order.status)}</div>
+                      {/* DESKTOP VIEW: Full Width Status Badge */}
+                      <div className="hidden sm:block shrink-0">{getStatusBadge(order.status)}</div>
+
+                      {/* MOBILE VIEW: Status Badge & Reorder Side-by-Side with Equal Height */}
+                      <div className="sm:hidden flex items-center justify-between gap-2.5 w-full">
+                        <div className="flex-1 min-w-0 flex items-center h-10">{getStatusBadge(order.status)}</div>
+                        <button
+                          onClick={() => handleReorder(order)}
+                          className="h-10 px-4 rounded-2xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 shrink-0 focus:outline-none focus:ring-0 active:bg-primary-dark"
+                        >
+                          <RefreshCw size={13} />
+                          <span>REORDER</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Ordered Items Full Breakdown */}
@@ -335,27 +414,28 @@ export const CustomerOrdersPage: React.FC = () => {
 
                     {/* Footer Info & Total Pricing */}
                     <div className="pt-4 border-t border-glass flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                      <div className="flex items-center justify-between sm:justify-start gap-4 text-xs font-semibold w-full sm:w-auto">
                         <div>
                           <span className="text-text-muted block text-[10px] uppercase font-bold tracking-wider">Grand Total</span>
-                          <span className="text-xl font-black text-text-primary font-display">
+                          <span className="text-lg sm:text-xl font-black text-text-primary font-display">
                             ₹{Number(order.totalAmount || 0).toFixed(2)}
                           </span>
                         </div>
 
                         <div className="h-8 w-px bg-glass hidden sm:block" />
 
-                        <div>
+                        <div className="text-right sm:text-left">
                           <span className="text-text-muted block text-[10px] uppercase font-bold tracking-wider">Payment Mode</span>
-                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] inline-block mt-0.5">
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] inline-block mt-0.5 uppercase">
                             {order.paymentMethod || 'Cash on Delivery (COD)'}
                           </span>
                         </div>
                       </div>
 
+                      {/* DESKTOP ONLY: Reorder All Items Button */}
                       <button
                         onClick={() => handleReorder(order)}
-                        className="px-5 py-2.5 rounded-xl bg-primary text-black hover:bg-primary-dark font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md hover:scale-105"
+                        className="hidden sm:flex px-5 py-2.5 rounded-xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all items-center justify-center gap-2 cursor-pointer shadow-md hover:scale-105 focus:outline-none focus:ring-0"
                       >
                         <RefreshCw size={14} />
                         <span>Reorder All Items</span>

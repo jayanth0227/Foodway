@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, Plus, Minus, La
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
+import { MobileMenuSkeleton } from '../components/common/MobileSkeletonLoader';
 
 export const RestaurantDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -82,11 +83,11 @@ export const RestaurantDetailsPage: React.FC = () => {
         <title>{restaurant ? `${restaurant.name} | Menu & Orders` : 'Restaurant Details'} | MK Delivery Services</title>
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-28 pb-28 px-4 sm:px-6 lg:px-12 relative overflow-hidden">
+      <div className="min-h-screen bg-bg-dark pt-16 sm:pt-28 pb-24 sm:pb-28 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
         {/* Ambient background decoration */}
         <div className="absolute top-20 left-0 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto space-y-8 relative z-10">
+        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 relative z-10">
 
           {/* Back Button */}
           <button
@@ -149,8 +150,9 @@ export const RestaurantDetailsPage: React.FC = () => {
             <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/15 border-2 border-rose-500/40 text-rose-300 flex items-start gap-3.5 shadow-lg">
               <AlertTriangle size={24} className="text-rose-400 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
-                <span className="font-extrabold text-sm sm:text-base text-rose-400 block">
-                  🔴 Currently Not Accepting Orders
+                <span className="font-extrabold text-sm sm:text-base text-rose-400 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  Currently Not Accepting Orders
                 </span>
                 <span className="text-xs text-rose-200/90 leading-relaxed block">
                   This restaurant is currently offline or closed. You can view the available menu below, but selecting items and adding them to the cart is temporarily disabled.
@@ -203,11 +205,7 @@ export const RestaurantDetailsPage: React.FC = () => {
 
           {/* Food Items List */}
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="glass-panel border border-glass rounded-2xl h-48 animate-pulse" />
-              ))}
-            </div>
+            <MobileMenuSkeleton count={5} />
           ) : filteredMenuItems.length === 0 ? (
             <div className="py-20 text-center glass-panel border border-glass rounded-3xl p-12 max-w-lg mx-auto space-y-4">
               <Utensils size={48} className="mx-auto text-text-muted opacity-50" />
@@ -357,7 +355,7 @@ export const RestaurantDetailsPage: React.FC = () => {
       </div>
 
       {/* Floating Action Button (FAB) for Categories - Fixed Right Bottom Position */}
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="fixed bottom-20 right-3.5 sm:bottom-6 sm:right-6 z-40">
         <button
           onClick={() => setIsCategoryFabOpen(!isCategoryFabOpen)}
           className="px-5 py-3.5 rounded-full bg-primary text-black font-black text-xs uppercase tracking-wider shadow-[0_8px_25px_rgba(197,147,99,0.5)] hover:scale-105 transition-transform flex items-center gap-2 cursor-pointer border-2 border-amber-300"

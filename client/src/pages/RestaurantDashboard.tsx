@@ -16,6 +16,7 @@ import {
   Clock,
   AlertTriangle,
   UploadCloud,
+  Folder,
   Star,
   Sun,
   Moon,
@@ -28,7 +29,17 @@ import {
   ArrowLeft,
   Globe,
   ChefHat,
-  XCircle
+  XCircle,
+  Mail,
+  Lock,
+  Phone,
+  MapPin,
+  Eye,
+  EyeOff,
+  Bell,
+  RefreshCw,
+  Plus,
+  Sparkles
 } from 'lucide-react';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
@@ -75,7 +86,7 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Auth & Restaurant Profile state
   const [restaurant, setRestaurant] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'profile' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'profile' | 'settings'>('profile');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 
@@ -162,12 +173,15 @@ export const RestaurantDashboard: React.FC = () => {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
+  const [isNotificationOpen, setIsNotificationOpen] = useState<boolean>(false);
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState({
     name: '',
     ownerName: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     phone: '',
     address: '',
     openingTime: '11:00 AM',
@@ -177,6 +191,8 @@ export const RestaurantDashboard: React.FC = () => {
     cuisine: 'Multi-Cuisine'
   });
 
+  const [showProfilePassword, setShowProfilePassword] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
   const [isProfileImageUploading, setIsProfileImageUploading] = useState(false);
@@ -281,12 +297,69 @@ export const RestaurantDashboard: React.FC = () => {
     }
   };
 
+  // Helper: Play Loud Synthesizer Buzz Alarm & HTML5 Chime Sound
+  const playOrderBuzzSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const playTones = (freq: number, start: number, dur: number) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+          gain.gain.setValueAtTime(0.45, ctx.currentTime + start);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + start);
+          osc.stop(ctx.currentTime + start + dur);
+        };
+        // 3 loud buzz alarm chirps (Ding-Dong-Ding alert tone)
+        playTones(784, 0, 0.3);       // G5
+        playTones(1046.5, 0.3, 0.4);  // C6
+        playTones(1567.98, 0.7, 0.55); // G6
+      }
+    } catch (e) { }
+
+    try {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(() => {});
+    } catch (e) {}
+  };
+
+  // Helper: Trigger Native Browser Push Notification
+  const triggerBrowserNotification = (orderId: string, customerName: string, total: number) => {
+    if ('Notification' in window) {
+      const showNotif = () => {
+        new Notification(`🔔 NEW ORDER RECEIVED! #${orderId}`, {
+          body: `Customer ${customerName} placed an order worth ₹${total.toFixed(2)}. Tap to view order!`,
+          icon: '/logo.jpeg',
+          tag: `order-${orderId}`,
+          requireInteraction: true
+        });
+      };
+
+      if (Notification.permission === 'granted') {
+        showNotif();
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            showNotif();
+          }
+        });
+      }
+    }
+  };
+
   // Socket.io Real-Time Room Join & Order Event Subscriptions
   useEffect(() => {
     const resId = restaurant?.id || 'RES-001';
     socketService.joinRestaurant(resId);
+    socketService.joinRestaurant('RES_DEFAULT');
+    socketService.joinRestaurant('all');
 
-    // Phase 1: Real-Time Order Creation Listener (0ms UI Update + Sound + Toast)
+    // Phase 1: Real-Time Order Creation Listener (0ms UI Update + Loud Buzz Alarm + Modal + Push Notif)
     const unsubscribeCreated = socketService.onOrderCreated((newOrder: any) => {
       console.log('⚡ [Real-Time Socket Event: ORDER_CREATED] Received:', newOrder);
 
@@ -294,23 +367,24 @@ export const RestaurantDashboard: React.FC = () => {
         id: newOrder.orderId || newOrder.id,
         customerName: newOrder.customerName || 'Valued Customer',
         customerPhone: newOrder.customerPhone || 'N/A',
-        customerAddress: newOrder.deliveryAddress || 'Address Not Specified',
-        items: newOrder.items || [],
+        customerAddress: newOrder.deliveryAddress || newOrder.customerAddress || 'Address Not Specified',
+        items: newOrder.items || newOrder.rawItems || [],
         total: Number(newOrder.totalAmount || newOrder.total || 0),
         paymentStatus: newOrder.paymentStatus === 'SUCCESS' ? 'paid' : 'pending',
-        orderStatus: newOrder.status || 'Pending',
+        orderStatus: newOrder.status || newOrder.orderStatus || 'Pending',
         time: 'Just Now',
         restaurantId: newOrder.restaurantId
       };
 
       // Prepend order to top of list instantly without page refresh!
       setOrders(prev => [formattedOrder, ...prev.filter(o => o.id !== formattedOrder.id)]);
+      setIncomingOrderPopup(formattedOrder);
 
-      // Play audio chime alert
-      try {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.play().catch(() => {});
-      } catch (e) {}
+      // Play loud synthesizer buzz alarm sound
+      playOrderBuzzSound();
+
+      // Send Native Browser Push Notification
+      triggerBrowserNotification(formattedOrder.id, formattedOrder.customerName, formattedOrder.total);
 
       logActivity('order', `New order #${formattedOrder.id} received from ${formattedOrder.customerName}!`);
     });
@@ -865,46 +939,109 @@ export const RestaurantDashboard: React.FC = () => {
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsProfileSaving(true);
+    setProfileError(null);
     setProfileSuccessMsg(null);
+
+    // 1. Restaurant Name validation
+    if (!profileForm.name.trim()) {
+      setProfileError('Restaurant name is required.');
+      return;
+    }
+
+    // 2. Owner Name validation
+    if (!profileForm.ownerName.trim()) {
+      setProfileError('Proprietor / Owner full name is required.');
+      return;
+    }
+
+    // 4. Phone validation
+    const cleanPhone = profileForm.phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setProfileError('Please enter a valid 10-digit mobile phone number.');
+      return;
+    }
+
+    // 5. Address validation
+    if (!profileForm.address.trim()) {
+      setProfileError('Physical restaurant address is required.');
+      return;
+    }
+
+    // 6. Password validation (optional, only if changing)
+    if (profileForm.password) {
+      if (profileForm.password.length < 6) {
+        setProfileError('New password must be at least 6 characters long.');
+        return;
+      }
+      if (profileForm.password !== profileForm.confirmPassword) {
+        setProfileError('New password and confirm password do not match.');
+        return;
+      }
+    }
+
+    setIsProfileSaving(true);
 
     const updatedRes = {
       ...restaurant,
-      name: profileForm.name,
-      ownerName: profileForm.ownerName,
-      phone: profileForm.phone,
-      address: profileForm.address,
-      openingTime: profileForm.openingTime,
-      closingTime: profileForm.closingTime,
+      name: profileForm.name.trim(),
+      ownerName: profileForm.ownerName.trim(),
+      email: profileForm.email.trim(),
+      phone: profileForm.phone.trim(),
+      address: profileForm.address.trim(),
+      openingTime: profileForm.openingTime.trim(),
+      closingTime: profileForm.closingTime.trim(),
       image: profileForm.image,
-      description: profileForm.description,
-      cuisine: profileForm.cuisine
+      description: profileForm.description.trim(),
+      cuisine: profileForm.cuisine.trim(),
+      ...(profileForm.password ? { password: profileForm.password } : {})
     };
 
     setRestaurant(updatedRes);
 
-    // Save in storage
+    // Save in restaurantAuth storage
     const rawAuth = localStorage.getItem('restaurantAuth') || sessionStorage.getItem('restaurantAuth');
     if (rawAuth) {
-      const parsed = JSON.parse(rawAuth);
-      parsed.restaurant = updatedRes;
-      if (localStorage.getItem('restaurantAuth')) {
-        localStorage.setItem('restaurantAuth', JSON.stringify(parsed));
-      } else {
-        sessionStorage.setItem('restaurantAuth', JSON.stringify(parsed));
-      }
+      try {
+        const parsed = JSON.parse(rawAuth);
+        parsed.restaurant = updatedRes;
+        if (parsed.user) {
+          parsed.user.email = updatedRes.email;
+          parsed.user.name = updatedRes.name;
+        }
+        if (localStorage.getItem('restaurantAuth')) {
+          localStorage.setItem('restaurantAuth', JSON.stringify(parsed));
+        } else {
+          sessionStorage.setItem('restaurantAuth', JSON.stringify(parsed));
+        }
+      } catch (err) { }
+    }
+
+    // Save in currentUser storage
+    const rawUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+    if (rawUser) {
+      try {
+        const parsedUser = JSON.parse(rawUser);
+        parsedUser.email = updatedRes.email;
+        parsedUser.name = updatedRes.name;
+        if (localStorage.getItem('currentUser')) {
+          localStorage.setItem('currentUser', JSON.stringify(parsedUser));
+        } else {
+          sessionStorage.setItem('currentUser', JSON.stringify(parsedUser));
+        }
+      } catch (err) { }
     }
 
     try {
-      await axios.put(`${API_BASE_URL}/restaurant/profile/${updatedRes.id}`, updatedRes);
+      await axios.put(`${API_BASE_URL}/restaurant/profile/${updatedRes.id || updatedRes.restaurantId}`, updatedRes);
     } catch (err) {
       console.warn('Profile sync warning:', err);
     }
 
     setIsProfileSaving(false);
-    setProfileSuccessMsg('Profile updated successfully!');
-    logActivity('profile', 'Restaurant profile details updated.');
-    setTimeout(() => setProfileSuccessMsg(null), 4000);
+    setProfileForm(prev => ({ ...prev, password: '', confirmPassword: '' }));
+    setProfileSuccessMsg('Profile details & login credentials updated successfully!');
+    logActivity('profile', 'Restaurant profile & credentials updated.');
+    setTimeout(() => setProfileSuccessMsg(null), 4500);
   };
 
   // Nav Items
@@ -1002,66 +1139,140 @@ export const RestaurantDashboard: React.FC = () => {
       </aside>
 
       {/* ==================================================== */}
-      {/* MOBILE NAVBAR & DRAWER */}
+      {/* MOBILE FIXED TOP NAVBAR */}
       {/* ==================================================== */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-bg-dark/90 backdrop-blur-md border-b border-glass px-4 py-3 flex items-center justify-between">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-bg-dark/95 backdrop-blur-xl border-b border-glass px-4 py-3 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-            className="p-2 rounded-lg bg-glass text-text-primary"
+            className="p-2 rounded-xl bg-glass border border-glass text-text-primary hover:text-primary transition-all cursor-pointer"
           >
             {isMobileSidebarOpen ? <X size={20} /> : <MenuIcon size={20} />}
           </button>
           <div>
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-primary block">RESTAURANT PORTAL</span>
-            <span className="text-xs font-black text-text-primary">{restaurant?.name || 'Dashboard'}</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">RESTAURANT PORTAL</span>
+            <span className="text-xs font-black text-text-primary truncate block max-w-[160px] sm:max-w-xs">{restaurant?.name || 'Restaurant Console'}</span>
           </div>
         </div>
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-lg bg-glass text-text-muted hover:text-primary"
-        >
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Mobile Notification Bell Button */}
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+            className="relative p-2 rounded-xl bg-white dark:bg-glass border border-slate-200/80 dark:border-glass text-text-primary hover:text-primary transition-all cursor-pointer shadow-2xs"
+            title="Recent Updates & Notifications"
+          >
+            <Bell size={16} className="text-primary" />
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white font-black text-[9px] flex items-center justify-center animate-pulse shadow-sm">
+                {pendingCount}
+              </span>
+            )}
+          </motion.button>
+
+          {/* Mobile Language Selector Dropdown (Replaces Theme Icon) */}
+          <div className="px-2.5 py-1.5 rounded-xl border border-glass bg-glass flex items-center gap-1.5 shadow-sm">
+            <Globe size={14} className="text-primary shrink-0" />
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as any)}
+              className="bg-transparent text-xs font-black text-text-primary focus:outline-none cursor-pointer uppercase"
+            >
+              <option value="en" className="bg-bg-dark text-text-primary">EN</option>
+              <option value="te" className="bg-bg-dark text-text-primary">TE</option>
+              <option value="hi" className="bg-bg-dark text-text-primary">HI</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Mobile Drawer */}
       <AnimatePresence>
         {isMobileSidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0, x: -250 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -250 }}
-            className="lg:hidden fixed inset-0 z-30 bg-bg-dark/95 backdrop-blur-2xl p-6 flex flex-col justify-between pt-20"
-          >
-            <div className="space-y-2">
-              {navItems.map(item => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => { setActiveTab(item.id as any); setIsMobileSidebarOpen(false); }}
-                    className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl font-bold text-xs ${isActive ? 'bg-primary text-bg-dark font-black' : 'text-text-secondary bg-glass'
-                      }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon size={18} />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge && <span className="px-2 py-0.5 rounded-full text-[10px] bg-primary/20 text-primary">{item.badge}</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              onClick={handleLogout}
-              className="w-full py-3 rounded-xl border border-error/30 bg-error/10 text-error font-bold text-xs flex items-center justify-center gap-2"
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="lg:hidden fixed inset-0 z-45 bg-black/75 backdrop-blur-xs"
+            />
+
+            {/* Slide-out Drawer Panel (Sleek White & Website Theme Accent) */}
+            <motion.div
+              initial={{ opacity: 0, x: -300 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -300 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-white dark:bg-bg-darkSec backdrop-blur-2xl border-r border-slate-200/90 dark:border-glass p-6 flex flex-col justify-between shadow-2xl text-slate-800 dark:text-white"
             >
-              <LogOut size={16} />
-              <span>Logout</span>
-            </button>
-          </motion.div>
+              <div className="space-y-6">
+                {/* Drawer Header */}
+                <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-glass pb-4 pt-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shrink-0 shadow-xs">
+                      <ChefHat size={20} />
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-primary block">RESTAURANT PORTAL</span>
+                      <span className="text-sm font-black text-slate-900 dark:text-white truncate block max-w-[150px] font-display">{restaurant?.name || 'Console'}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                    className="p-1.5 rounded-xl bg-slate-100 dark:bg-glass text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Nav Links */}
+                <div className="space-y-2">
+                  {navItems.map(item => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => { setActiveTab(item.id as any); setIsMobileSidebarOpen(false); }}
+                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl font-extrabold text-xs transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-primary text-black font-black shadow-lg shadow-primary/25'
+                            : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/90 dark:bg-glass hover:bg-slate-200/80'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon size={18} className={isActive ? 'text-black' : 'text-primary'} />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            isActive ? 'bg-black text-primary' : 'bg-primary/20 text-primary'
+                          }`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Logout Button with Confirmation Alert */}
+              <button
+                onClick={() => {
+                  setIsMobileSidebarOpen(false);
+                  handleLogout();
+                }}
+                className="w-full py-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:bg-rose-500/20 cursor-pointer shadow-xs"
+              >
+                <LogOut size={16} />
+                <span>{t('nav_logout')}</span>
+              </button>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -1076,48 +1287,39 @@ export const RestaurantDashboard: React.FC = () => {
         {/* DASHBOARD TAB */}
         {/* ==================================================== */}
         {activeTab === 'dashboard' && (
-          <div className="space-y-8 animate-fadeIn w-full">
-            {/* Welcome Banner */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6">
+          <div className="space-y-6 animate-fadeIn w-full">
+            {/* Welcome & Quick Action Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-5">
               <div>
-                <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">{t('establishment_overview')}</span>
+                <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block flex items-center gap-1.5">
+                  <ChefHat size={14} className="text-primary" />
+                  <span>{t('establishment_overview')}</span>
+                </span>
                 <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">
                   {t('welcome_back')}, {restaurant?.ownerName || 'Partner'}
                 </h1>
                 <p className="text-xs text-text-muted mt-1">{t('overview_desc')}</p>
               </div>
-              <div className="flex items-center gap-3">
-                {/* Language Selector Dropdown */}
-                <div className="px-3.5 py-2 rounded-xl border border-glass bg-glass hover:bg-glass-subtle flex items-center gap-2 transition-all shadow-sm">
-                  <Globe size={14} className="text-primary shrink-0" />
-                  <select
-                    value={language}
-                    onChange={(e) => setLanguage(e.target.value as any)}
-                    className="bg-transparent text-xs font-extrabold text-text-primary focus:outline-none cursor-pointer"
-                  >
-                    <option value="en" className="bg-bg-dark text-text-primary">English</option>
-                    <option value="te" className="bg-bg-dark text-text-primary">తెలుగు</option>
-                    <option value="hi" className="bg-bg-dark text-text-primary">हिन्दी</option>
-                  </select>
-                </div>
 
+              <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto mt-1 sm:mt-0">
                 <button
-                  onClick={() => setActiveTab('menu')}
-                  className="px-4 py-2.5 rounded-xl border border-glass bg-glass hover:bg-glass-subtle text-xs font-bold uppercase tracking-wider text-text-primary transition-all flex items-center gap-2"
+                  type="button"
+                  onClick={openAddFoodModal}
+                  className="px-5 py-3 rounded-2xl bg-primary hover:bg-primary-dark active:scale-95 text-black font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-primary/20 cursor-pointer"
                 >
-                  <PlusCircle size={14} className="text-primary" />
-                  <span>{t('manage_menu')}</span>
+                  <PlusCircle size={18} strokeWidth={2.5} />
+                  <span>Add Dish</span>
                 </button>
               </div>
             </div>
 
-            {/* Restaurant Status Card (Placed below Manage Menu button) */}
-            <div className={`glass-panel border rounded-2xl p-5 shadow-luxury transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isRestaurantOpen
+            {/* Restaurant Status Banner Card */}
+            <div className={`glass-panel border rounded-2xl p-4 sm:p-5 shadow-luxury transition-all duration-300 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${isRestaurantOpen
               ? 'border-emerald-500/40 bg-emerald-500/5 dark:bg-emerald-950/20'
               : 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-950/20'
               }`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isRestaurantOpen
+              <div className="flex items-center gap-3.5">
+                <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center transition-all ${isRestaurantOpen
                   ? 'bg-emerald-500/20 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
                   : 'bg-rose-500/20 text-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
                   }`}>
@@ -1129,13 +1331,13 @@ export const RestaurantDashboard: React.FC = () => {
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">{t('restaurant_status')}</h3>
-                  <div className="flex items-center gap-2.5 mt-1">
-                    <span className={`text-lg font-black tracking-tight ${isRestaurantOpen ? 'text-emerald-500 font-display' : 'text-rose-500 font-display'
+                  <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-text-muted">{t('restaurant_status')}</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={`text-base sm:text-lg font-black tracking-tight ${isRestaurantOpen ? 'text-emerald-500 font-display' : 'text-rose-500 font-display'
                       }`}>
                       {isRestaurantOpen ? t('restaurant_open') : t('restaurant_closed')}
                     </span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${isRestaurantOpen
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${isRestaurantOpen
                       ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/30'
                       : 'bg-rose-500/10 text-rose-500 border-rose-500/30'
                       }`}>
@@ -1146,7 +1348,7 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
 
               {/* Toggle Switch */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-0 border-glass/40">
                 <span className="text-xs font-bold text-text-secondary">
                   {isRestaurantOpen ? t('accepting_orders') : t('offline')}
                 </span>
@@ -1174,61 +1376,154 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Stat Cards Grid (6 Cards) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
+            {/* Stat Cards Grid (6 Pro Metric Cards in Requested Order) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5 sm:gap-4">
+              {/* 1. Today Orders */}
               <div className="glass-panel border border-glass rounded-2xl p-4 shadow-md hover:border-primary/40 transition-all">
-                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">{t('todays_orders')}</span>
-                <div className="text-2xl font-black font-display text-text-primary mt-2">{todayOrdersCount}</div>
-                <span className="text-[10px] text-text-muted mt-1 block">{t('total_received')}</span>
+                <div className="flex items-center justify-between text-text-muted">
+                  <span className="text-[10px] font-bold uppercase tracking-wider block">{t('todays_orders')}</span>
+                  <ClipboardList size={15} />
+                </div>
+                <div className="text-xl sm:text-2xl font-black font-display text-text-primary mt-2">{todayOrdersCount}</div>
+                <span className="text-[9.5px] text-text-muted mt-1 block font-medium">{t('total_received')}</span>
               </div>
 
-              <div className="glass-panel border border-amber-500/30 bg-amber-500/5 rounded-2xl p-4 shadow-md">
-                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block">{t('pending')}</span>
-                <div className="text-2xl font-black font-display text-amber-500 mt-2">{pendingCount}</div>
-                <span className="text-[10px] text-amber-500/70 mt-1 block">{t('awaiting_response')}</span>
+              {/* 2. Pending Orders */}
+              <div className="glass-panel border border-amber-500/40 bg-amber-500/10 rounded-2xl p-4 shadow-md">
+                <div className="flex items-center justify-between text-amber-500">
+                  <span className="text-[10px] font-black uppercase tracking-wider block">{t('pending')}</span>
+                  <Clock size={15} className="animate-pulse" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black font-display text-amber-400 mt-2">{pendingCount}</div>
+                <span className="text-[9.5px] text-amber-400/80 mt-1 block font-semibold">{t('awaiting_response')}</span>
               </div>
 
-              <div className="glass-panel border border-blue-500/30 bg-blue-500/5 rounded-2xl p-4 shadow-md">
-                <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider block">{t('preparing')}</span>
-                <div className="text-2xl font-black font-display text-blue-400 mt-2">{preparingCount}</div>
-                <span className="text-[10px] text-blue-400/70 mt-1 block">{t('in_kitchen')}</span>
+              {/* 3. Preparing Orders */}
+              <div className="glass-panel border border-blue-500/40 bg-blue-500/10 rounded-2xl p-4 shadow-md">
+                <div className="flex items-center justify-between text-blue-400">
+                  <span className="text-[10px] font-black uppercase tracking-wider block">{t('preparing')}</span>
+                  <ChefHat size={15} />
+                </div>
+                <div className="text-xl sm:text-2xl font-black font-display text-blue-400 mt-2">{preparingCount}</div>
+                <span className="text-[9.5px] text-blue-400/80 mt-1 block font-semibold">{t('in_kitchen')}</span>
               </div>
 
-              <div className="glass-panel border border-emerald-500/30 bg-emerald-500/5 rounded-2xl p-4 shadow-md">
-                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">{t('ready')}</span>
-                <div className="text-2xl font-black font-display text-emerald-400 mt-2">{readyCount}</div>
-                <span className="text-[10px] text-emerald-400/70 mt-1 block">{t('for_pickup')}</span>
+              {/* 4. Ready Orders */}
+              <div className="glass-panel border border-emerald-500/40 bg-emerald-500/10 rounded-2xl p-4 shadow-md">
+                <div className="flex items-center justify-between text-emerald-400">
+                  <span className="text-[10px] font-black uppercase tracking-wider block">{t('ready')}</span>
+                  <CheckCircle size={15} />
+                </div>
+                <div className="text-xl sm:text-2xl font-black font-display text-emerald-400 mt-2">{readyCount}</div>
+                <span className="text-[9.5px] text-emerald-400/80 mt-1 block font-semibold">{t('for_pickup')}</span>
               </div>
 
-              <div className="glass-panel border border-glass rounded-2xl p-4 shadow-md">
-                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">{t('completed')}</span>
-                <div className="text-2xl font-black font-display text-text-primary mt-2">{completedCount}</div>
-                <span className="text-[10px] text-text-muted mt-1 block">{t('delivered')}</span>
+              {/* 5. Completed Orders */}
+              <div className="glass-panel border border-glass bg-glass-subtle/30 rounded-2xl p-4 shadow-md">
+                <div className="flex items-center justify-between text-text-muted">
+                  <span className="text-[10px] font-bold uppercase tracking-wider block">{t('completed')}</span>
+                  <CheckCircle size={15} />
+                </div>
+                <div className="text-xl sm:text-2xl font-black font-display text-text-primary mt-2">{completedCount}</div>
+                <span className="text-[9.5px] text-text-muted mt-1 block font-medium">{t('delivered')}</span>
               </div>
 
-              <div className="glass-panel border border-primary/40 bg-primary/5 rounded-2xl p-4 shadow-md">
-                <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">{t('todays_revenue')}</span>
-                <div className="text-2xl font-black font-display text-primary mt-2">₹{todayRevenue.toFixed(2)}</div>
-                <span className="text-[10px] text-primary/70 mt-1 block">{t('gross_earnings')}</span>
+              {/* 6. Today's Revenue */}
+              <div className="glass-panel border border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-2xl p-4 shadow-luxury hover:border-primary/60 transition-all">
+                <div className="flex items-center justify-between text-primary">
+                  <span className="text-[10px] font-black uppercase tracking-wider block">{t('todays_revenue')}</span>
+                  <Utensils size={15} />
+                </div>
+                <div className="text-xl sm:text-2xl font-black font-display text-primary mt-2">₹{todayRevenue.toFixed(2)}</div>
+                <span className="text-[9.5px] text-primary/80 mt-1 block font-semibold">{t('gross_earnings')}</span>
               </div>
             </div>
 
-            {/* Layout Split: Latest Orders Table + Recent Activity Panel */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              {/* Left 2 Cols: Latest Orders Table */}
+            {/* Layout Split: Latest Customer Orders + Recent Activity */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
+              {/* Left 2 Cols: Latest Orders */}
               <div className="xl:col-span-2 space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold font-display text-primary tracking-tight">Latest Customer Orders</h3>
+                  <h3 className="text-base sm:text-lg font-black font-display text-primary tracking-tight flex items-center gap-2">
+                    <ClipboardList size={18} />
+                    <span>Latest Customer Orders</span>
+                  </h3>
                   <button
                     onClick={() => setActiveTab('orders')}
-                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    <span>View All Orders ({orders.length})</span>
+                    <span>View All ({orders.length})</span>
                     <ChevronRight size={14} />
                   </button>
                 </div>
 
-                <div className="glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury">
+                {/* Mobile Orders Card List (Screens < 640px) */}
+                <div className="space-y-3.5 sm:hidden">
+                  {orders.slice(0, 4).map(o => {
+                    const status = (o.orderStatus || (o as any).status || 'Pending').toString();
+                    const isPending = status.toLowerCase() === 'pending';
+                    const isPreparing = status.toLowerCase() === 'preparing' || status.toLowerCase() === 'accepted';
+                    const isReady = status.toLowerCase() === 'ready';
+
+                    return (
+                      <motion.div
+                        key={o.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`glass-panel border rounded-2xl p-3.5 space-y-3 shadow-md relative overflow-hidden ${isPending
+                          ? 'border-amber-500/40 bg-amber-500/[0.03]'
+                          : isPreparing
+                            ? 'border-blue-500/40 bg-blue-500/[0.03]'
+                            : isReady
+                              ? 'border-emerald-500/40 bg-emerald-500/[0.03]'
+                              : 'border-glass bg-bg-cardSec/40'
+                          }`}
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-glass/60 pb-2.5">
+                          <span className="font-mono text-xs font-black text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
+                            #{o.id}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wide border ${isPending ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' :
+                            isPreparing ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' :
+                              isReady ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
+                                'bg-glass text-text-muted border-glass'
+                            }`}>
+                            {status}
+                          </span>
+                        </div>
+
+                        {/* Customer & Items */}
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-extrabold text-xs text-text-primary flex items-center gap-1">
+                              <User size={12} className="text-primary" />
+                              <span>{o.customerName}</span>
+                            </div>
+                            <div className="text-[10px] text-text-muted mt-0.5">
+                              {Array.isArray(o.items) && o.items.length > 0 ? (
+                                o.items.map(it => `${it.foodName || it.name} (x${it.quantity || 1})`).join(', ')
+                              ) : typeof o.items === 'string' ? (
+                                o.items
+                              ) : 'Items ordered'}
+                            </div>
+                          </div>
+                          <span className="font-black text-sm text-primary font-display shrink-0">
+                            ₹{Number(o.total || 0).toFixed(2)}
+                          </span>
+                        </div>
+
+                        {/* Action Bar */}
+                        <div className="pt-2 border-t border-glass/60 flex items-center justify-end">
+                          {renderRestaurantOrderAction(o)}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop Orders Table (Screens >= 640px) */}
+                <div className="hidden sm:block glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-bg-dark/80 border-b border-glass text-[10px] uppercase tracking-wider text-text-muted font-bold">
@@ -1286,18 +1581,24 @@ export const RestaurantDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Right Col: Recent Activities */}
+              {/* Right Col: Live Recent Activities Stream */}
               <div className="space-y-4">
-                <h3 className="text-lg font-bold font-display text-primary tracking-tight">Recent Activity</h3>
-                <div className="glass-panel border border-glass rounded-2xl p-5 shadow-luxury space-y-4">
+                <h3 className="text-base sm:text-lg font-black font-display text-primary tracking-tight flex items-center gap-2">
+                  <Clock size={18} />
+                  <span>Recent Operational Activity</span>
+                </h3>
+                <div className="glass-panel border border-glass rounded-2xl p-4 sm:p-5 shadow-luxury space-y-3">
                   {activities.map(act => (
-                    <div key={act.id} className="flex gap-3 items-start p-3 rounded-xl bg-glass-subtle/50 border border-glass/40">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                    <div key={act.id} className="flex gap-3 items-start p-3 rounded-xl bg-glass-subtle/50 border border-glass/40 hover:border-primary/30 transition-all">
+                      <div className="w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
                         <Clock size={14} />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-bold text-text-primary">{act.title}</div>
-                        <div className="text-[10px] text-text-muted mt-0.5">{act.time}</div>
+                        <div className="text-xs font-extrabold text-text-primary leading-tight">{act.title}</div>
+                        <div className="text-[10px] text-text-muted font-mono mt-1 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                          <span>{act.time}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1555,6 +1856,39 @@ export const RestaurantDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* Active Categories List & Quick Delete Action */}
+              {categories.length > 0 && (
+                <div className="glass-panel border border-glass rounded-2xl p-4 space-y-2.5 shadow-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest flex items-center gap-1.5">
+                      <Folder size={12} />
+                      <span>Active Establishment Categories ({categories.length})</span>
+                    </span>
+                    <span className="text-[10px] text-text-muted font-medium">
+                      Click trash icon to delete category & items from DynamoDB
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {categories.map((catName) => (
+                      <div
+                        key={catName}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-bg-dark/80 border border-glass text-xs font-bold text-text-primary hover:border-primary/40 transition-all shadow-sm group"
+                      >
+                        <span>{catName}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCategoryToDelete(catName)}
+                          className="p-1 rounded-md text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title={`Delete '${catName}' category`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Filter Bar */}
               <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center justify-between shadow-md">
                 <div className="relative w-full md:w-80">
@@ -1726,24 +2060,24 @@ export const RestaurantDashboard: React.FC = () => {
             </div>
 
             {/* Filter Controls */}
-            <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
+            <div className="glass-panel border border-glass rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center justify-between shadow-md">
               <div className="relative w-full sm:w-80">
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
                   type="text"
-                  placeholder="Search by Order ID or Customer..."
+                  placeholder="Search Order ID, Customer, or Phone..."
                   value={orderSearch}
                   onChange={(e) => setOrderSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none"
+                  className="w-full pl-10 pr-4 py-2.5 text-[15px] sm:text-xs font-semibold rounded-xl bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none"
                 />
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1.5 sm:pb-0 scrollbar-none">
                 {['All', 'Pending', 'Accepted', 'Preparing', 'Ready', 'Completed', 'Rejected'].map(st => (
                   <button
                     key={st}
                     onClick={() => setOrderStatusFilter(st)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${orderStatusFilter === st ? 'bg-primary text-bg-dark font-black' : 'bg-glass text-text-secondary hover:text-primary'
+                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${orderStatusFilter === st ? 'bg-primary text-black font-black shadow-sm' : 'bg-glass text-text-secondary hover:text-primary border border-glass/60'
                       }`}
                   >
                     {st}
@@ -1752,69 +2086,228 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Orders Table */}
-            <div className="glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-bg-dark/80 border-b border-glass text-[10px] uppercase tracking-wider text-text-muted font-bold">
-                    <tr>
-                      <th className="p-4">Order ID</th>
-                      <th className="p-4">Customer Details</th>
-                      <th className="p-4">Items Ordered</th>
-                      <th className="p-4">Total</th>
-                      <th className="p-4">Payment</th>
-                      <th className="p-4">Order Status</th>
-                      <th className="p-4 text-right">Update Status Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-glass font-medium text-text-secondary">
-                    {filteredOrders.map(o => (
-                      <tr key={o.id} className="hover:bg-glass/40 transition-colors">
-                        <td className="p-4 font-mono font-bold text-primary">{o.id}</td>
-                        <td className="p-4">
-                          <div className="font-bold text-text-primary">{o.customerName}</div>
-                          <div className="text-[10px] text-text-muted">{o.customerPhone} • {o.customerAddress}</div>
-                        </td>
-                        <td className="p-4 max-w-xs">
-                          {Array.isArray(o.items) && o.items.length > 0 ? (
-                            <div className="space-y-1">
-                              {o.items.map((it: any, idx: number) => (
-                                <div key={idx} className="text-xs font-semibold text-text-primary">
-                                  {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : typeof o.items === 'string' ? (
-                            o.items
-                          ) : (
-                            <span className="text-text-muted italic text-[11px]">No items listed</span>
-                          )}
-                        </td>
-                        <td className="p-4 font-bold text-text-primary">₹{Number(o.total || 0).toFixed(2)}</td>
-                        <td className="p-4">
-                          <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            {o.paymentStatus}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${o.orderStatus === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                            o.orderStatus === 'Accepted' || o.orderStatus === 'Preparing' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                              o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
-                                  'bg-error/10 text-error border border-error/20'
-                            }`}>
-                            {o.orderStatus}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          {renderRestaurantOrderAction(o)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* ORDERS LIST: DUAL MOBILE CARDS + DESKTOP TABLE */}
+            {filteredOrders.length === 0 ? (
+              <div className="text-center py-16 glass-panel border border-glass rounded-2xl p-8 max-w-md mx-auto space-y-3">
+                <ClipboardList size={40} className="mx-auto text-text-muted opacity-50" />
+                <h3 className="font-bold text-base text-text-primary font-display">No Orders Found</h3>
+                <p className="text-xs text-text-muted">
+                  No orders match your filter. Active incoming customer orders will appear here automatically in real time.
+                </p>
               </div>
-            </div>
+            ) : (
+              <>
+                {/* 1. MOBILE ORDERS CARD LIST (Shown on Mobile screens < 640px) */}
+                <div className="space-y-4 sm:hidden">
+                  {filteredOrders.map(o => {
+                    const status = (o.orderStatus || (o as any).status || 'Pending').toString();
+                    const isPending = status.toLowerCase() === 'pending';
+                    const isPreparing = status.toLowerCase() === 'preparing' || status.toLowerCase() === 'accepted';
+                    const isReady = status.toLowerCase() === 'ready';
+                    const isCompleted = status.toLowerCase() === 'completed' || status.toLowerCase() === 'delivered';
+                    const isRejected = status.toLowerCase() === 'rejected';
+
+                    return (
+                      <motion.div
+                        key={o.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`glass-panel border rounded-2xl p-4 space-y-3.5 shadow-luxury relative overflow-hidden transition-all ${isPending
+                          ? 'border-amber-500/40 bg-amber-500/[0.03]'
+                          : isPreparing
+                            ? 'border-blue-500/40 bg-blue-500/[0.03]'
+                            : isReady
+                              ? 'border-emerald-500/40 bg-emerald-500/[0.03]'
+                              : 'border-glass bg-bg-cardSec/40'
+                          }`}
+                      >
+                        {/* Top Header Strip: Order ID & Status Badge */}
+                        <div className="flex items-center justify-between gap-2 border-b border-glass/60 pb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-black text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg tracking-wider">
+                              #{o.id}
+                            </span>
+                            {o.time && (
+                              <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
+                                <Clock size={11} className="text-text-muted" />
+                                {o.time}
+                              </span>
+                            )}
+                          </div>
+
+                          <span
+                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 border shadow-sm ${isPending
+                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                              : isPreparing
+                                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                : isReady
+                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                  : isCompleted
+                                    ? 'bg-glass text-text-muted border-glass'
+                                    : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${isPending
+                                ? 'bg-amber-400 animate-pulse'
+                                : isPreparing
+                                  ? 'bg-blue-400 animate-pulse'
+                                  : isReady
+                                    ? 'bg-emerald-400 animate-pulse'
+                                    : isCompleted
+                                      ? 'bg-text-muted'
+                                      : 'bg-rose-400'
+                                }`}
+                            />
+                            <span>{status}</span>
+                          </span>
+                        </div>
+
+                        {/* Customer Details Box */}
+                        <div className="bg-bg-dark/60 border border-glass/60 rounded-xl p-3 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-xs text-text-primary flex items-center gap-1.5">
+                              <User size={13} className="text-primary shrink-0" />
+                              <span>{o.customerName || 'Customer'}</span>
+                            </span>
+
+                            {o.customerPhone && (
+                              <a
+                                href={`tel:${o.customerPhone}`}
+                                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20"
+                              >
+                                <Phone size={11} />
+                                <span>{o.customerPhone}</span>
+                              </a>
+                            )}
+                          </div>
+
+                          {o.customerAddress && (
+                            <p className="text-[11px] text-text-muted font-medium flex items-start gap-1.5 leading-snug pt-0.5">
+                              <MapPin size={12} className="text-text-muted shrink-0 mt-0.5" />
+                              <span className="line-clamp-2">{o.customerAddress}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Ordered Items List Box */}
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-text-muted block px-0.5">
+                            Items Ordered
+                          </span>
+
+                          <div className="bg-glass-subtle/50 border border-glass/60 rounded-xl p-3 space-y-1.5">
+                            {Array.isArray(o.items) && o.items.length > 0 ? (
+                              o.items.map((it: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between text-xs font-semibold text-text-primary border-b border-glass/30 last:border-0 pb-1 last:pb-0">
+                                  <span className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                    <span>{it.foodName || it.name || 'Food Item'}</span>
+                                  </span>
+                                  <span className="font-extrabold text-primary bg-primary/10 px-2 py-0.5 rounded-md text-[10px]">
+                                    x{it.quantity || 1}
+                                  </span>
+                                </div>
+                              ))
+                            ) : typeof o.items === 'string' ? (
+                              <p className="text-xs font-semibold text-text-primary">{o.items}</p>
+                            ) : (
+                              <span className="text-text-muted italic text-[11px]">No items listed</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Order Payment & Total Pricing Strip */}
+                        <div className="flex items-center justify-between pt-1 border-t border-glass/60">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Payment:</span>
+                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              {o.paymentStatus || 'PAID'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-text-muted font-bold uppercase">Total:</span>
+                            <span className="text-base font-black text-primary font-display">
+                              ₹{Number(o.total || 0).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Order Action Button Strip */}
+                        <div className="pt-2 border-t border-glass/60 flex items-center justify-end">
+                          {renderRestaurantOrderAction(o)}
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+
+                {/* 2. DESKTOP ORDERS TABLE (Shown on screens >= 640px) */}
+                <div className="hidden sm:block glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-bg-dark/80 border-b border-glass text-[10px] uppercase tracking-wider text-text-muted font-bold">
+                        <tr>
+                          <th className="p-4">Order ID</th>
+                          <th className="p-4">Customer Details</th>
+                          <th className="p-4">Items Ordered</th>
+                          <th className="p-4">Total</th>
+                          <th className="p-4">Payment</th>
+                          <th className="p-4">Order Status</th>
+                          <th className="p-4 text-right">Update Status Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-glass font-medium text-text-secondary">
+                        {filteredOrders.map(o => (
+                          <tr key={o.id} className="hover:bg-glass/40 transition-colors">
+                            <td className="p-4 font-mono font-bold text-primary">{o.id}</td>
+                            <td className="p-4">
+                              <div className="font-bold text-text-primary">{o.customerName}</div>
+                              <div className="text-[10px] text-text-muted">{o.customerPhone} • {o.customerAddress}</div>
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              {Array.isArray(o.items) && o.items.length > 0 ? (
+                                <div className="space-y-1">
+                                  {o.items.map((it: any, idx: number) => (
+                                    <div key={idx} className="text-xs font-semibold text-text-primary">
+                                      {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : typeof o.items === 'string' ? (
+                                o.items
+                              ) : (
+                                <span className="text-text-muted italic text-[11px]">No items listed</span>
+                              )}
+                            </td>
+                            <td className="p-4 font-bold text-text-primary">₹{Number(o.total || 0).toFixed(2)}</td>
+                            <td className="p-4">
+                              <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                {o.paymentStatus}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${o.orderStatus === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
+                                o.orderStatus === 'Accepted' || o.orderStatus === 'Preparing' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                  o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                    o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
+                                      'bg-error/10 text-error border border-error/20'
+                                }`}>
+                                {o.orderStatus}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              {renderRestaurantOrderAction(o)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -1822,138 +2315,232 @@ export const RestaurantDashboard: React.FC = () => {
         {/* PROFILE TAB */}
         {/* ==================================================== */}
         {activeTab === 'profile' && (
-          <div className="space-y-6 animate-fadeIn w-full">
-            <div className="border-b border-glass pb-6">
+          <div className="space-y-5 animate-fadeIn w-full max-h-[calc(100vh-120px)] overflow-y-auto pr-1 sm:pr-2 pb-12">
+            <div className="border-b border-glass pb-5">
               <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Establishment Details</span>
               <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Restaurant Profile</h1>
-              <p className="text-xs text-text-muted mt-1">Update your restaurant information, timings, address, and cover image.</p>
+              <p className="text-xs text-text-muted mt-1">Manage your restaurant details, contact information, credentials, timings, and cover image.</p>
             </div>
 
-            <div className="glass-panel border border-glass rounded-2xl p-6 sm:p-8 shadow-luxury w-full">
+            <div className="glass-panel border border-glass rounded-2xl p-4 sm:p-8 shadow-luxury w-full">
+              {/* Error Banner */}
+              {profileError && (
+                <div className="p-4 rounded-xl bg-error/15 border border-error/30 text-rose-400 text-xs font-semibold mb-6 flex gap-2.5 items-center shadow-sm">
+                  <AlertTriangle size={18} className="shrink-0 text-rose-400" />
+                  <span>{profileError}</span>
+                </div>
+              )}
+
+              {/* Success Banner */}
               {profileSuccessMsg && (
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-6 flex gap-2 items-center">
-                  <CheckCircle size={16} />
+                <div className="p-4 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold mb-6 flex gap-2.5 items-center shadow-sm">
+                  <CheckCircle size={18} className="shrink-0 text-emerald-400" />
                   <span>{profileSuccessMsg}</span>
                 </div>
               )}
 
               <form onSubmit={saveProfile} className="space-y-6 text-xs font-semibold text-text-secondary w-full">
-                {/* 2 Cols */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 1. Basic Identity Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                   <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Restaurant Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={profileForm.name}
-                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Owner Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={profileForm.ownerName}
-                      onChange={(e) => setProfileForm({ ...profileForm, ownerName: e.target.value })}
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* Read-Only Credentials Section */}
-                <div className="p-4 rounded-xl bg-glass-subtle/40 border border-glass space-y-3">
-                  <span className="text-[9px] font-extrabold uppercase tracking-widest text-primary block">Admin Managed Credentials (Read-Only)</span>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Email Address</label>
+                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                      Restaurant Name <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Utensils size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                       <input
                         type="text"
-                        disabled
-                        value={profileForm.email}
-                        className="w-full bg-bg-dark/40 border border-glass/40 text-text-muted px-3.5 py-2.5 rounded-lg outline-none font-mono text-xs cursor-not-allowed"
+                        required
+                        placeholder="e.g. Royal Bawarchi Restaurant"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1">Password</label>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                      Proprietor / Owner Name <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                       <input
-                        type="password"
-                        disabled
-                        value="••••••••"
-                        className="w-full bg-bg-dark/40 border border-glass/40 text-text-muted px-3.5 py-2.5 rounded-lg outline-none font-mono text-xs cursor-not-allowed"
+                        type="text"
+                        required
+                        placeholder="e.g. Likhith Kumar"
+                        value={profileForm.ownerName}
+                        onChange={(e) => setProfileForm({ ...profileForm, ownerName: e.target.value })}
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Contact & Address */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Phone Number</label>
-                    <input
-                      type="text"
-                      required
-                      value={profileForm.phone}
-                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                    />
+                {/* 2. Login & Credentials Update Section */}
+                <div className="p-4 sm:p-5 rounded-2xl bg-glass-subtle/50 border border-glass/80 space-y-4">
+                  <div className="flex items-center justify-between border-b border-glass/60 pb-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+                      <Lock size={13} />
+                      <span>Account Credentials & Email Updates</span>
+                    </span>
+                    <span className="text-[9.5px] text-text-muted">You can update your email & password anytime</span>
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Cuisine Specialty</label>
-                    <input
-                      type="text"
-                      value={profileForm.cuisine}
-                      onChange={(e) => setProfileForm({ ...profileForm, cuisine: e.target.value })}
-                      placeholder="e.g. Gourmet Pizza, South Indian, Hyderabadi"
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Email Address Field (Admin Managed Read-Only) */}
+                    <div>
+                      <label className="block text-[9.5px] font-bold text-text-muted uppercase tracking-widest mb-1.5 flex items-center justify-between">
+                        <span>Email Address</span>
+                        <span className="text-[8.5px] text-primary/80 font-bold uppercase">Admin Assigned</span>
+                      </label>
+                      <div className="relative">
+                        <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted opacity-70" />
+                        <input
+                          type="email"
+                          disabled
+                          readOnly
+                          value={profileForm.email}
+                          className="w-full bg-bg-dark/40 border border-glass/40 text-text-muted pl-9 pr-3.5 py-2.5 rounded-xl outline-none font-medium text-[15px] sm:text-xs cursor-not-allowed"
+                        />
+                      </div>
+                    </div>
+
+                    {/* New Password Field */}
+                    <div>
+                      <label className="block text-[9.5px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+                        New Password (Optional)
+                      </label>
+                      <div className="relative">
+                        <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                        <input
+                          type={showProfilePassword ? 'text' : 'password'}
+                          placeholder="Leave blank to keep current"
+                          value={profileForm.password}
+                          onChange={(e) => setProfileForm({ ...profileForm, password: e.target.value })}
+                          className="w-full bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary pl-9 pr-9 py-2.5 rounded-xl outline-none font-medium text-[15px] sm:text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowProfilePassword(!showProfilePassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary cursor-pointer"
+                        >
+                          {showProfilePassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Confirm Password Field */}
+                    <div>
+                      <label className="block text-[9.5px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+                        Confirm New Password
+                      </label>
+                      <div className="relative">
+                        <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                        <input
+                          type={showProfilePassword ? 'text' : 'password'}
+                          placeholder="Re-enter password"
+                          value={profileForm.confirmPassword}
+                          onChange={(e) => setProfileForm({ ...profileForm, confirmPassword: e.target.value })}
+                          className="w-full bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary pl-9 pr-3.5 py-2.5 rounded-xl outline-none font-medium text-[15px] sm:text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Timings */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 3. Contact & Cuisine Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+                  <div>
+                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                      Phone Number <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 9876543210"
+                        value={profileForm.phone}
+                        onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                      Cuisine Specialty
+                    </label>
+                    <div className="relative">
+                      <ChefHat size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="text"
+                        value={profileForm.cuisine}
+                        onChange={(e) => setProfileForm({ ...profileForm, cuisine: e.target.value })}
+                        placeholder="e.g. Gourmet Biryani, South Indian, Tandoori, Chinese"
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Timings Section */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                   <div>
                     <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Opening Time</label>
-                    <input
-                      type="text"
-                      value={profileForm.openingTime}
-                      onChange={(e) => setProfileForm({ ...profileForm, openingTime: e.target.value })}
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                    />
+                    <div className="relative">
+                      <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="text"
+                        placeholder="e.g. 10:30 AM"
+                        value={profileForm.openingTime}
+                        onChange={(e) => setProfileForm({ ...profileForm, openingTime: e.target.value })}
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
+                      />
+                    </div>
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Closing Time</label>
+                    <div className="relative">
+                      <Clock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="text"
+                        placeholder="e.g. 11:00 PM"
+                        value={profileForm.closingTime}
+                        onChange={(e) => setProfileForm({ ...profileForm, closingTime: e.target.value })}
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 5. Address Section */}
+                <div>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                    Physical Address <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                     <input
                       type="text"
-                      value={profileForm.closingTime}
-                      onChange={(e) => setProfileForm({ ...profileForm, closingTime: e.target.value })}
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
+                      required
+                      placeholder="e.g. D.No 4-12, Main Road, Ravulapalem, Konaseema"
+                      value={profileForm.address}
+                      onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Physical Address</label>
-                  <input
-                    type="text"
-                    required
-                    value={profileForm.address}
-                    onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
-                    className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                  />
-                </div>
-
-                {/* Restaurant Image Upload */}
-                <div className="space-y-3">
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Restaurant Image (S3 Upload)</label>
-                  <div className="flex flex-col sm:flex-row gap-4 items-center">
-                    <label className="cursor-pointer flex items-center gap-2 px-4 py-3 rounded-xl border border-glass bg-glass-subtle hover:bg-glass hover:text-primary transition-all text-xs font-bold">
+                {/* 6. Restaurant Cover Image Upload */}
+                <div className="space-y-2.5">
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Restaurant Cover Banner Image</label>
+                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                    <label className="cursor-pointer flex items-center gap-2 px-4 py-3 rounded-xl border border-glass bg-glass-subtle hover:bg-glass hover:text-primary transition-all text-xs font-bold shrink-0">
                       <UploadCloud size={16} />
-                      <span>{isProfileImageUploading ? 'Uploading to S3...' : 'Upload New Cover Image'}</span>
+                      <span>{isProfileImageUploading ? 'Uploading to Cloud...' : 'Upload New Cover Image'}</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -1963,28 +2550,34 @@ export const RestaurantDashboard: React.FC = () => {
                       />
                     </label>
                     {profileForm.image && (
-                      <img src={profileForm.image} alt="Cover" className="w-16 h-16 rounded-xl object-cover border border-glass shadow-sm" />
+                      <div className="flex items-center gap-3">
+                        <img src={profileForm.image} alt="Cover Preview" className="w-16 h-16 rounded-xl object-cover border border-glass shadow-md shrink-0" />
+                        <span className="text-[11px] text-emerald-400 font-bold">Image Loaded Successfully</span>
+                      </div>
                     )}
                   </div>
                 </div>
 
+                {/* 7. Description */}
                 <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Description</label>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Establishment Description</label>
                   <textarea
                     rows={3}
+                    placeholder="Write a brief overview of your restaurant, food hygiene standards, special family thalis..."
                     value={profileForm.description}
                     onChange={(e) => setProfileForm({ ...profileForm, description: e.target.value })}
-                    className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm resize-none"
+                    className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary p-4 rounded-xl outline-none font-medium text-[15px] sm:text-sm resize-none"
                   />
                 </div>
 
-                <div className="pt-4 flex justify-end">
+                {/* Submit Action Bar */}
+                <div className="pt-4 border-t border-glass flex justify-end">
                   <button
                     type="submit"
                     disabled={isProfileSaving}
-                    className="px-8 py-3 bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest rounded-xl hover:shadow-lg transition-all"
+                    className="px-8 py-3.5 bg-primary hover:bg-primary-dark text-black font-black text-xs uppercase tracking-widest rounded-xl hover:shadow-lg active:scale-95 transition-all cursor-pointer shadow-md"
                   >
-                    {isProfileSaving ? 'Saving Profile...' : 'Save Profile Changes'}
+                    {isProfileSaving ? 'Saving Changes...' : 'Save Profile Changes'}
                   </button>
                 </div>
               </form>
@@ -2317,6 +2910,146 @@ export const RestaurantDashboard: React.FC = () => {
             </motion.div>
           </div>
         )}
+
+        {/* Notifications & Recent Order Updates Drawer / Modal Panel */}
+        <AnimatePresence>
+          {isNotificationOpen && (
+            <>
+              {/* Dim Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsNotificationOpen(false)}
+                className="fixed inset-0 z-45 bg-black/70 backdrop-blur-xs cursor-pointer"
+              />
+
+              {/* Notification Drawer Panel */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                className="fixed top-14 right-3 sm:top-16 sm:right-8 z-50 w-[92vw] sm:w-96 max-h-[80vh] bg-white dark:bg-[#0b1329] border border-slate-200 dark:border-glass rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col justify-between overflow-hidden"
+              >
+                <div className="space-y-4 flex-1 flex flex-col min-h-0">
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold">
+                        <Bell size={16} />
+                      </div>
+                      <div>
+                        <h3 className="font-black text-sm text-text-primary font-display">Recent Updates & Orders</h3>
+                        <span className="text-[10px] text-text-muted font-bold block">Live Notification Center</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setIsNotificationOpen(false)}
+                      className="p-1.5 rounded-xl bg-slate-100 dark:bg-glass text-text-muted hover:text-text-primary cursor-pointer"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  {/* Notifications List */}
+                  <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 text-xs scrollbar-thin">
+                    {/* Pending Action Required Banner */}
+                    {pendingCount > 0 && (
+                      <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 animate-pulse">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+                          <div>
+                            <span className="font-black text-amber-500 text-xs block">{pendingCount} Action Required</span>
+                            <span className="text-[10px] text-amber-400/90 font-medium">Pending orders awaiting response</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setActiveTab('orders');
+                            setOrderStatusFilter('Pending');
+                            setIsNotificationOpen(false);
+                          }}
+                          className="px-2.5 py-1 rounded-xl bg-amber-500 text-black font-black text-[10px] tracking-tight shrink-0 cursor-pointer shadow-xs"
+                        >
+                          Review
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Orders Updates List */}
+                    {orders.slice(0, 5).map(o => {
+                      const isPending = o.orderStatus === 'Pending';
+                      return (
+                        <div
+                          key={o.id}
+                          className="p-3 rounded-2xl bg-slate-50 dark:bg-glass-subtle/40 border border-slate-200/60 dark:border-glass/40 flex items-start justify-between gap-3 hover:border-primary/40 transition-all"
+                        >
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-primary font-mono">{o.id}</span>
+                              <span className={`px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${
+                                isPending ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/20 text-emerald-500'
+                              }`}>
+                                {o.orderStatus}
+                              </span>
+                            </div>
+                            <div className="font-extrabold text-text-primary text-[11px] truncate">{o.customerName}</div>
+                            <div className="text-[10px] text-text-muted truncate">
+                              {Array.isArray(o.items) && o.items.length > 0
+                                ? o.items.map((it: any) => `${it.foodName || it.name} (x${it.quantity || 1})`).join(', ')
+                                : 'Order Items'}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            <span className="font-black text-xs text-text-primary">₹{Number(o.total || 0).toFixed(2)}</span>
+                            {isPending ? (
+                              <button
+                                onClick={() => {
+                                  handleUpdateOrderStatus(o.id, 'Preparing');
+                                  setIsNotificationOpen(false);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-primary text-black font-black text-[9.5px] cursor-pointer shadow-xs"
+                              >
+                                Accept
+                              </button>
+                            ) : (
+                              <span className="text-[9px] text-text-muted font-mono">{o.time}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Activity Feed Updates */}
+                    <div className="pt-2 border-t border-slate-200 dark:border-glass/40 space-y-2">
+                      <span className="text-[9.5px] font-black uppercase tracking-widest text-text-muted block px-1">Recent Activity Log</span>
+                      {activities.slice(0, 4).map(act => (
+                        <div key={act.id} className="p-2.5 rounded-xl bg-slate-100/70 dark:bg-glass/30 text-[11px] font-bold flex items-center justify-between gap-2">
+                          <span className="text-text-primary truncate">{act.title}</span>
+                          <span className="text-[9px] text-primary font-mono shrink-0">{act.time}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Footer Action */}
+                  <div className="pt-3 border-t border-slate-200 dark:border-glass">
+                    <button
+                      onClick={() => {
+                        setActiveTab('orders');
+                        setIsNotificationOpen(false);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all border border-primary/30"
+                    >
+                      <ClipboardList size={15} />
+                      <span>View All Orders ({orders.length})</span>
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </AnimatePresence>
       {/* Restaurant Mobile Bottom Navigation Bar */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-bg-darkSec/95 border-t border-slate-200 dark:border-glass backdrop-blur-xl px-2 py-2 flex items-center justify-around shadow-2xl">

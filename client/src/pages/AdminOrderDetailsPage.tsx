@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   RefreshCw,
   Copy,
-  Check
+  Check,
+  Utensils
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
@@ -371,7 +372,7 @@ export const AdminOrderDetailsPage: React.FC = () => {
                                   <img src={it.image} alt={it.name || it.foodName} className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-glass shrink-0 shadow-sm" />
                                 ) : (
                                   <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-slate-200 dark:border-glass flex items-center justify-center text-primary font-bold text-lg shrink-0">
-                                    🍱
+                                    <Utensils size={20} />
                                   </div>
                                 )}
                                 <div>

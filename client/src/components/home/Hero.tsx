@@ -203,7 +203,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       id="home"
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      className="relative min-h-screen flex items-center justify-center pt-28 pb-20 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
+      className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center pt-20 sm:pt-28 pb-12 sm:pb-20 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
     >
       {/* Background Video */}
       <video
@@ -221,17 +221,17 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       </video>
 
       {/* Premium left-to-right gradient overlay optimized for mobile contrast & readability */}
-      <div className="absolute inset-0 bg-gradient-to-r from-bg-dark-color/95 via-bg-dark-color/80 to-bg-dark-color/40 md:from-bg-dark-color/90 md:via-bg-dark-color/50 md:to-transparent pointer-events-none z-0" />
+      <div className="absolute inset-0 bg-gradient-to-r from-bg-dark-color/95 via-bg-dark-color/85 to-bg-dark-color/40 md:from-bg-dark-color/90 md:via-bg-dark-color/50 md:to-transparent pointer-events-none z-0" />
       {/* Background Cinematic Gradients and Orbs (Mouse-driven parallax) */}
       <motion.div 
         style={{ x: bgBlob1X, y: bgBlob1Y }}
-        className="absolute top-[15%] left-[20%] w-[550px] h-[550px] rounded-full bg-primary/10 blur-[130px] pointer-events-none animate-pulse-slow" 
+        className="absolute top-[15%] left-[20%] w-[350px] sm:w-[550px] h-[350px] sm:h-[550px] rounded-full bg-primary/10 blur-[100px] sm:blur-[130px] pointer-events-none animate-pulse-slow" 
       />
       <motion.div 
         style={{ x: bgBlob2X, y: bgBlob2Y }}
-        className="absolute bottom-[20%] right-[15%] w-[550px] h-[550px] rounded-full bg-accent/5 blur-[130px] pointer-events-none animate-glow-slow" 
+        className="absolute bottom-[20%] right-[15%] w-[350px] sm:w-[550px] h-[350px] sm:h-[550px] rounded-full bg-accent/5 blur-[100px] sm:blur-[130px] pointer-events-none animate-glow-slow" 
       />
-      <div className="absolute top-[40%] right-[35%] w-[350px] h-[350px] rounded-full bg-secondary/5 blur-[100px] pointer-events-none" />
+      <div className="absolute top-[40%] right-[35%] w-[250px] sm:w-[350px] h-[250px] sm:h-[350px] rounded-full bg-secondary/5 blur-[80px] sm:blur-[100px] pointer-events-none" />
 
       {/* Floating Sparkles and Rings with Parallax */}
       <motion.div
@@ -263,41 +263,40 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
         </svg>
       </motion.div>
 
-      {/* Floating Food Ingredient (Tomato slice / Basil - Parallax & drift) */}
+      {/* Floating Food Ingredient */}
       <motion.div
         style={{ x: food1X, y: food1Y, animationDelay: '0.8s' } as any}
         className="absolute top-[60%] right-[42%] w-5 h-5 opacity-40 pointer-events-none hidden lg:block animate-leaf-drift"
       >
-        {/* Sparkle particle */}
         <svg viewBox="0 0 24 24" fill="none" className="w-full h-full text-primary/60">
           <polygon points="12,0 15,9 24,12 15,15 12,24 9,15 0,12 9,9" fill="currentColor" />
         </svg>
       </motion.div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center relative z-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-16 items-center relative z-10">
         
         {/* Left Content Text Column */}
-        <div className="lg:col-span-7 space-y-8 text-center lg:text-left">
+        <div className="lg:col-span-7 space-y-5 sm:space-y-8 text-center lg:text-left">
           
           {/* Tagline */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="inline-flex items-center space-x-2 bg-glass-subtle border border-primary/20 px-4.5 py-1.8 rounded-full backdrop-blur-md"
+            className="inline-flex items-center space-x-2 bg-glass-subtle border border-primary/20 px-3.5 py-1 sm:px-4.5 sm:py-1.8 rounded-full backdrop-blur-md"
           >
-            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-            <span className="text-[10px] font-bold tracking-[0.25em] text-primary uppercase">
-            Fast Delivery Across Konaseema. 
+            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-primary animate-ping" />
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.2em] sm:tracking-[0.25em] text-primary uppercase">
+              Fast Delivery Across Konaseema. 
             </span>
           </motion.div>
 
           {/* Heading */}
           <motion.h1
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="text-4xl sm:text-5xl md:text-6.5xl lg:text-5xl font-extrabold font-display leading-[1.05] tracking-[-0.03em] text-text-primary"
+            className="text-3xl sm:text-5xl md:text-6.5xl lg:text-5xl font-extrabold font-display leading-tight sm:leading-[1.05] tracking-tight text-text-primary"
           >
             Fresh food,<br />
             <span className="text-gradient-gold text-glow-gold">Delivered to your doorstep... </span>
@@ -305,30 +304,29 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
 
           {/* Description */}
           <motion.p
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="text-sm md:text-base text-text-secondary/90 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium"
+            className="text-xs sm:text-sm md:text-base text-text-secondary/90 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium"
           >
             Discover the best restaurants across Konaseema and enjoy hot, freshly prepared meals delivered quickly, safely, and with care. 
- 
           </motion.p>
 
           {/* Search bar */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
             className="w-full max-w-xl mx-auto lg:mx-0"
           >
             <form
               onSubmit={handleSearchSubmit}
-              className={`flex items-center bg-bg-cardSec/70 backdrop-blur-xl border rounded-[22px] p-2 transition-all duration-500 ${
+              className={`flex items-center bg-bg-cardSec/80 backdrop-blur-xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 ${
                 searchFocused ? 'border-primary/60 shadow-[0_0_35px_rgba(197,147,99,0.18)]' : 'border-glass'
               }`}
             >
-              <div className="flex-1 flex items-center px-4 space-x-3">
-                <Search size={18} className={`transition-colors duration-300 ${searchFocused ? 'text-primary' : 'text-text-muted'}`} />
+              <div className="flex-1 flex items-center px-2.5 sm:px-4 space-x-2 sm:space-x-3">
+                <Search size={16} className={`transition-colors duration-300 ${searchFocused ? 'text-primary' : 'text-text-muted'}`} />
                 <div className="relative flex-grow">
                   {/* Real Search Input */}
                   <input
@@ -338,13 +336,13 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                     aria-label="Search restaurants and cuisines"
-                    className="w-full bg-transparent border-none outline-none text-text-primary text-sm py-3 font-medium relative z-10"
+                    className="w-full bg-transparent border-none outline-none text-text-primary text-xs sm:text-sm py-2 sm:py-3 font-medium relative z-10"
                   />
                   {/* Dynamic placeholder typing overlay */}
                   {!searchQuery && (
-                    <span className="absolute left-0 right-2 top-1/2 -translate-y-1/2 text-text-muted/60 text-sm font-medium pointer-events-none select-none z-0 truncate">
+                    <span className="absolute left-0 right-2 top-1/2 -translate-y-1/2 text-text-muted/60 text-xs sm:text-sm font-medium pointer-events-none select-none z-0 truncate">
                       {placeholderText}
-                      <span className="w-[1.5px] h-4 bg-primary/70 inline-block align-middle ml-0.5 animate-pulse" />
+                      <span className="w-[1.5px] h-3.5 sm:h-4 bg-primary/70 inline-block align-middle ml-0.5 animate-pulse" />
                     </span>
                   )}
                 </div>
@@ -352,33 +350,33 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               <button
                 type="submit"
                 aria-label="Submit search query"
-                className="btn-primary px-6 py-3.5 rounded-[15px] font-bold text-xs uppercase tracking-wider flex items-center space-x-1 shrink-0"
+                className="btn-primary px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-[15px] font-bold text-[11px] sm:text-xs uppercase tracking-wider flex items-center space-x-1 shrink-0"
               >
                 <span>Find Dishes</span>
-                <ChevronRight size={14} />
+                <ChevronRight size={13} />
               </button>
             </form>
           </motion.div>
 
           {/* Action buttons */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="flex flex-col sm:flex-row justify-center lg:justify-start items-center gap-4 pt-2"
+            className="flex flex-row justify-center lg:justify-start items-center gap-2.5 sm:gap-4 pt-1 sm:pt-2"
           >
             <button
               onClick={handleOrderClick}
               onFocus={() => setIsPrimaryFocused(true)}
               onBlur={() => setIsPrimaryFocused(false)}
               disabled={isOrdering}
-              className={`w-full sm:w-auto btn-primary font-bold text-xs py-4 px-9 rounded-xl uppercase tracking-widest text-center shadow-lg relative flex items-center justify-center min-w-[170px] ${
+              className={`flex-1 sm:flex-none btn-primary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl uppercase tracking-wider sm:tracking-widest text-center shadow-lg relative flex items-center justify-center min-w-[130px] sm:min-w-[170px] ${
                 isPrimaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
               } ${isOrdering ? 'opacity-85 cursor-not-allowed' : ''}`}
             >
               {isOrdering ? (
-                <div className="flex items-center space-x-2">
-                  <svg className="animate-spin h-4 w-4 text-black" fill="none" viewBox="0 0 24 24">
+                <div className="flex items-center space-x-1.5">
+                  <svg className="animate-spin h-3.5 w-3.5 text-black" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
@@ -394,20 +392,20 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               onFocus={() => setIsSecondaryFocused(true)}
               onBlur={() => setIsSecondaryFocused(false)}
               disabled={isExploring}
-              className={`w-full sm:w-auto btn-secondary font-bold text-xs py-4 px-9 rounded-xl text-center uppercase tracking-widest min-w-[170px] relative flex items-center justify-center ${
+              className={`flex-1 sm:flex-none btn-secondary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center ${
                 isSecondaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
               } ${isExploring ? 'opacity-85 cursor-not-allowed' : ''}`}
             >
               {isExploring ? (
-                <div className="flex items-center space-x-2">
-                  <svg className="animate-spin h-4 w-4 text-primary" fill="none" viewBox="0 0 24 24">
+                <div className="flex items-center space-x-1.5">
+                  <svg className="animate-spin h-3.5 w-3.5 text-primary" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   <span>Exploring...</span>
                 </div>
               ) : (
-                <span>Explore Restaurants</span>
+                <span>Explore</span>
               )}
             </button>
           </motion.div>
@@ -417,29 +415,29 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.6 }}
-            className="grid grid-cols-3 gap-2.5 pt-6 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto lg:gap-4"
+            className="grid grid-cols-3 gap-2 pt-3 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto lg:gap-4"
           >
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 premium-badge-glass px-2.5 py-2 sm:px-4.5 sm:py-2.5 rounded-2xl">
-              <User className="text-primary shrink-0" size={15} />
+            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
+              <User className="text-primary shrink-0" size={14} />
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-text-primary leading-tight">20K+</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Happy Customers</span>
+                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">20K+</span>
+                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Customers</span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 premium-badge-glass px-2.5 py-2 sm:px-4.5 sm:py-2.5 rounded-2xl">
-              <Store className="text-primary shrink-0" size={15} />
+            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
+              <Store className="text-primary shrink-0" size={14} />
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-text-primary leading-tight">500+</span>
+                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">500+</span>
                 <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Restaurants</span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 premium-badge-glass px-2.5 py-2 sm:px-4.5 sm:py-2.5 rounded-2xl">
-              <Clock className="text-primary shrink-0" size={15} />
+            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
+              <Clock className="text-primary shrink-0" size={14} />
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-text-primary leading-tight">30 min</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Fast Delivery</span>
+                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">30 min</span>
+                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Delivery</span>
               </div>
             </div>
           </motion.div>
@@ -447,7 +445,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
         </div>
 
         {/* Right Content Column empty to let background image show through */}
-        <div className="lg:col-span-5 relative h-[380px] md:h-[500px] w-full pointer-events-none" />
+        <div className="lg:col-span-5 relative h-[100px] md:h-[500px] w-full pointer-events-none hidden lg:block" />
       </div>
     </section>
   );
