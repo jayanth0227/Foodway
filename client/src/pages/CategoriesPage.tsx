@@ -21,13 +21,15 @@ import {
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { useCart } from '../context/CartContext';
-import { getMergedCategories, DEFAULT_CULINARY_CATEGORIES, type CategoryItem } from '../utils/categoryUtils';
+import { useLanguage } from '../context/LanguageContext';
+import { getMergedCategories, DEFAULT_CULINARY_CATEGORIES, getTranslatedCategoryName, type CategoryItem } from '../utils/categoryUtils';
 import { MobileShopCardSkeleton, MobileGridSkeleton } from '../components/common/MobileSkeletonLoader';
 
 export const CategoriesPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { addToCart } = useCart();
+  const { t } = useLanguage();
 
   // State
   const initialCat = searchParams.get('category') || null;
@@ -37,6 +39,7 @@ export const CategoriesPage: React.FC = () => {
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [dishes, setDishes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCategorySwitching, setIsCategorySwitching] = useState(false);
 
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
 
@@ -62,13 +65,9 @@ export const CategoriesPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  // Fetch real database restaurants, dishes, and categories
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
+  // Fetch real database restaurants, dishes, and categories with real-time polling & status events
+  const fetchData = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const [resResp, dishResp, catResp] = await Promise.allSettled([
         axios.get(`${API_BASE_URL}/public/restaurants`),
@@ -96,16 +95,36 @@ export const CategoriesPage: React.FC = () => {
       setDishes(dishList);
     } catch (err) {
       console.warn('Error fetching categories page data:', err);
-      setRestaurants([]);
-      setCulinaryCategories(getMergedCategories([]));
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchData(true);
+
+    // Real-time status update poll every 4s
+    const pollInterval = setInterval(() => fetchData(false), 4000);
+
+    const handleStatusUpdate = () => fetchData(false);
+    window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+    window.addEventListener('storage', handleStatusUpdate);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+      window.removeEventListener('storage', handleStatusUpdate);
+    };
+  }, []);
+
   const handleSelectCategory = (categoryName: string) => {
+    if (selectedCategory === categoryName) return;
+    setIsCategorySwitching(true);
     setSelectedCategory(categoryName);
     setSearchParams({ category: categoryName });
+    setTimeout(() => {
+      setIsCategorySwitching(false);
+    }, 380);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -163,11 +182,11 @@ export const CategoriesPage: React.FC = () => {
     <>
       <Helmet>
         <title>
-          {selectedCategory ? `${selectedCategory} Shops & Restaurants | Foodway` : 'Food Categories & Cuisines | Foodway'}
+          {selectedCategory ? `${selectedCategory} Shops & Restaurants | Foodway` : 'Discover Stores | Foodway'}
         </title>
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-4 sm:pb-20 px-3 sm:px-6 lg:px-12 relative overflow-hidden transition-colors">
+      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-24 px-3 sm:px-6 lg:px-12 relative transition-colors">
         {/* Ambient background glow */}
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/10 rounded-full blur-[150px] pointer-events-none" />
 
@@ -181,25 +200,34 @@ export const CategoriesPage: React.FC = () => {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}
-              className="flex flex-col h-[calc(100vh-88px)] sm:h-auto overflow-hidden sm:overflow-visible space-y-3 sm:space-y-8"
+              className="space-y-4 sm:space-y-8 pb-20"
             >
-              {/* Back Button & Top Navigation & Switcher - Strictly Fixed Header on Mobile */}
+              {/* Back Button & Top Navigation & Switcher */}
               <div className="shrink-0 space-y-3 pt-2 sm:pt-0 pb-3 border-b border-glass bg-bg-dark z-20">
-                <div className="flex items-center sm:justify-between gap-2.5 sm:gap-4">
-                  <button
-                    onClick={handleClearCategory}
-                    className="inline-flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-glass border border-glass hover:border-primary/50 text-text-primary text-xs font-bold transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95"
-                    title="Back to All Categories"
-                  >
-                    <ArrowLeft size={16} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
-                    <span>
-                      <span className="sm:hidden">All Categories</span>
-                      <span className="hidden sm:inline">Back to All Categories</span>
-                    </span>
-                  </button>
+                {/* Single Straight Line Header Row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                  {/* Left: Clean Icon-Only Back Button + Quick Switch Cuisine Label */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      onClick={handleClearCategory}
+                      className="p-2.5 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95 hover:bg-glass-subtle"
+                      aria-label="Back to All Categories"
+                      title="Back to All Categories"
+                    >
+                      <ArrowLeft size={20} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
+                    </button>
 
-                  {/* Search inside category view */}
-                  <div className="relative flex-1 sm:flex-none sm:w-80">
+                    <span className="text-xs sm:text-sm font-black text-gradient-gold uppercase tracking-wider">
+                      Quick Switch Cuisine
+                    </span>
+
+                    <span className="text-xs font-bold text-text-muted">
+                      ({culinaryCategories.length} Options)
+                    </span>
+                  </div>
+
+                  {/* Right: Search Bar on Web */}
+                  <div className="relative w-full sm:w-64 md:w-72 sm:ml-auto">
                     <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                     <input
                       type="text"
@@ -212,19 +240,14 @@ export const CategoriesPage: React.FC = () => {
                 </div>
 
                 {/* Category Quick Switcher Slider */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] sm:text-xs font-bold text-text-muted uppercase tracking-wider">
-                      Quick Switch Cuisine
-                    </span>
-                    <span className="text-[11px] sm:text-xs text-text-muted">
-                      {culinaryCategories.length} Options
-                    </span>
-                  </div>
-
-                  {/* MOBILE ONLY: Swiggy/Zomato Food Avatar Circular Horizontal Story Slider */}
+                <div className="pt-1">
                   <div
-                    className="flex sm:hidden items-center gap-2.5 overflow-x-auto pb-1 pt-1 scroll-smooth -mx-1 px-1 [&::-webkit-scrollbar]:hidden"
+                    onWheel={(e) => {
+                      if (e.deltaY !== 0) {
+                        e.currentTarget.scrollLeft += e.deltaY * 1.5;
+                      }
+                    }}
+                    className="flex items-center gap-4 sm:gap-6 overflow-x-auto py-2.5 scroll-smooth -mx-3 px-3 sm:-mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                   >
                     {culinaryCategories.map((cat) => {
@@ -234,45 +257,29 @@ export const CategoriesPage: React.FC = () => {
                         <button
                           key={cat.id}
                           onClick={() => handleSelectCategory(cat.name)}
-                          className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group"
+                          className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group active:scale-95 transition-all relative"
                         >
-                          <div className={`relative w-11 h-11 min-w-[44px] min-h-[44px] rounded-full overflow-hidden transition-all duration-300 ${active
-                            ? "ring-2 ring-primary ring-offset-2 ring-offset-bg-dark scale-105 shadow-luxury"
-                            : "opacity-80 hover:opacity-100 border border-glass"
-                            }`}>
+                          {/* Pure Borderless Dish Image Container matching Swiggy */}
+                          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 transition-all duration-300 shadow-md ${
+                            active
+                              ? "scale-105 shadow-luxury ring-2 ring-primary ring-offset-2 ring-offset-bg-dark -translate-y-0.5"
+                              : "opacity-90 hover:opacity-100 hover:scale-105 hover:-translate-y-0.5 shadow-sm"
+                          }`}>
                             <img
                               src={cat.image}
                               alt={cat.name}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              className="w-full h-full object-cover shrink-0 group-hover:scale-110 transition-transform duration-500"
                             />
-                            <div className={`absolute inset-0 transition-opacity ${active ? "bg-primary/10" : "bg-black/20"
-                              }`} />
                           </div>
-                          <span className={`text-[9.5px] font-black text-center truncate max-w-[56px] leading-tight transition-colors ${active ? "text-primary" : "text-text-muted group-hover:text-text-primary"
-                            }`}>
-                            {cat.name}
+
+                          {/* Swiggy Style Clean Typography */}
+                          <span className={`text-xs sm:text-sm font-extrabold tracking-tight text-center truncate max-w-[82px] sm:max-w-[105px] transition-all ${
+                            active
+                              ? "text-primary font-black scale-105"
+                              : "text-text-primary group-hover:text-primary"
+                          }`}>
+                            {getTranslatedCategoryName(cat.name, t)}
                           </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* DESKTOP ONLY: Standard Pill Button Slider */}
-                  <div className="hidden sm:flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none scroll-smooth">
-                    {culinaryCategories.map((cat) => {
-                      const active = (selectedCategory || '').toLowerCase() === cat.name.toLowerCase();
-
-                      return (
-                        <button
-                          key={cat.id}
-                          onClick={() => handleSelectCategory(cat.name)}
-                          className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-black transition-all duration-200 flex items-center gap-2 cursor-pointer border ${active
-                            ? "bg-gradient-to-r from-primary via-primary-dark to-secondary text-black border-primary shadow-luxury scale-[1.02]"
-                            : "bg-glass text-text-secondary border-glass hover:border-primary/50 hover:text-primary shadow-sm"
-                            }`}
-                        >
-                          {active && <span className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
-                          <span className="whitespace-nowrap">{cat.name}</span>
                         </button>
                       );
                     })}
@@ -280,9 +287,8 @@ export const CategoriesPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Matching Shops & Restaurants Grid - Scrollable ONLY on Mobile */}
-              <div className="flex-1 overflow-y-auto sm:overflow-visible pb-24 sm:pb-0 pt-1 scroll-smooth [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                <div className="space-y-4 sm:space-y-5">
+              {/* Matching Shops & Restaurants Grid */}
+              <div className="space-y-4 sm:space-y-5">
                   <div className="flex items-center justify-between gap-2 border-b border-glass pb-3">
                     <h2 className="text-base sm:text-xl font-black font-display text-text-primary flex items-center gap-2 truncate">
                       <span className="text-gradient-gold truncate">{selectedCategory} Shops</span>
@@ -292,8 +298,8 @@ export const CategoriesPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {loading ? (
-                    <MobileShopCardSkeleton count={3} />
+                  {loading || isCategorySwitching ? (
+                    <MobileShopCardSkeleton count={6} />
                   ) : matchingShops.length === 0 ? (
                     <div className="py-12 sm:py-16 text-center glass-panel border border-glass rounded-3xl p-6 sm:p-8 max-w-md mx-auto space-y-4 shadow-sm">
                       <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
@@ -319,9 +325,13 @@ export const CategoriesPage: React.FC = () => {
                       {matchingShops.map((shop) => {
                         const shopId = shop.id || shop.restaurantId || 'res-1';
                         const shopName = shop.name || shop.restaurantName || 'Gourmet Food Hub';
-                        const shopImage = shop.image || shop.logo || shop.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800';
+                        const shopImage = shop.image || shop.logo || shop.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800';
                         const shopRating = shop.rating || 4.8;
                         const shopTime = shop.deliveryTime || '20-30 min';
+                        const shopCuisine = shop.cuisine || selectedCategory || '';
+
+                        const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive' || shop.status === 'INACTIVE' || shop.status === 'OFFLINE' || shop.status === 'offline' || shop.status === 'CLOSED';
+                        const isOpen = !isClosed;
 
                         return (
                           <motion.div
@@ -329,60 +339,101 @@ export const CategoriesPage: React.FC = () => {
                             initial={false}
                             animate={{ opacity: 1, y: 0 }}
                             onClick={() => navigate(`/restaurants/${shopId}`)}
-                            className="glass-panel border border-glass sm:hover:border-primary/50 rounded-2xl sm:rounded-3xl overflow-hidden shadow-luxury sm:hover:shadow-luxury-hover sm:hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer"
+                            className={`bg-bg-cardSec border border-glass sm:hover:border-primary/50 rounded-2xl sm:rounded-3xl overflow-hidden shadow-luxury sm:hover:shadow-luxury-hover sm:hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer relative ${
+                              !isOpen ? 'opacity-90' : ''
+                            }`}
                           >
                             <div>
-                              {/* Shop Cover Image */}
-                              <div className="relative aspect-[16/9] sm:aspect-[16/9] max-h-44 sm:max-h-56 overflow-hidden bg-black/40">
+                              {/* Shop Cover Image Container */}
+                              <div className="relative aspect-[16/9] w-full overflow-hidden bg-black">
                                 <img
                                   src={shopImage}
                                   alt={shopName}
-                                  className="w-full h-full object-cover sm:group-hover:scale-105 transition-transform duration-500"
+                                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
+                                    !isOpen ? 'filter grayscale opacity-75' : ''
+                                  }`}
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 opacity-80 pointer-events-none" />
 
-                                {/* Rating Badge */}
-                                <div className="absolute top-2.5 right-2.5">
-                                  <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-600 text-white font-black text-[11px] sm:text-xs flex items-center gap-1 shadow-md">
-                                    <Star size={10} className="fill-white text-white" />
-                                    <span>{shopRating}</span>
+                                {/* Dynamic Cuisine Badge */}
+                                {shopCuisine && (
+                                  <div className="absolute top-2.5 left-2.5 z-10">
+                                    <span className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md text-[10px] font-black text-primary border border-primary/30 uppercase tracking-wider flex items-center gap-1 shadow-md">
+                                      <Sparkles size={11} />
+                                      <span className="truncate max-w-[110px]">{shopCuisine}</span>
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Open/Closed Status Badge on Top Right */}
+                                <div className="absolute top-2.5 right-2.5 z-10">
+                                  <span className={`px-2.5 py-1 rounded-full backdrop-blur-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md border ${
+                                    isOpen
+                                      ? 'bg-emerald-600/90 text-white border-emerald-400/40'
+                                      : 'bg-rose-600/95 text-white border-rose-400/40'
+                                  }`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-300 animate-pulse' : 'bg-white'}`} />
+                                    <span>{isOpen ? 'OPEN NOW' : 'CLOSED'}</span>
                                   </span>
                                 </div>
 
-                                {/* Delivery Time Badge */}
-                                <div className="absolute bottom-2.5 right-2.5">
-                                  <span className="text-[10px] sm:text-[11px] font-bold text-white bg-black/75 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg border border-white/10 flex items-center gap-1">
-                                    <Clock size={10} className="text-primary" />
-                                    <span>{shopTime}</span>
-                                  </span>
+                                {/* Dynamic Delivery Time & Rating Badge on Bottom */}
+                                <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                                  {shopTime && (
+                                    <span className="text-[10px] font-extrabold text-white bg-black/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/40 flex items-center gap-1.5 shadow-sm">
+                                      <Clock size={11} className="text-primary" />
+                                      <span>{shopTime}</span>
+                                    </span>
+                                  )}
+
+                                  {shopRating && (
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center gap-1 shadow-md">
+                                      <Star size={10} className="fill-white text-white" />
+                                      <span>{shopRating}</span>
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
-                              {/* Shop Information */}
-                              <div className="p-3.5 sm:p-5 space-y-2.5 sm:space-y-3">
-                                <div className="space-y-0.5">
-                                  <h3 className="text-base sm:text-lg font-black text-text-primary group-hover:text-primary transition-colors truncate">
+                              {/* Shop Info Content */}
+                              <div className="p-3.5 sm:p-4 space-y-1">
+                                <div className="flex items-center justify-between gap-2">
+                                  <h3 className="text-sm sm:text-base font-black font-display text-text-primary group-hover:text-primary transition-colors line-clamp-1">
                                     {shopName}
                                   </h3>
-                                  <p className="text-[11px] sm:text-xs text-text-muted flex items-center gap-1 font-medium truncate">
-                                    <MapPin size={11} className="text-primary shrink-0" />
-                                    <span className="truncate">{shop.address || 'Konaseema Central'}</span>
-                                  </p>
                                 </div>
+
+                                {shop.address && (
+                                  <p className="text-[11px] text-text-muted flex items-center gap-1 font-medium truncate">
+                                    <MapPin size={12} className="text-primary shrink-0" />
+                                    <span className="truncate">{shop.address}</span>
+                                  </p>
+                                )}
                               </div>
                             </div>
 
-                            {/* CTA Button */}
-                            <div className="p-3.5 sm:p-5 pt-0">
+                            {/* CTA Action Button */}
+                            <div className="p-3.5 sm:p-4 pt-0.5 flex items-center justify-between border-t border-glass/40 mt-2">
+                              <span className={`text-[10px] font-extrabold uppercase flex items-center gap-1 ${
+                                isOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                                <span>{isOpen ? 'Accepting Orders' : 'Currently Closed'}</span>
+                              </span>
+
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   navigate(`/restaurants/${shopId}`);
                                 }}
-                                className="w-full py-2 rounded-xl bg-white dark:bg-bg-dark border border-primary/70 hover:border-primary text-primary font-extrabold text-xs tracking-wider flex items-center justify-center gap-1.5 shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 cursor-pointer"
+                                className={`px-3.5 py-1.5 rounded-lg font-black text-[11px] uppercase tracking-wider shadow-xs active:scale-[0.96] transition-all flex items-center justify-center cursor-pointer ${
+                                  isOpen
+                                    ? 'bg-primary text-black hover:brightness-105'
+                                    : 'bg-glass border border-glass text-text-muted hover:text-text-primary'
+                                }`}
                               >
-                                <Plus size={14} className="text-primary stroke-[2.5]" />
-                                <span>View Menu</span>
+                                <span>{t('view_menu')}</span>
                               </button>
                             </div>
                           </motion.div>
@@ -391,50 +442,58 @@ export const CategoriesPage: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </div>
             </motion.div>
           ) : (
             /* ========================================================
                VIEW 2: ALL CATEGORIES GRID VIEW
                ======================================================== */
-            <div className="flex flex-col h-[calc(100vh-88px)] sm:h-auto overflow-hidden sm:overflow-visible space-y-3 sm:space-y-8">
-              {/* Header Banner - Strictly Fixed Header on Mobile */}
-              <div className="shrink-0 space-y-2 pt-2 sm:pt-0 pb-3 border-b border-glass bg-bg-dark z-20">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5">
+            <div className="space-y-4 sm:space-y-8 pb-20">
+              {/* Header Banner - Fixed Header on Mobile */}
+              <div className="shrink-0 space-y-3 pt-2 sm:pt-0 pb-4 border-b border-glass bg-bg-dark z-20">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Left: Standalone Back Button + Clean Title & Subheading Stack */}
+                  <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                    {/* Standalone Back Button */}
                     <button
                       onClick={() => navigate('/')}
-                      className="md:hidden p-2 rounded-full bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer"
+                      className="p-2.5 sm:p-3 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer flex items-center justify-center"
                       aria-label="Back to Home"
-                      title="Back to Home"
+                      title="Back to Home Screen"
                     >
-                      <ArrowLeft size={18} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
+                      <ArrowLeft size={19} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
                     </button>
-                    <h1 className="text-2xl sm:text-4xl lg:text-4xl font-black font-display text-gradient-gold">
-                      Explore Categories
-                    </h1>
-                  </div>
-                  <p className="text-xs sm:text-sm text-text-secondary max-w-xl leading-relaxed">
-                    Select a category to view all partner shops, sweets stores, bakeries, and restaurants offering your favorite food.
-                  </p>
-                </div>
 
-                {/* Category Search Bar */}
-                <div className="relative w-full md:w-80">
-                  <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
-                  <input
-                    type="text"
-                    placeholder="Search Food, Sweets, Bakery..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-glass border border-glass focus:border-primary/50 text-text-primary text-[15px] sm:text-xs font-bold focus:outline-none transition-all placeholder:text-text-muted shadow-sm"
-                  />
+                    {/* Title & Subheading Stack */}
+                    <div className="space-y-0.5 min-w-0">
+                      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black font-display text-gradient-gold leading-tight">
+                        Discover Stores
+                      </h1>
+                      <p className="text-xs sm:text-sm text-text-secondary font-medium truncate">
+                        {t('explore_curated_categories')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Side: Category Search Bar */}
+                  <div className="relative w-full sm:w-64 md:w-72 lg:ml-auto shrink-0">
+                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <input
+                      type="text"
+                      placeholder={t('search_categories_dishes')}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-glass border border-glass focus:border-primary/50 text-text-primary text-[15px] sm:text-xs font-bold focus:outline-none transition-all placeholder:text-text-muted shadow-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Main Categories Grid - Scrollable ONLY on Mobile */}
-              <div className="flex-1 overflow-y-auto sm:overflow-visible pb-24 sm:pb-0 pt-1 scroll-smooth [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+              {/* Main Categories Grid */}
+              <div>
+                {loading ? (
+                  <MobileGridSkeleton count={8} />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                   {filteredCategories.map((category) => (
                     <motion.div
                       key={category.id}
@@ -457,7 +516,7 @@ export const CategoriesPage: React.FC = () => {
                         {/* Content */}
                         <div className="space-y-0.5 sm:space-y-1 px-0.5">
                           <h3 className="text-xs sm:text-base font-black font-display text-text-primary group-hover:text-primary transition-colors flex items-center justify-between">
-                            <span className="truncate">{category.name}</span>
+                            <span className="truncate">{getTranslatedCategoryName(category.name, t)}</span>
                           </h3>
                           <p className="text-[10px] sm:text-xs text-text-muted line-clamp-1 sm:line-clamp-2 leading-tight sm:leading-relaxed">
                             {category.description}
@@ -472,6 +531,7 @@ export const CategoriesPage: React.FC = () => {
                     </motion.div>
                   ))}
                 </div>
+                )}
               </div>
             </div>
           )}

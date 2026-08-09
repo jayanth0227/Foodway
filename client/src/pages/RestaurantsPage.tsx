@@ -2,43 +2,77 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { Search, MapPin, Star, Clock, Store, Plus, Heart } from 'lucide-react';
+import { Search, MapPin, Star, Clock, Store, Plus, Heart, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { MobileShopCardSkeleton } from '../components/common/MobileSkeletonLoader';
+import { useLanguage } from '../context/LanguageContext';
+import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
 
 export const RestaurantsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCuisine, setSelectedCuisine] = useState<string>('All');
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
+    const list = getWishlist();
+    const favMap: Record<string, boolean> = {};
+    list.forEach(i => { favMap[i.id] = true; });
+    return favMap;
+  });
 
-  useEffect(() => {
-    fetchRestaurants();
-  }, []);
-
-  const toggleFav = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const fetchRestaurants = async () => {
-    setLoading(true);
+  const fetchRestaurants = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/public/restaurants`);
       if (response.data.success && Array.isArray(response.data.restaurants)) {
         setRestaurants(response.data.restaurants);
-      } else {
-        setRestaurants([]);
       }
     } catch (err) {
       console.error('Failed to fetch restaurants from DB:', err);
-      setRestaurants([]);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchRestaurants(true);
+
+    // Auto poll every 4 seconds for real-time merchant status updates without page refresh
+    const pollInterval = setInterval(() => fetchRestaurants(false), 4000);
+
+    const handleStatusUpdate = () => fetchRestaurants(false);
+    window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+    window.addEventListener('storage', handleStatusUpdate);
+
+    const syncWishlist = () => {
+      const list = getWishlist();
+      const favMap: Record<string, boolean> = {};
+      list.forEach(i => { favMap[i.id] = true; });
+      setFavorites(favMap);
+    };
+
+    window.addEventListener('foodway_wishlist_updated', syncWishlist);
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+      window.removeEventListener('storage', handleStatusUpdate);
+      window.removeEventListener('foodway_wishlist_updated', syncWishlist);
+    };
+  }, []);
+
+  const toggleFav = (res: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const resId = res.id || res.restaurantId;
+    toggleWishlistItem({
+      id: resId,
+      name: res.name || 'Partner Kitchen',
+      image: res.image || res.logo || res.bannerImage || '',
+      rating: res.rating || 4.5,
+      type: 'restaurant',
+    });
   };
 
   // Filtered Restaurants
@@ -59,7 +93,7 @@ export const RestaurantsPage: React.FC = () => {
         <meta name="description" content="Browse all active restaurants and dining establishments available in our live database." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-16 sm:pt-24 pb-24 sm:pb-16 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
+      <div className="min-h-screen bg-bg-dark pt-24 sm:pt-32 pb-24 sm:pb-16 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
         {/* Ambient background decoration */}
         <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-amber-500/5 blur-[150px] pointer-events-none" />
@@ -67,19 +101,33 @@ export const RestaurantsPage: React.FC = () => {
         <div className="max-w-7xl mx-auto space-y-5 sm:space-y-8 relative z-10">
 
           {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 border-b border-glass pb-4 sm:pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 border-b border-glass pb-4 sm:pb-6 pt-2 sm:pt-4">
             <div className="space-y-2 sm:space-y-3">
-              <span className="text-primary font-bold text-xs uppercase tracking-widest block">Live Database Directory</span>
-              <h1 className="text-2.5xl sm:text-5xl font-black font-display text-gradient-gold tracking-tight">
-                Available Restaurants
-              </h1>
+
+              {/* Title & Back Arrow on the exact same horizontal line */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate(-1)}
+                  className="p-2 sm:p-2.5 rounded-2xl bg-glass border border-glass text-primary hover:border-primary/50 flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm shrink-0"
+                  aria-label="Back"
+                  title="Back"
+                >
+                  <ArrowLeft size={20} className="text-primary" />
+                </button>
+
+                <h1 className="text-2xl sm:text-5xl font-black font-display text-gradient-gold tracking-tight leading-tight">
+                  {t('top_rated_restaurants')}
+                </h1>
+              </div>
+
               <p className="text-xs sm:text-sm text-text-muted font-medium max-w-xl leading-relaxed">
                 Explore all verified partner restaurants registered in our system. View live statuses, menus, and order directly.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-glass border border-glass text-[11px] sm:text-xs font-bold text-text-primary">
+            {/* Registered Establishments Pill - Right Aligned */}
+            <div className="flex items-center justify-end shrink-0 sm:self-end">
+              <span className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-glass border border-glass text-[11px] sm:text-xs font-bold text-text-primary shadow-xs">
                 {restaurants.length} Registered Establishments
               </span>
             </div>
@@ -133,8 +181,12 @@ export const RestaurantsPage: React.FC = () => {
                 const resCuisine = r.cuisine || 'Multi-Cuisine';
                 const resRating = r.rating || 4.5;
                 const resTime = r.deliveryTime || '20-30 MINS';
-                const isOpen = r.isOpen !== false;
+                const isClosed = r.isOpen === false || r.isOpen === 'false' || r.status === 'closed' || r.status === 'inactive' || r.status === 'INACTIVE' || r.status === 'OFFLINE' || r.status === 'offline' || r.status === 'CLOSED';
+                const isOpen = !isClosed;
                 const isFav = !!favorites[resId];
+
+
+
 
                 return (
                   <motion.div
@@ -156,7 +208,7 @@ export const RestaurantsPage: React.FC = () => {
                       <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-10">
                         <button
                           type="button"
-                          onClick={(e) => toggleFav(resId, e)}
+                          onClick={(e) => toggleFav(r, e)}
                           className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-black/60 active:scale-95 transition-all shadow-md cursor-pointer"
                           title="Favorite"
                         >

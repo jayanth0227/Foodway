@@ -1,22 +1,32 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { motion, useScroll, useSpring } from 'framer-motion';
 import { TIMELINE_STEPS } from '../../utils/mockData';
- 
+import { DeliveryProcessSkeleton } from './HomePageSkeleton';
+
 export const DeliveryProcess: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
- 
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Track scroll inside the timeline container
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ['start center', 'end center'],
   });
- 
+
   // Smooth scroll progression line
   const scaleY = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,
     restDelta: 0.001,
   });
+
+  if (loading) return <DeliveryProcessSkeleton />;
+
  
   return (
     <section

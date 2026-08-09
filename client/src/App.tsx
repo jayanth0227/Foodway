@@ -16,7 +16,7 @@ import { RestaurantsPage } from './pages/RestaurantsPage';
 import { RestaurantDetailsPage } from './pages/RestaurantDetailsPage';
 import { CartPage } from './pages/CartPage';
 import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
-import { CartNotificationToast } from './components/common/CartNotificationToast';
+import { ItemAddedToast } from './components/common/ItemAddedToast';
 import { FloatingCartBar } from './components/common/FloatingCartBar';
 import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -25,8 +25,11 @@ import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartn
 import { RestaurantDashboard } from './pages/RestaurantDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { CategoriesPage } from './pages/CategoriesPage';
+import { DishesPage } from './pages/DishesPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { OfflineDetector } from './components/common/OfflineDetector';
+
 
 import { requestNotificationPermission } from "./utils/requestNotificationPermission";
 import { setupForegroundMessageListener } from "./utils/onForegroundMessage";
@@ -91,15 +94,15 @@ const AppContent: React.FC = () => {
     location.pathname.startsWith('/delivery') ||
     location.pathname === '/login';
 
-  const isHomePage = location.pathname === '/';
-
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
       {/* Global Elements */}
       {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
-      <CartNotificationToast />
+      <ItemAddedToast />
       <FloatingCartBar />
+      <OfflineDetector />
+
       <AuthModals
         isOpen={authModal.isOpen}
         onClose={closeAuthModal}
@@ -112,6 +115,7 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
           <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/dishes" element={<DishesPage />} />
           <Route path="/restaurants" element={<RestaurantsPage />} />
           <Route path="/restaurants/:id" element={<RestaurantDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
@@ -128,6 +132,23 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/delivery-locations"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminDashboard initialTab="locations" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/locations"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminDashboard initialTab="locations" />
+              </ProtectedRoute>
+            }
+          />
+
           <Route
             path="/admin/orders/:orderId"
             element={
@@ -175,12 +196,10 @@ const AppContent: React.FC = () => {
         </Routes>
       </main>
 
-      {!isPortalRoute && (
-        <div className={!isHomePage ? 'hidden lg:block' : ''}>
-          <Footer />
-        </div>
-      )}
+      {/* Render Footer ONLY on Home Page ('/') for web and mobile */}
+      {location.pathname === '/' && <Footer />}
     </div>
+
   );
 };
 

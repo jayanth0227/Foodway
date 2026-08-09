@@ -1,14 +1,24 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination } from 'swiper/modules';
 import { Star } from 'lucide-react';
 import { TESTIMONIALS } from '../../utils/mockData';
+import { TestimonialsSkeleton } from './HomePageSkeleton';
 
 // Import Swiper styles
 import 'swiper/css';
 import 'swiper/css/pagination';
 
 export const Testimonials: React.FC = () => {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (loading) return <TestimonialsSkeleton />;
+
   return (
     <section id="testimonials" className="py-16 md:py-20 lg:py-30 bg-bg-dark border-t border-glass relative overflow-hidden">
       {/* Decorative ambient background orb */}

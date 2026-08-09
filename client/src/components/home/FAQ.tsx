@@ -1,16 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import { FAQS } from '../../utils/mockData';
+import { FAQSkeleton } from './HomePageSkeleton';
 
 export const FAQ: React.FC = () => {
   const [openId, setOpenId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   const visibleFaqs = showAll ? FAQS : FAQS.slice(0, 4);
 
   const toggleFAQ = (id: string) => {
     setOpenId((prev) => (prev === id ? null : id));
   };
+
+  if (loading) return <FAQSkeleton />;
+
 
   return (
     <section id="faq" className="py-16 md:py-20 lg:py-24 bg-bg-darkSec border-t border-glass relative">

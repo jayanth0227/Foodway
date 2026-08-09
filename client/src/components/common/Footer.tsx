@@ -10,7 +10,7 @@ export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer id="footer" className="bg-bg-cardSec border-t border-glass pt-10 pb-8 relative overflow-hidden transition-colors duration-400">
+    <footer id="footer" className="bg-bg-cardSec border-t border-glass pt-10 pb-28 sm:pb-8 relative overflow-hidden transition-colors duration-400">
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8 relative z-10">
         {/* Brand identity */}
         <div className="space-y-3 max-w-md">

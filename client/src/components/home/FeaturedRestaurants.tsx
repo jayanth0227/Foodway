@@ -4,37 +4,70 @@ import { Heart, MapPin, ArrowRight, Store, Clock, Star, Plus } from 'lucide-reac
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_BASE_URL } from '../../utils/api';
+import { MobileShopCardSkeleton } from '../common/MobileSkeletonLoader';
+import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
 
 export const FeaturedRestaurants: React.FC = () => {
   const navigate = useNavigate();
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
+    const list = getWishlist();
+    const favMap: Record<string, boolean> = {};
+    list.forEach(i => { favMap[i.id] = true; });
+    return favMap;
+  });
 
   useEffect(() => {
-    const fetchRestaurants = async () => {
-      setLoading(true);
+    const fetchRestaurants = async (isInitial = false) => {
+      if (isInitial) setLoading(true);
       try {
         const response = await axios.get(`${API_BASE_URL}/public/restaurants`);
         if (response.data.success && Array.isArray(response.data.restaurants)) {
           setRestaurants(response.data.restaurants);
-        } else {
-          setRestaurants([]);
         }
       } catch (err) {
         console.warn('Error fetching restaurants from DB:', err);
-        setRestaurants([]);
       } finally {
-        setLoading(false);
+        if (isInitial) setLoading(false);
       }
     };
 
-    fetchRestaurants();
+    fetchRestaurants(true);
+
+    // Auto poll every 4 seconds for real-time merchant status updates without page refresh
+    const pollInterval = setInterval(() => fetchRestaurants(false), 4000);
+
+    const handleStatusUpdate = () => fetchRestaurants(false);
+    window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+    window.addEventListener('storage', handleStatusUpdate);
+
+    const syncWishlist = () => {
+      const list = getWishlist();
+      const favMap: Record<string, boolean> = {};
+      list.forEach(i => { favMap[i.id] = true; });
+      setFavorites(favMap);
+    };
+
+    window.addEventListener('foodway_wishlist_updated', syncWishlist);
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+      window.removeEventListener('storage', handleStatusUpdate);
+      window.removeEventListener('foodway_wishlist_updated', syncWishlist);
+    };
   }, []);
 
-  const toggleFav = (id: string, e: React.MouseEvent) => {
+  const toggleFav = (restaurant: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    setFavorites(prev => ({ ...prev, [id]: !prev[id] }));
+    const resId = restaurant.id || restaurant.restaurantId;
+    toggleWishlistItem({
+      id: resId,
+      name: restaurant.name || 'Partner Kitchen',
+      image: restaurant.image || restaurant.logo || restaurant.bannerImage || '',
+      rating: restaurant.rating || 4.5,
+      type: 'restaurant',
+    });
   };
 
   const containerVariants = {
@@ -81,11 +114,7 @@ export const FeaturedRestaurants: React.FC = () => {
 
         {/* Restaurants Grid */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="glass-panel border border-glass rounded-3xl h-[360px] animate-pulse" />
-            ))}
-          </div>
+          <MobileShopCardSkeleton count={3} />
         ) : restaurants.length === 0 ? (
           <div className="text-center py-16 glass-panel border border-glass rounded-3xl p-12 max-w-md mx-auto space-y-3">
             <Store size={40} className="mx-auto text-text-muted opacity-50" />
@@ -109,8 +138,11 @@ export const FeaturedRestaurants: React.FC = () => {
               const resCuisine = restaurant.cuisine || 'Multi-Cuisine';
               const resRating = restaurant.rating || 4.5;
               const resTime = restaurant.deliveryTime || '20-30 MINS';
-              const isOpen = restaurant.isOpen !== false;
+              const isClosed = restaurant.isOpen === false || restaurant.isOpen === 'false' || restaurant.status === 'closed' || restaurant.status === 'inactive' || restaurant.status === 'INACTIVE' || restaurant.status === 'OFFLINE' || restaurant.status === 'offline' || restaurant.status === 'CLOSED';
+              const isOpen = !isClosed;
               const isFav = !!favorites[resId];
+
+
 
               return (
                 <motion.div
@@ -132,7 +164,7 @@ export const FeaturedRestaurants: React.FC = () => {
                     <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 z-10">
                       <button
                         type="button"
-                        onClick={(e) => toggleFav(resId, e)}
+                        onClick={(e) => toggleFav(restaurant, e)}
                         className="w-8 h-8 sm:w-8.5 sm:h-8.5 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white flex items-center justify-center hover:bg-black/60 active:scale-95 transition-all shadow-md cursor-pointer"
                         title="Favorite"
                       >

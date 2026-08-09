@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { getWishlist, removeFromWishlist } from '../utils/wishlistUtils';
 import type { WishlistItem } from '../utils/wishlistUtils';
 import { useCart } from '../context/CartContext';
+import { useLanguage } from '../context/LanguageContext';
 
 export const WishlistPage: React.FC = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { t } = useLanguage();
   const [items, setItems] = useState<WishlistItem[]>([]);
 
   useEffect(() => {
@@ -58,7 +60,7 @@ export const WishlistPage: React.FC = () => {
           </button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold text-text-primary">
-              My Wishlist
+              {t('my_wishlist_title')}
             </h1>
             <p className="text-xs text-text-muted mt-0.5">
               {items.length > 0
@@ -115,10 +117,10 @@ export const WishlistPage: React.FC = () => {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                 onClick={() => {
-                  if (item.restaurantId) {
-                    navigate(`/restaurant/${item.restaurantId}`);
-                  } else if (item.type === 'restaurant') {
-                    navigate(`/restaurant/${item.id}`);
+                  if (item.type === 'restaurant') {
+                    navigate(`/restaurants/${item.id}`);
+                  } else if (item.restaurantId) {
+                    navigate(`/restaurants/${item.restaurantId}`);
                   }
                 }}
                 className="glass-card hover-glow-gold rounded-2xl p-4 flex flex-col justify-between border border-glass relative group cursor-pointer"

@@ -3,6 +3,9 @@ import { motion, useMotionValue, useSpring, useScroll, useTransform } from 'fram
 import { Search, ChevronRight, User, Store, Clock } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../utils/api';
+import DeliveryLocations from './DeliveryLocations';
+import { HeroSkeleton } from './HomePageSkeleton';
+
 
 interface HeroProps {
   onOpenAuth: (type: 'login' | 'register') => void;
@@ -14,6 +17,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
+  const [loadingHero, setLoadingHero] = useState(true);
 
   const [videoUrls, setVideoUrls] = useState<{
     darkest: string;
@@ -37,6 +41,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   }, []);
 
   useEffect(() => {
+    setLoadingHero(true);
     // Fetch video URLs from server
     fetch(`${API_BASE_URL}/hero/videos`)
       .then((res) => res.json())
@@ -52,6 +57,9 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       })
       .catch((err) => {
         console.warn("Failed to fetch custom background videos from server, using local fallbacks.", err);
+      })
+      .finally(() => {
+        setLoadingHero(false);
       });
   }, []);
   
@@ -198,13 +206,20 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
     }, 1000);
   };
 
+  if (loadingHero) return <HeroSkeleton />;
+
   return (
+
     <section
       id="home"
       ref={containerRef}
       onMouseMove={handleMouseMove}
       className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center pt-20 sm:pt-28 pb-12 sm:pb-20 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
     >
+
+
+
+
       {/* Background Video */}
       <video
         key={`${theme}-${isMobile}-${theme === 'dark' ? (isMobile ? videoUrls.dark_mobile : videoUrls.darkest) : (isMobile ? videoUrls.light_mobile : videoUrls.lightest)}`}

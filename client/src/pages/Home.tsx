@@ -4,6 +4,7 @@ import Hero from '../components/home/Hero';
 import Categories from '../components/home/Categories';
 import FeaturedRestaurants from '../components/home/FeaturedRestaurants';
 import PopularDishes from '../components/home/PopularDishes';
+import DeliveryLocations from '../components/home/DeliveryLocations';
 import DeliveryProcess from '../components/home/DeliveryProcess';
 import Testimonials from '../components/home/Testimonials';
 import FAQ from '../components/home/FAQ';
@@ -27,6 +28,10 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
 
       <div className="relative">
         <Hero onOpenAuth={onOpenAuth} />
+
+        {/* Live Delivery Locations Auto-Scrolling Ticker Ribbon (Right under Hero & before Categories) */}
+        <DeliveryLocations />
+
         <Categories />
         <FeaturedRestaurants />
         <PopularDishes />
@@ -38,4 +43,5 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
     </>
   );
 };
+
 export default Home;

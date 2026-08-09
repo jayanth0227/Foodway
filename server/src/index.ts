@@ -19,6 +19,7 @@ import { ensureAllTablesExist } from './utils/setupTables';
 import restaurantRouter from './routes/restaurant.routes';
 import authRouter from './routes/auth.routes';
 import notificationRouter from './routes/notification.routes';
+import deliveryLocationRouter from './routes/deliveryLocation.routes';
 import { menuService } from './services/menu.service';
 import { orderService } from './services/order.service';
 import { orderItemRepository } from './repositories/orderItem.repository';
@@ -49,6 +50,8 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 // Unified Authentication & Notification API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/notifications', notificationRouter);
+app.use('/api', deliveryLocationRouter);
+
 
 // Health Check API
 app.get('/api/health', (req: Request, res: Response) => {
@@ -199,7 +202,7 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
   try {
     const rawRestaurants = await restaurantService.getAllRestaurants();
     const mapped = rawRestaurants.map((r: any) => {
-      const isClosed = r.isOpen === false || r.status === 'closed' || r.status === 'inactive';
+      const isClosed = r.isOpen === false || r.isOpen === 'false' || r.status === 'closed' || r.status === 'inactive' || r.status === 'INACTIVE' || r.status === 'OFFLINE' || r.status === 'offline' || r.status === 'CLOSED';
       return {
         id: r.restaurantId,
         name: r.restaurantName,
@@ -227,6 +230,14 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
     const response = await dynamoDocClient.send(scanCommand);
     const items = response.Items || [];
 
+    let resMap: Record<string, string> = {};
+    try {
+      const rawRestaurants = await restaurantService.getAllRestaurants();
+      rawRestaurants.forEach((r: any) => {
+        resMap[r.restaurantId || r.id] = r.restaurantName || r.name;
+      });
+    } catch (e) { }
+
     const mapped = items.map((item: any) => ({
       id: item.menuItemId,
       name: item.foodName,
@@ -235,11 +246,13 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
       category: item.category || 'Main Course',
       image: item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
       isVeg: item.isVeg !== undefined ? item.isVeg : true,
+      type: item.isVeg ? 'veg' : 'non-veg',
       isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
       status: item.isAvailable === false || item.status === 'UNAVAILABLE' ? 'disabled' : 'active',
       rating: item.rating || 4.8,
       prepTime: item.preparationTime || '15-20 mins',
-      restaurantId: item.restaurantId
+      restaurantId: item.restaurantId,
+      restaurantName: item.restaurantName || resMap[item.restaurantId] || 'Jayanth Foods'
     }));
 
     res.json({ success: true, dishes: mapped });
@@ -247,6 +260,7 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Failed to fetch public dishes.' });
   }
 });
+
 
 // Public Endpoint: Fetch All Unique Categories dynamically from DynamoDB
 app.get('/api/public/categories', async (req: Request, res: Response) => {

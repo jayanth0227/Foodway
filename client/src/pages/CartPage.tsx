@@ -1,24 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ShoppingBag, ArrowLeft, Trash2, Plus, Minus, Check, MapPin, Phone, User, CreditCard, ShieldCheck, Utensils, Lock } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, Trash2, Plus, Minus, Check, MapPin, Phone, User, CreditCard, ShieldCheck, Utensils, Lock, Sparkles, ChefHat, ArrowRight, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../hooks/useAuth';
+import { useLanguage } from '../context/LanguageContext';
 import { API_BASE_URL } from '../utils/api';
+import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
   const { cartItems, addToCart, reduceQuantity, removeFromCart, clearCart, totalAmount, totalItemsCount } = useCart();
   const { user, isAuthenticated } = useAuth();
+  const { t } = useLanguage();
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [mobileStep, setMobileStep] = useState<1 | 2>(1);
   const [customerName, setCustomerName] = useState(user?.name || '');
   const [customerPhone, setCustomerPhone] = useState((user as any)?.phone || '');
   const [deliveryAddress, setDeliveryAddress] = useState((user as any)?.address || '');
   const [instructions, setInstructions] = useState('');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 350);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -94,39 +104,88 @@ export const CartPage: React.FC = () => {
   };
 
   if (orderSuccess) {
+    const confettiParticles = [
+      { x: -55, y: -45, color: 'bg-amber-400', size: 'w-2 h-2 rounded-full' },
+      { x: 55, y: -40, color: 'bg-rose-500', size: 'w-2.5 h-1 rounded-sm' },
+      { x: -65, y: 15, color: 'bg-blue-400', size: 'w-2 h-2 rounded-full' },
+      { x: 65, y: 20, color: 'bg-emerald-400', size: 'w-3 h-1 rounded-sm' },
+      { x: -35, y: -65, color: 'bg-purple-400', size: 'w-2 h-2 rounded-full' },
+      { x: 35, y: -60, color: 'bg-yellow-300', size: 'w-2.5 h-1 rounded-sm' },
+      { x: -25, y: 55, color: 'bg-emerald-500', size: 'w-2 h-2 rounded-full' },
+      { x: 30, y: 55, color: 'bg-pink-400', size: 'w-3 h-1 rounded-sm' },
+    ];
+
     return (
-      <div className="min-h-screen bg-bg-dark pt-32 pb-20 px-4 text-center">
+      <div className="min-h-screen bg-bg-dark/95 backdrop-blur-md pt-20 pb-20 px-4 flex items-center justify-center relative overflow-hidden z-50">
+        {/* Soft Background Emerald Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-emerald-500/20 rounded-full blur-[100px] pointer-events-none" />
+
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="max-w-lg mx-auto glass-panel border border-emerald-500/40 rounded-3xl p-8 space-y-6 shadow-luxury"
+          initial={{ opacity: 0, scale: 0.85, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ type: 'spring', damping: 20, stiffness: 280 }}
+          className="w-full max-w-sm mx-auto bg-white dark:bg-bg-cardSec rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.4)] border border-emerald-500/30 text-slate-900 dark:text-white space-y-4 relative z-10 text-center"
         >
-          <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/50">
-            <Check size={40} />
-          </div>
-          <div className="space-y-2">
-            <span className="text-xs font-black text-emerald-400 uppercase tracking-widest block">Order Confirmed!</span>
-            <h2 className="text-3xl font-black font-display text-white">Thank You For Your Order</h2>
-            <p className="text-xs text-text-muted">
-              Order ID: <span className="font-mono text-primary font-bold">{orderSuccess}</span>
-            </p>
-            <p className="text-xs text-text-secondary leading-relaxed pt-2">
-              Your delicious meal is being prepared and will be delivered to <span className="text-white font-semibold">{deliveryAddress}</span> shortly.
-            </p>
+          {/* Green Tick Circle with Bursting Celebration Confetti */}
+          <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+            {/* Confetti Explosion Particles */}
+            {confettiParticles.map((p, idx) => (
+              <motion.div
+                key={idx}
+                initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
+                animate={{ x: p.x, y: p.y, opacity: [1, 1, 0], scale: [0, 1.2, 0.8] }}
+                transition={{ duration: 0.9, delay: 0.15 + idx * 0.03, ease: 'easeOut' }}
+                className={`absolute ${p.color} ${p.size} shadow-sm`}
+              />
+            ))}
+
+            {/* Glowing Green Tick Circle */}
+            <motion.div
+              initial={{ scale: 0, rotate: -60 }}
+              animate={{ scale: [0, 1.2, 1], rotate: 0 }}
+              transition={{ type: 'spring', damping: 14, stiffness: 240 }}
+              className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white flex items-center justify-center shadow-[0_10px_25px_rgba(16,185,129,0.5)] border-2 border-emerald-300 relative z-10"
+            >
+              <Check size={36} className="stroke-[3]" />
+            </motion.div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          {/* Direct Title & Order ID */}
+          <div className="space-y-1">
+            <h2 className="text-xl font-black font-display tracking-tight text-slate-900 dark:text-white flex items-center justify-center gap-1.5">
+              <span>Order Placed!</span>
+              <span className="text-lg">🎉</span>
+            </h2>
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold text-emerald-700 dark:text-emerald-300">
+              <span>Order ID:</span>
+              <span className="font-mono font-extrabold">{orderSuccess}</span>
+            </div>
+          </div>
+
+          {/* Delivery Address Preview */}
+          <div className="bg-slate-50 dark:bg-bg-darkSec/60 border border-slate-200/80 dark:border-glass rounded-2xl p-3 text-left flex items-start gap-2.5 text-xs text-slate-600 dark:text-text-muted">
+            <MapPin size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <span className="font-bold text-slate-900 dark:text-text-primary block">Delivering to</span>
+              <span className="truncate block font-medium">{deliveryAddress}</span>
+            </div>
+          </div>
+
+          {/* Compact Primary Actions */}
+          <div className="space-y-2 pt-1">
             <button
               onClick={() => navigate('/orders')}
-              className="flex-1 py-3.5 rounded-2xl bg-primary hover:bg-primary-dark text-black font-black text-sm uppercase tracking-wider shadow-lg transition-transform hover:scale-[1.02] cursor-pointer"
+              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
-              Track Order Status →
+              <span>Track Order Live</span>
+              <ArrowRight size={16} className="stroke-[3]" />
             </button>
+
             <button
               onClick={() => navigate('/restaurants')}
-              className="flex-1 py-3.5 rounded-2xl bg-glass border border-glass hover:border-primary/40 text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-glass dark:hover:bg-glass-subtle text-slate-700 dark:text-text-secondary font-bold text-xs transition-colors cursor-pointer"
             >
-              Explore Restaurants
+              Done
             </button>
           </div>
         </motion.div>
@@ -140,34 +199,42 @@ export const CartPage: React.FC = () => {
         <title>Your Shopping Cart | MK Delivery Services</title>
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-28 pb-24 px-4 sm:px-6 lg:px-12 relative overflow-hidden">
+      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-24 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
         {/* Ambient background decoration */}
         <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto space-y-8 relative z-10">
+        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 relative z-10">
 
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6">
-            <div className="space-y-1">
+          {/* Clean Page Header (Only Back Icon & Clear Cart Button) */}
+          <div className="flex items-center justify-between gap-3 border-b border-glass pb-4">
+            <div className="flex items-center gap-3 min-w-0">
               <button
-                onClick={() => navigate(-1)}
-                className="text-xs font-bold text-text-muted hover:text-primary transition-colors flex items-center gap-1 mb-2 cursor-pointer"
+                onClick={() => {
+                  if (mobileStep === 2 && window.innerWidth < 1024) {
+                    setMobileStep(1);
+                  } else {
+                    navigate(-1);
+                  }
+                }}
+                className="w-10 h-10 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95"
+                title="Go Back"
               >
-                <ArrowLeft size={14} />
-                <span>Continue Shopping</span>
+                <ArrowLeft size={19} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
               </button>
-              <h1 className="text-3xl sm:text-4xl font-black font-display text-gradient-gold">
-                Your Shopping Cart
-              </h1>
-              <p className="text-xs text-text-secondary">
-                Review your selected dishes and enter delivery information to complete your order.
-              </p>
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-3xl font-black font-display text-text-primary tracking-tight truncate">
+                  {mobileStep === 2 ? 'Checkout & Delivery' : 'Your Cart'}
+                </h1>
+                <p className="text-xs text-text-muted font-medium truncate">
+                  {mobileStep === 2 ? 'Step 2 of 2: Enter Delivery Details' : `${totalItemsCount} ${totalItemsCount === 1 ? 'item selected' : 'items selected'}`}
+                </p>
+              </div>
             </div>
 
             {cartItems.length > 0 && (
               <button
                 onClick={clearCart}
-                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/30 transition-all flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
+                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
               >
                 <Trash2 size={14} />
                 <span>Clear Cart</span>
@@ -175,8 +242,10 @@ export const CartPage: React.FC = () => {
             )}
           </div>
 
-          {/* Empty Cart View */}
-          {cartItems.length === 0 ? (
+          {/* Skeleton Loader View */}
+          {isLoading ? (
+            <CartPageSkeleton />
+          ) : cartItems.length === 0 ? (
             <div className="py-20 text-center glass-panel border border-glass rounded-3xl p-12 max-w-md mx-auto space-y-6">
               <div className="w-20 h-20 bg-glass rounded-full flex items-center justify-center mx-auto text-text-muted">
                 <ShoppingBag size={36} />
@@ -198,8 +267,8 @@ export const CartPage: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-              {/* Items List (Left Side - 7 cols) */}
-              <div className="lg:col-span-7 space-y-4">
+              {/* Items List (Left Side - 7 cols) - Mobile Step 1 / Desktop */}
+              <div className={`lg:col-span-7 space-y-4 ${mobileStep === 2 ? 'hidden lg:block' : 'block'}`}>
                 <h3 className="text-lg font-extrabold font-display text-text-primary flex items-center gap-2">
                   <Utensils size={18} className="text-primary" />
                   <span>Selected Items ({totalItemsCount})</span>
@@ -210,61 +279,62 @@ export const CartPage: React.FC = () => {
                     <motion.div
                       key={item.dish.id}
                       layout
-                      className="glass-panel border border-glass hover:border-primary/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all"
+                      className="glass-panel border border-glass hover:border-primary/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all"
                     >
-                      <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
+                      <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
                         <img
                           src={item.dish.image}
                           alt={item.dish.name}
-                          className="w-16 h-16 rounded-xl object-cover border border-glass shrink-0"
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-glass shrink-0 shadow-sm"
                         />
                         <div className="min-w-0 space-y-1">
                           <div className="flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full ${item.dish.isVeg !== false ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                            <h4 className="font-bold text-sm text-text-primary truncate">{item.dish.name}</h4>
+                            <h4 className="font-extrabold text-sm sm:text-base text-text-primary truncate">{item.dish.name}</h4>
                           </div>
                           <span className="text-[11px] font-semibold text-text-muted block">
                             {item.dish.category || 'Main Course'}
                           </span>
-                          <span className="text-xs font-extrabold text-primary block">
+                          <span className="text-xs font-extrabold text-primary block font-display">
                             ₹{item.dish.price.toFixed(2)} each
                           </span>
                         </div>
                       </div>
 
-                      {/* Quantity Controller & Price Total */}
-                      <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-glass">
-                        {/* Interactive Quantity Box */}
-                        <div className="flex items-center bg-bg-dark border border-primary/40 rounded-xl p-1 shadow-inner">
+                      {/* Quantity Stepper Controller & Subtotal */}
+                      <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-glass">
+                        {/* High-Contrast Stepper Box */}
+                        <div className="flex items-center bg-glass-subtle border-2 border-primary/70 rounded-xl p-1 shadow-sm">
                           <button
                             onClick={() => reduceQuantity(item.dish.id)}
-                            className="w-7 h-7 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-black font-extrabold flex items-center justify-center transition-colors cursor-pointer"
+                            className="w-7 h-7 rounded-lg bg-primary/20 hover:bg-primary text-primary hover:text-black font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                             title="Reduce Quantity"
                           >
-                            <Minus size={13} />
+                            <Minus size={12} className="stroke-[3]" />
                           </button>
-                          <span className="w-8 text-center font-black text-sm text-white">
+                          <span className="w-8 text-center font-black text-sm text-primary font-display">
                             {item.quantity}
                           </span>
                           <button
                             onClick={() => addToCart(item.dish)}
-                            className="w-7 h-7 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-black font-extrabold flex items-center justify-center transition-colors cursor-pointer"
+                            className="w-7 h-7 rounded-lg bg-primary/20 hover:bg-primary text-primary hover:text-black font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                             title="Increase Quantity"
                           >
-                            <Plus size={13} />
+                            <Plus size={12} className="stroke-[3]" />
                           </button>
                         </div>
 
-                        <div className="text-right shrink-0 min-w-[70px]">
-                          <span className="text-xs text-text-muted block text-[10px] font-bold uppercase">Subtotal</span>
-                          <span className="text-sm font-black text-white">
+                        {/* Item Subtotal */}
+                        <div className="text-right shrink-0 min-w-[75px]">
+                          <span className="text-[10px] font-extrabold text-text-muted block uppercase tracking-wider">Subtotal</span>
+                          <span className="text-sm sm:text-base font-black text-text-primary font-display">
                             ₹{(item.dish.price * item.quantity).toFixed(2)}
                           </span>
                         </div>
 
                         <button
                           onClick={() => removeFromCart(item.dish.id)}
-                          className="p-2 rounded-xl hover:bg-rose-500/20 text-text-muted hover:text-rose-400 transition-colors cursor-pointer"
+                          className="p-2 rounded-xl hover:bg-rose-500/20 text-text-muted hover:text-rose-400 transition-colors cursor-pointer shrink-0"
                           title="Remove item"
                         >
                           <Trash2 size={16} />
@@ -273,10 +343,28 @@ export const CartPage: React.FC = () => {
                     </motion.div>
                   ))}
                 </div>
+
+                {/* Mobile Proceed to Delivery Button (Step 1 -> Step 2) */}
+                <div className="pt-4 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setMobileStep(2)}
+                    className="w-full py-4 px-5 rounded-2xl bg-emerald-600 dark:bg-primary text-white dark:text-black font-extrabold shadow-luxury flex items-center justify-between cursor-pointer active:scale-95 transition-transform border border-emerald-400/30 dark:border-amber-300/40"
+                  >
+                    <div className="text-left leading-tight">
+                      <span className="text-[10px] font-black uppercase tracking-wider block opacity-90">Item Subtotal</span>
+                      <span className="text-sm font-black font-display">₹{totalAmount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-black/20 dark:bg-black/15 px-3.5 py-2 rounded-xl">
+                      <span>Proceed to Delivery</span>
+                      <Plus size={15} className="rotate-45 hidden" />
+                    </div>
+                  </button>
+                </div>
               </div>
 
-              {/* Checkout Form & Order Summary (Right Side - 5 cols) */}
-              <div className="lg:col-span-5 space-y-6">
+              {/* Checkout Form & Order Summary (Right Side - 5 cols) - Mobile Step 2 / Desktop */}
+              <div className={`lg:col-span-5 space-y-6 ${mobileStep === 1 ? 'hidden lg:block' : 'block'}`}>
                 <form onSubmit={handlePlaceOrder} className="glass-panel border border-glass rounded-3xl p-6 space-y-6 shadow-luxury">
                   <h3 className="text-lg font-extrabold font-display text-text-primary flex items-center gap-2 border-b border-glass pb-4">
                     <MapPin size={18} className="text-primary" />
@@ -295,7 +383,7 @@ export const CartPage: React.FC = () => {
                         placeholder="Enter your full name"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-white placeholder-text-muted/50 outline-none"
+                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none"
                       />
                     </div>
 
@@ -310,7 +398,7 @@ export const CartPage: React.FC = () => {
                         placeholder="Enter your mobile number"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-white placeholder-text-muted/50 outline-none"
+                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none"
                       />
                     </div>
 
@@ -325,7 +413,7 @@ export const CartPage: React.FC = () => {
                         placeholder="House no, street name, landmark, village/town..."
                         value={deliveryAddress}
                         onChange={(e) => setDeliveryAddress(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-white placeholder-text-muted/50 outline-none resize-none"
+                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none resize-none"
                       />
                     </div>
 
@@ -336,7 +424,7 @@ export const CartPage: React.FC = () => {
                         placeholder="e.g. Leave at door, don't ring bell"
                         value={instructions}
                         onChange={(e) => setInstructions(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-white placeholder-text-muted/50 outline-none"
+                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none"
                       />
                     </div>
                   </div>

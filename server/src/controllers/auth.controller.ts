@@ -225,3 +225,70 @@ export const register = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const updateProfile = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: 'Not authenticated.' });
+    }
+
+    const userId = req.user.id;
+    const { name, email, phone } = req.body;
+
+    const existingUser = await userService.getUserById(userId);
+    if (!existingUser) {
+      return res.status(404).json({ success: false, error: 'User not found.' });
+    }
+
+    const updates: any = {};
+    if (name && name.trim()) updates.name = name.trim();
+    if (phone !== undefined) updates.phone = phone.trim();
+
+    if (email && email.trim().toLowerCase() !== existingUser.email.toLowerCase()) {
+      const cleanEmail = email.trim().toLowerCase();
+      const emailTaken = await userService.getUserByEmail(cleanEmail);
+      if (emailTaken && emailTaken.userId !== userId) {
+        return res.status(400).json({ success: false, error: 'This email is already in use by another account.' });
+      }
+      updates.email = cleanEmail;
+    }
+
+    updates.updatedAt = new Date().toISOString();
+
+    const updatedUser = await userService.updateUserProfile(userId, updates);
+    if (!updatedUser) {
+      return res.status(500).json({ success: false, error: 'Failed to update profile in database.' });
+    }
+
+    const payload: JwtUserPayload = {
+      id: updatedUser.userId,
+      email: updatedUser.email,
+      name: updatedUser.name,
+      role: updatedUser.role as any,
+      restaurantId: req.user.restaurantId
+    };
+
+    const newToken = generateToken(payload);
+
+    return res.json({
+      success: true,
+      message: 'Profile updated successfully in database.',
+      token: newToken,
+      user: {
+        id: updatedUser.userId,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        phone: updatedUser.phone || '',
+        role: updatedUser.role,
+        restaurantId: req.user.restaurantId
+      }
+    });
+  } catch (error: any) {
+    console.error('Update Profile Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to update profile.',
+      details: error.message
+    });
+  }
+};

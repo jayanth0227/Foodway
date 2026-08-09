@@ -5,13 +5,14 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../utils/api';
 import { CategoryCardSkeleton } from './HomePageSkeleton';
 import { useNavigate } from "react-router-dom";
-
-import { getMergedCategories } from '../../utils/categoryUtils';
+import { useLanguage } from '../../context/LanguageContext';
+import { getMergedCategories, getTranslatedCategoryName } from '../../utils/categoryUtils';
 
 export const Categories: React.FC = () => {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -118,7 +119,7 @@ export const Categories: React.FC = () => {
                     {/* Text Description */}
                     <div>
                       <h3 className="font-display font-bold text-text-primary group-hover:text-primary transition-colors text-xs sm:text-sm md:text-base tracking-tight duration-300 line-clamp-1">
-                        {cleanName}
+                        {getTranslatedCategoryName(cleanName, t)}
                       </h3>
                       <p className="text-[10px] sm:text-xs text-text-muted mt-1 leading-snug sm:leading-relaxed font-medium line-clamp-2">
                         {cleanDesc}

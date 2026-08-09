@@ -6,13 +6,16 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
 import { useCart } from '../context/CartContext';
+import { useLanguage } from '../context/LanguageContext';
 import { API_BASE_URL } from '../utils/api';
 import socketService from '../services/socket.service';
+import { MobileOrderCardSkeleton } from '../components/common/MobileSkeletonLoader';
 
 export const CustomerOrdersPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { addToCart } = useCart();
+  const { t } = useLanguage();
 
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -27,13 +30,15 @@ export const CustomerOrdersPage: React.FC = () => {
       const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
         console.log('⚡ [Socket Event: ORDER_STATUS_UPDATED]:', updatedOrder);
         const targetId = updatedOrder.orderId || updatedOrder.id;
-        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: updatedOrder.status } : o));
+        const newStatus = updatedOrder.status || updatedOrder.orderStatus;
+        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: newStatus } : o));
       });
 
       const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
         console.log('⚡ [Socket Event: RIDER_STATUS_UPDATED]:', updatedOrder);
         const targetId = updatedOrder.orderId || updatedOrder.id;
-        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: updatedOrder.status } : o));
+        const newStatus = updatedOrder.status || updatedOrder.orderStatus;
+        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: newStatus } : o));
       });
 
       return () => {
@@ -157,7 +162,7 @@ export const CustomerOrdersPage: React.FC = () => {
                 className="hidden sm:flex text-xs font-bold text-text-muted hover:text-primary transition-colors items-center gap-1 mb-2 cursor-pointer"
               >
                 <ArrowLeft size={14} />
-                <span>Explore Restaurants</span>
+                <span>{t('browse_restaurants_btn')}</span>
               </button>
 
               {/* Title Section: Mobile shows Back Arrow button beside My Orders */}
@@ -171,7 +176,7 @@ export const CustomerOrdersPage: React.FC = () => {
                   <ArrowLeft size={18} className="text-primary" />
                 </button>
                 <h1 className="text-3xl sm:text-4xl font-black font-display text-gradient-gold">
-                  My Orders
+                  {t('my_orders_title')}
                 </h1>
               </div>
 
@@ -216,63 +221,7 @@ export const CustomerOrdersPage: React.FC = () => {
 
           {/* Orders List Skeleton Loader */}
           {loading ? (
-            <div className="space-y-4 sm:space-y-6">
-              {[1, 2].map(i => (
-                <div
-                  key={i}
-                  className="glass-panel border border-glass rounded-3xl p-4 sm:p-6 space-y-4 shadow-luxury animate-pulse"
-                >
-                  {/* Top Line Skeleton: Order ID & Restaurant pill */}
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-28 h-4 bg-primary/20 rounded-md" />
-                      <div className="w-16 h-3 bg-glass rounded-md" />
-                    </div>
-                    <div className="w-28 h-6 bg-primary/15 rounded-xl" />
-                  </div>
-
-                  {/* Mobile Status Badge & Reorder button row skeleton */}
-                  <div className="sm:hidden flex items-center justify-between gap-2.5 w-full">
-                    <div className="flex-1 h-10 bg-blue-500/15 rounded-2xl" />
-                    <div className="w-24 h-10 bg-primary/25 rounded-2xl" />
-                  </div>
-
-                  {/* Desktop Status Badge skeleton */}
-                  <div className="hidden sm:block w-48 h-10 bg-blue-500/15 rounded-2xl" />
-
-                  <div className="h-px bg-glass/60" />
-
-                  {/* Food items breakdown skeleton */}
-                  <div className="space-y-2.5">
-                    <div className="w-36 h-3 bg-glass rounded-md" />
-                    <div className="p-3 rounded-2xl bg-glass/40 border border-glass flex items-center justify-between gap-3">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 bg-glass rounded-xl shrink-0" />
-                        <div className="space-y-1.5">
-                          <div className="w-32 h-3.5 bg-glass rounded-md" />
-                          <div className="w-20 h-3 bg-primary/20 rounded-md" />
-                        </div>
-                      </div>
-                      <div className="w-14 h-4 bg-glass rounded-md" />
-                    </div>
-                  </div>
-
-                  <div className="h-px bg-glass/60" />
-
-                  {/* Footer skeleton */}
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="w-16 h-2.5 bg-glass rounded-md" />
-                      <div className="w-20 h-5 bg-primary/30 rounded-md" />
-                    </div>
-                    <div className="space-y-1 text-right">
-                      <div className="w-20 h-2.5 bg-glass rounded-md" />
-                      <div className="w-28 h-5 bg-emerald-500/20 rounded-xl" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <MobileOrderCardSkeleton count={3} />
           ) : displayedOrders.length === 0 ? (
             <div className="py-20 text-center glass-panel border border-glass rounded-3xl p-12 max-w-md mx-auto space-y-4">
               <ShoppingBag size={48} className="mx-auto text-text-muted opacity-50" />

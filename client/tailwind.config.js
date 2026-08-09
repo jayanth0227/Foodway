@@ -15,6 +15,9 @@ export default {
         accent: {
           DEFAULT: '#2563EB',
         },
+        error: {
+          DEFAULT: '#EF4444',
+        },
         bg: {
           dark: 'var(--bg-dark-color)',
           card: 'var(--bg-card)',

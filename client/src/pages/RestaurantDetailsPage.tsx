@@ -2,11 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, Plus, Minus, Layers, X, AlertTriangle, Lock } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart } from 'lucide-react';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
 import { MobileMenuSkeleton } from '../components/common/MobileSkeletonLoader';
+import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
+
+const removeEmojis = (str: string) => {
+  if (!str) return '';
+  return str.replace(/([\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF])/g, '').trim();
+};
 
 export const RestaurantDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,15 +26,61 @@ export const RestaurantDetailsPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDietary, setSelectedDietary] = useState<'All' | 'Veg' | 'Non-Veg'>('All');
   const [isCategoryFabOpen, setIsCategoryFabOpen] = useState<boolean>(false);
+  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
+    const list = getWishlist();
+    const favMap: Record<string, boolean> = {};
+    list.forEach(i => { favMap[i.id] = true; });
+    return favMap;
+  });
 
   useEffect(() => {
     if (id) {
-      fetchRestaurantDetails(id);
+      fetchRestaurantDetails(id, true);
+
+      // Real-time status poll every 4s
+      const pollInterval = setInterval(() => fetchRestaurantDetails(id, false), 4000);
+      const handleStatusUpdate = () => fetchRestaurantDetails(id, false);
+
+      window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+      window.addEventListener('storage', handleStatusUpdate);
+
+      const syncWishlist = () => {
+        const list = getWishlist();
+        const favMap: Record<string, boolean> = {};
+        list.forEach(i => { favMap[i.id] = true; });
+        setFavorites(favMap);
+      };
+
+      window.addEventListener('foodway_wishlist_updated', syncWishlist);
+      return () => {
+        clearInterval(pollInterval);
+        window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+        window.removeEventListener('storage', handleStatusUpdate);
+        window.removeEventListener('foodway_wishlist_updated', syncWishlist);
+      };
     }
   }, [id]);
 
-  const fetchRestaurantDetails = async (resId: string) => {
-    setLoading(true);
+
+  const toggleFav = (targetObj: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetId = targetObj.id || targetObj.restaurantId || targetObj.menuItemId;
+    const isDish = !!targetObj.foodName || !!targetObj.price;
+    toggleWishlistItem({
+      id: targetId,
+      name: targetObj.name || targetObj.foodName || 'Partner Item',
+      image: targetObj.image || targetObj.foodImage || targetObj.logo || '',
+      price: targetObj.price ? Number(targetObj.price) : undefined,
+      rating: targetObj.rating || 4.8,
+      restaurantId: restaurant?.id || id,
+      restaurantName: restaurant?.name || 'Partner Restaurant',
+      category: targetObj.category,
+      type: isDish ? 'dish' : 'restaurant',
+    });
+  };
+
+  const fetchRestaurantDetails = async (resId: string, isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       // 1. Fetch restaurant info
       const resResponse = await axios.get(`${API_BASE_URL}/public/restaurants`);
@@ -60,9 +112,10 @@ export const RestaurantDetailsPage: React.FC = () => {
       console.error('Error fetching restaurant details & menu from DB:', err);
       setMenuItems([]);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
+
 
   const categories = ['All', ...Array.from(new Set(menuItems.map(m => m.category).filter(Boolean)))];
 
@@ -77,6 +130,9 @@ export const RestaurantDetailsPage: React.FC = () => {
     return matchesSearch && matchesCat && matchesDietary;
   });
 
+  const isResClosed = restaurant ? (restaurant.isOpen === false || restaurant.isOpen === 'false' || restaurant.status === 'closed' || restaurant.status === 'inactive' || restaurant.status === 'INACTIVE' || restaurant.status === 'OFFLINE' || restaurant.status === 'offline' || restaurant.status === 'CLOSED') : false;
+  const isResOpen = !isResClosed;
+
   return (
     <>
       <Helmet>
@@ -89,55 +145,185 @@ export const RestaurantDetailsPage: React.FC = () => {
 
         <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 relative z-10">
 
-          {/* Back Button */}
-          <button
-            onClick={() => navigate('/restaurants')}
-            className="px-4 py-2 rounded-xl bg-glass border border-glass hover:border-primary/40 text-text-secondary hover:text-primary font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
-          >
-            <ArrowLeft size={16} />
-            <span>Back to All Restaurants</span>
-          </button>
-
-          {/* Restaurant Banner Header */}
+          {/* Mobile-Only Shop Header Card matching User Screenshot */}
           {loading ? (
-            <div className="glass-panel border border-glass rounded-3xl h-64 animate-pulse" />
+            <div className="block sm:hidden glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
           ) : restaurant && (
-            <div className="relative rounded-3xl overflow-hidden border border-glass shadow-luxury bg-bg-darkSec">
-              <div className="h-64 sm:h-80 relative overflow-hidden">
-                <img
-                  src={restaurant.image}
-                  alt={restaurant.name}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-bg-dark/60 to-transparent" />
+            <div className="block sm:hidden glass-panel border border-glass rounded-3xl p-4 shadow-luxury bg-bg-cardSec space-y-3.5">
+              {/* Top Bar: Back Button (Left) & Rating Badge (Right) */}
+              <div className="flex items-center justify-between gap-2 border-b border-glass/60 pb-3">
+                <button
+                  onClick={() => navigate('/restaurants')}
+                  className="px-4 py-1.5 rounded-full bg-glass border border-glass text-text-primary font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                >
+                  <ArrowLeft size={14} className="text-primary" />
+                  <span>Back</span>
+                </button>
 
-                <div className="absolute top-6 left-6 flex gap-2">
-                  <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider backdrop-blur-md shadow-lg ${restaurant.isOpen ? 'bg-emerald-500/90 text-white' : 'bg-rose-600/90 text-white'
-                    }`}>
-                    {restaurant.isOpen ? '● OPEN FOR ORDERS' : '● CLOSED'}
-                  </span>
+                <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-black">
+                  <Star size={13} className="fill-emerald-400 text-emerald-400" />
+                  <span>{restaurant.rating || 4.8} Rating</span>
+                </div>
+              </div>
+
+              {/* Shop Main Info Row: Logo Thumbnail + Name & Address */}
+              <div className="flex items-start gap-3.5">
+                <div className="w-16 h-16 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0 shadow-md">
+                  <img
+                    src={restaurant.logo || restaurant.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400"}
+                    alt={restaurant.name}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
 
-                <div className="absolute bottom-6 left-6 right-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                  <div className="space-y-2">
-                    <span className="px-3 py-1 rounded-lg bg-primary/20 border border-primary/40 text-primary text-xs font-bold uppercase tracking-wider">
-                      {restaurant.cuisine || 'Multi-Cuisine'}
-                    </span>
-                    <h1 className="text-3xl sm:text-5xl font-black font-display text-white tracking-tight">
+                <div className="space-y-1 text-left min-w-0 flex-1">
+                  {/* Shop Name + Wishlist (Heart) Luxury Badge on the right */}
+                  <div className="flex items-center justify-between gap-2.5 w-full">
+                    <h1 className="text-lg font-black font-display text-gradient-gold leading-snug truncate">
                       {restaurant.name}
                     </h1>
-                    {restaurant.address && (
-                      <p className="text-xs sm:text-sm text-text-muted flex items-center gap-2">
-                        <MapPin size={14} className="text-primary shrink-0" />
-                        <span>{restaurant.address}</span>
-                      </p>
-                    )}
+
+                    <button
+                      type="button"
+                      onClick={(e) => toggleFav(restaurant, e)}
+                      className={`p-2 rounded-2xl border transition-all duration-300 active:scale-95 cursor-pointer shrink-0 ml-auto flex items-center justify-center ${
+                        favorites[restaurant.id || id || '']
+                          ? 'bg-rose-500/15 border-rose-500/35 text-rose-500'
+                          : 'bg-glass border-glass text-text-muted hover:text-rose-400 hover:border-rose-400/40'
+                      }`}
+                      title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
+                    >
+                      <Heart
+                        size={16}
+                        className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-text-muted"}
+                      />
+                    </button>
+
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 text-black font-extrabold text-sm shadow-lg">
-                      <Star size={16} className="fill-black" />
-                      <span>{restaurant.rating || 4.8} Rating</span>
+
+
+                  {restaurant.address && (
+                    <p className="text-xs text-text-muted flex items-start gap-1 font-medium leading-relaxed">
+                      <MapPin size={12} className="text-primary shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{restaurant.address}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Badges Layout Row: Open for Orders & Delivery Time Side-by-Side */}
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
+                <span className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                  isResOpen ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${isResOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                  <span>{isResOpen ? 'OPEN FOR ORDERS' : 'CLOSED NOW'}</span>
+                </span>
+
+                {restaurant.deliveryTime && (
+                  <span className="px-3 py-1 rounded-xl bg-glass border border-glass text-text-secondary text-[11px] font-bold flex items-center gap-1.5 ml-auto">
+                    <Clock size={12} className="text-primary shrink-0" />
+                    <span>{restaurant.deliveryTime}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Desktop-Only Banner Header */}
+          {loading ? (
+            <div className="hidden sm:block glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
+          ) : restaurant && (
+            <div className="hidden sm:block relative rounded-3xl overflow-hidden border border-glass shadow-luxury bg-bg-darkSec">
+              <div className="h-48 sm:h-56 relative overflow-hidden">
+                {/* Background Cover Image */}
+                <img
+                  src={restaurant.image || restaurant.bannerImage || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200"}
+                  alt={restaurant.name}
+                  className={`w-full h-full object-cover scale-105 filter ${!isResOpen ? 'grayscale brightness-75' : 'brightness-90'}`}
+                />
+                {/* Gradient Overlays */}
+                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-bg-dark/70 to-black/30" />
+
+                {/* Top Badges Row */}
+                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-2 flex-wrap z-10">
+                  <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider backdrop-blur-md shadow-lg border flex items-center gap-1.5 ${
+                    isResOpen ? 'bg-emerald-500/90 text-white border-emerald-400/40' : 'bg-rose-600/90 text-white border-rose-400/40'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${isResOpen ? 'bg-emerald-300 animate-pulse' : 'bg-white'}`} />
+                    <span>{isResOpen ? 'OPEN FOR ORDERS' : 'CLOSED NOW'}</span>
+                  </span>
+
+                  {restaurant.deliveryTime && (
+                    <span className="px-3 py-1 rounded-full text-[11px] font-extrabold bg-black/60 text-white border border-glass backdrop-blur-md flex items-center gap-1.5">
+                      <Clock size={12} className="text-primary" />
+                      <span>{restaurant.deliveryTime}</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Top Right Rating Badge */}
+                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-black font-black text-xs shadow-xl border border-amber-300">
+                    <Star size={13} className="fill-black text-black" />
+                    <span>{restaurant.rating || 4.8} Rating</span>
+                  </div>
+                </div>
+
+                {/* Bottom Main Content Row */}
+                <div className="absolute bottom-3.5 left-3.5 right-3.5 sm:bottom-5 sm:left-5 sm:right-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3 z-10">
+                  <div className="flex items-end gap-3 sm:gap-4">
+                    {/* Restaurant Logo Avatar */}
+                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl overflow-hidden border-2 border-primary/40 shadow-2xl shrink-0 bg-black/60 backdrop-blur-md">
+                      <img
+                        src={restaurant.logo || restaurant.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400"}
+                        alt={restaurant.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* Restaurant Name & Categories + Wishlist Button */}
+                    <div className="space-y-0.5 text-left">
+                      <div className="flex items-center gap-3">
+                        <h1 className="text-xl sm:text-3xl font-black font-display text-gradient-gold tracking-tight drop-shadow-md">
+                          {restaurant.name}
+                        </h1>
+
+                        <button
+                          type="button"
+                          onClick={(e) => toggleFav(restaurant, e)}
+                          className={`p-2 rounded-2xl border backdrop-blur-md transition-all duration-300 active:scale-95 cursor-pointer shrink-0 ${
+                            favorites[restaurant.id || id || '']
+                              ? 'bg-rose-500/20 border-rose-500/40 text-rose-500'
+                              : 'bg-black/40 border-white/20 text-white hover:border-rose-400/50 hover:bg-rose-500/10'
+                          }`}
+                          title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
+                        >
+                          <Heart size={16} className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-white"} />
+                        </button>
+
+
+                      </div>
+
+                      {restaurant.address && (
+                        <p className="text-[11px] sm:text-xs text-text-secondary flex items-center gap-1 font-semibold">
+                          <MapPin size={12} className="text-primary shrink-0" />
+                          <span>{restaurant.address}</span>
+                        </p>
+                      )}
+
+                      {/* Dynamic Categories List Badges */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        {(categories.filter(c => c !== 'All').length > 0
+                          ? categories.filter(c => c !== 'All')
+                          : [restaurant.cuisine || 'Multi-Cuisine']
+                        ).map((catName) => (
+                          <span key={catName} className="px-2.5 py-0.5 rounded-lg bg-primary/20 text-primary text-[10px] sm:text-xs font-black uppercase tracking-wider border border-primary/30 backdrop-blur-sm">
+                            {removeEmojis(catName)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -145,61 +331,71 @@ export const RestaurantDetailsPage: React.FC = () => {
             </div>
           )}
 
-          {/* Currently Not Accepting Orders Banner */}
-          {restaurant && (restaurant.isOpen === false || restaurant.status === 'closed') && (
-            <div className="p-4 sm:p-5 rounded-2xl bg-rose-500/15 border-2 border-rose-500/40 text-rose-300 flex items-start gap-3.5 shadow-lg">
-              <AlertTriangle size={24} className="text-rose-400 shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                <span className="font-extrabold text-sm sm:text-base text-rose-400 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                  Currently Not Accepting Orders
-                </span>
-                <span className="text-xs text-rose-200/90 leading-relaxed block">
-                  This restaurant is currently offline or closed. You can view the available menu below, but selecting items and adding them to the cart is temporarily disabled.
-                </span>
+
+
+          {/* Swiggy Style Menu Search & Filter Header */}
+          <div className="glass-panel border border-glass rounded-2xl p-3.5 sm:p-5 space-y-3 shadow-luxury bg-bg-cardSec">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4">
+              {/* 1. Swiggy Search Input Bar */}
+              <div className="relative w-full lg:w-72 shrink-0">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input
+                  type="text"
+                  placeholder={`Search in ${restaurant?.name || 'this restaurant'}...`}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-11 pr-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/60 outline-none transition-all"
+                />
               </div>
-            </div>
-          )}
 
-          {/* Menu Search & Category Controls */}
-          <div className="glass-panel border border-glass rounded-2xl p-4 sm:p-6 flex flex-col md:flex-row gap-4 items-center justify-between shadow-luxury">
-            <div className="relative w-full md:w-80">
-              <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
-              <input
-                type="text"
-                placeholder="Search food items in this restaurant..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary placeholder-text-muted/60 outline-none"
-              />
-            </div>
-
-            {/* Category Chips */}
-            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0">
-              {categories.map(cat => (
+              {/* 2. Swiggy Horizontal Filter Bar (Veg / Non-Veg Toggle Chips + Categories) */}
+              <div className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+                {/* Veg Filter Chip */}
                 <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${selectedCategory === cat ? 'bg-primary text-black font-black shadow-md' : 'bg-glass hover:bg-glass-subtle border border-glass text-text-secondary'
+                  type="button"
+                  onClick={() => setSelectedDietary(selectedDietary === 'Veg' ? 'All' : 'Veg')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Veg'
+                      ? 'bg-emerald-600 text-white shadow-md border border-emerald-400'
+                      : 'bg-glass hover:bg-glass-subtle border border-emerald-500/30 text-emerald-400'
                     }`}
                 >
-                  {cat}
+                  <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                  </div>
+                  <span>Veg</span>
                 </button>
-              ))}
-            </div>
 
-            {/* Dietary Type Filter */}
-            <div className="flex items-center gap-1 bg-bg-dark/60 border border-glass p-1 rounded-xl shrink-0">
-              {(['All', 'Veg', 'Non-Veg'] as const).map(dt => (
+                {/* Non-Veg Filter Chip */}
                 <button
-                  key={dt}
-                  onClick={() => setSelectedDietary(dt)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${selectedDietary === dt ? 'bg-primary text-black font-extrabold' : 'text-text-muted hover:text-text-primary'
+                  type="button"
+                  onClick={() => setSelectedDietary(selectedDietary === 'Non-Veg' ? 'All' : 'Non-Veg')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Non-Veg'
+                      ? 'bg-rose-600 text-white shadow-md border border-rose-400'
+                      : 'bg-glass hover:bg-glass-subtle border border-rose-500/30 text-rose-400'
                     }`}
                 >
-                  {dt}
+                  <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
+                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                  </div>
+                  <span>Non-Veg</span>
                 </button>
-              ))}
+
+                <div className="h-4 w-px bg-glass shrink-0 mx-1" />
+
+                {/* Swiggy Categories Chips */}
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${selectedCategory === cat
+                        ? 'bg-primary text-black font-black shadow-md'
+                        : 'bg-glass hover:bg-glass-subtle border border-glass text-text-secondary'
+                      }`}
+                  >
+                    {removeEmojis(cat)}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -224,10 +420,10 @@ export const RestaurantDetailsPage: React.FC = () => {
 
                 const dishObj = {
                   id: dishId,
-                  name: item.foodName || item.name,
-                  description: item.description || '',
+                  name: removeEmojis(item.foodName || item.name || ''),
+                  description: removeEmojis(item.description || ''),
                   price: Number(item.price),
-                  category: item.category || 'Main Course',
+                  category: removeEmojis(item.category || item.foodCategory || 'Main Course'),
                   image: item.foodImage || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
                   type: (item.isVeg !== false ? 'veg' : 'non-veg') as 'veg' | 'non-veg',
                   isVeg: item.isVeg !== false,
@@ -235,115 +431,122 @@ export const RestaurantDetailsPage: React.FC = () => {
                   restaurantIsOpen: !isRestaurantClosed,
                   rating: 4.8,
                   restaurantId: restaurant?.id || id || item.restaurantId,
-                  restaurantName: restaurant?.name || 'Partner Restaurant'
+                  restaurantName: removeEmojis(restaurant?.name || 'Partner Restaurant')
                 };
 
                 return (
                   <motion.div
                     key={dishId}
-                    whileHover={{ x: 4 }}
-                    className={`glass-panel border rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6 shadow-luxury transition-all w-full ${isOutOfStock ? 'opacity-70 border-rose-500/20 bg-bg-dark/40' : 'border-glass hover:border-primary/40'
+                    initial={false}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`glass-panel border rounded-2xl p-3.5 sm:p-5 flex items-start justify-between gap-3 sm:gap-6 shadow-luxury transition-all w-full relative overflow-visible ${isOutOfStock
+                      ? 'opacity-70 border-rose-500/20 bg-bg-dark/40'
+                      : 'border-glass hover:border-primary/40 bg-bg-cardSec'
                       }`}
                   >
-                    {/* Left Side: Food Image Container */}
-                    <div className="relative w-full sm:w-36 h-36 sm:h-28 rounded-xl overflow-hidden border border-glass bg-bg-dark shrink-0">
-                      <img
-                        src={dishObj.image}
-                        alt={dishObj.name}
-                        className={`w-full h-full object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'hover:scale-105'}`}
-                      />
-                      <div className="absolute top-2 left-2 flex gap-1">
-                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase ${dishObj.isVeg ? 'bg-emerald-500 text-white' : 'bg-rose-600 text-white'
-                          }`}>
-                          {dishObj.isVeg ? 'Veg' : 'Non-Veg'}
-                        </span>
-                      </div>
-                      <div className="absolute top-2 right-2">
-                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-extrabold uppercase backdrop-blur-md ${!isOutOfStock ? 'bg-emerald-500/90 text-white' : 'bg-rose-600/90 text-white'
-                          }`}>
-                          {isRestaurantClosed ? 'Closed' : !isOutOfStock ? 'In Stock' : 'Out of Stock'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Center: Food Details */}
-                    <div className="flex-1 min-w-0 space-y-1.5 text-left w-full">
+                    {/* Left Side: Food Details & Pricing */}
+                    <div className="flex-1 min-w-0 space-y-1 text-left">
+                      {/* Veg / Non-Veg Indicator & Category */}
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-primary uppercase tracking-wider bg-primary/10 px-2.5 py-0.5 rounded-md border border-primary/20">
+                        <div
+                          className={`w-4 h-4 rounded-sm border-2 p-0.5 flex items-center justify-center shrink-0 ${dishObj.isVeg ? 'border-emerald-600' : 'border-rose-600'
+                            }`}
+                        >
+                          <div
+                            className={`w-1.5 h-1.5 rounded-full ${dishObj.isVeg ? 'bg-emerald-600' : 'bg-rose-600'
+                              }`}
+                          />
+                        </div>
+                        <span className="text-[10px] font-extrabold text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
                           {dishObj.category}
                         </span>
-                        <span className="text-[11px] text-text-muted font-medium">
-                          Prep: {item.preparationTime || item.prepTime || '15-20 mins'}
-                        </span>
                       </div>
-                      <h3 className="font-extrabold text-base sm:text-lg text-text-primary truncate">
+
+                      {/* Dish Name */}
+                      <h3 className="font-extrabold text-sm sm:text-base text-text-primary line-clamp-1 pt-0.5">
                         {dishObj.name}
                       </h3>
+
+                      {/* Dish Price */}
+                      <div className="font-black text-base sm:text-lg text-text-primary font-display">
+                        ₹{dishObj.price.toFixed(2)}
+                      </div>
+
+                      {/* Description */}
                       {dishObj.description && (
-                        <p className="text-xs text-text-muted line-clamp-2 leading-relaxed">
+                        <p className="text-[11px] text-text-muted line-clamp-2 leading-relaxed pt-0.5">
                           {dishObj.description}
                         </p>
                       )}
                     </div>
 
-                    {/* Right Side: Price & Actions */}
-                    <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 shrink-0 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-glass">
-                      <div className="text-left sm:text-right">
-                        <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider block">Price</span>
-                        <span className="text-lg sm:text-xl font-black text-text-primary font-display">
-                          ₹{dishObj.price.toFixed(2)}
-                        </span>
+                    {/* Right Side: Dish Image & Swiggy/Zomato Floating ADD Button */}
+                    <div className="relative shrink-0 flex flex-col items-center">
+                      <div className="relative w-28 h-28 sm:w-36 sm:h-28 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0">
+                        <img
+                          src={dishObj.image}
+                          alt={dishObj.name}
+                          className={`w-full h-full object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'hover:scale-105'}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => toggleFav(dishObj, e)}
+                          className="absolute top-1.5 right-1.5 z-10 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center active:scale-95 transition-all shadow-md cursor-pointer"
+                          title="Favorite"
+                        >
+                          <Heart size={13} className={favorites[dishId] ? "fill-rose-500 text-rose-500" : "text-white"} />
+                        </button>
                       </div>
 
-                      {/* Action Button */}
-                      {isRestaurantClosed ? (
-                        <button
-                          disabled
-                          className="px-4 py-2.5 rounded-xl text-xs font-extrabold bg-rose-500/20 text-rose-400 cursor-not-allowed border border-rose-500/30 flex items-center gap-1.5 cursor-not-allowed"
-                          title="Restaurant is currently offline"
-                        >
-                          <Lock size={13} />
-                          <span>Not Accepting Orders</span>
-                        </button>
-                      ) : isOutOfStock ? (
-                        <button
-                          disabled
-                          className="px-4 py-2 rounded-xl text-xs font-extrabold bg-rose-500/20 text-rose-400 cursor-not-allowed border border-rose-500/30"
-                        >
-                          Unavailable
-                        </button>
-                      ) : qtyInCart > 0 ? (
-                        <div className="flex items-center bg-primary text-black rounded-xl p-1 shadow-md border border-amber-300">
+                      {/* Floating ADD / Stepper Button matching Swiggy */}
+                      <div className="relative -mt-4 z-10">
+                        {isRestaurantClosed ? (
                           <button
-                            type="button"
-                            onClick={() => reduceQuantity(dishId)}
-                            className="w-7 h-7 rounded-lg bg-black/15 hover:bg-black/30 text-black font-black flex items-center justify-center transition-colors cursor-pointer"
-                            title="Decrease quantity"
+                            disabled
+                            className="px-3 py-1 rounded-xl text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed uppercase"
                           >
-                            <Minus size={13} />
+                            Closed
                           </button>
-                          <span className="w-8 text-center font-black text-xs">
-                            {qtyInCart}
-                          </span>
+                        ) : isOutOfStock ? (
+                          <button
+                            disabled
+                            className="px-3 py-1 rounded-xl text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed uppercase"
+                          >
+                            Unavailable
+                          </button>
+                        ) : qtyInCart > 0 ? (
+                          <div className="flex items-center bg-bg-cardSec text-primary rounded-xl px-2 py-1 shadow-md border-2 border-primary">
+                            <button
+                              type="button"
+                              onClick={() => reduceQuantity(dishId)}
+                              className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                              title="Decrease quantity"
+                            >
+                              <Minus size={11} className="stroke-[3]" />
+                            </button>
+                            <span className="w-6 text-center font-black text-xs font-display text-primary">
+                              {qtyInCart}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => addToCart(dishObj)}
+                              className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                              title="Increase quantity"
+                            >
+                              <Plus size={11} className="stroke-[3]" />
+                            </button>
+                          </div>
+                        ) : (
                           <button
                             type="button"
                             onClick={() => addToCart(dishObj)}
-                            className="w-7 h-7 rounded-lg bg-black/15 hover:bg-black/30 text-black font-black flex items-center justify-center transition-colors cursor-pointer"
-                            title="Increase quantity"
+                            className="px-5 py-1.5 rounded-xl bg-bg-cardSec text-primary border-2 border-primary/80 hover:border-primary font-black text-xs uppercase tracking-wider shadow-md hover:bg-primary hover:text-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
                           >
-                            <Plus size={13} />
+                            <span>ADD</span>
+                            <Plus size={12} className="stroke-[3]" />
                           </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => addToCart(dishObj)}
-                          className="px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-black font-extrabold text-xs shadow-md hover:scale-105 transition-all flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <ShoppingBag size={13} />
-                          <span>Add to Cart</span>
-                        </button>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -352,65 +555,6 @@ export const RestaurantDetailsPage: React.FC = () => {
           )}
 
         </div>
-      </div>
-
-      {/* Floating Action Button (FAB) for Categories - Fixed Right Bottom Position */}
-      <div className="fixed bottom-20 right-3.5 sm:bottom-6 sm:right-6 z-40">
-        <button
-          onClick={() => setIsCategoryFabOpen(!isCategoryFabOpen)}
-          className="px-5 py-3.5 rounded-full bg-primary text-black font-black text-xs uppercase tracking-wider shadow-[0_8px_25px_rgba(197,147,99,0.5)] hover:scale-105 transition-transform flex items-center gap-2 cursor-pointer border-2 border-amber-300"
-        >
-          <Layers size={18} />
-          <span>Menu Categories</span>
-          <span className="bg-black/20 px-2 py-0.5 rounded-full text-[10px]">
-            {categories.length - 1}
-          </span>
-        </button>
-
-        {/* Floating Category Select Popup */}
-        <AnimatePresence>
-          {isCategoryFabOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.9 }}
-              className="absolute bottom-16 right-0 w-64 bg-bg-darkSec border border-primary/40 rounded-2xl p-4 shadow-luxury backdrop-blur-xl space-y-3"
-            >
-              <div className="flex items-center justify-between border-b border-glass pb-2">
-                <span className="text-xs font-black uppercase text-primary tracking-wider">Select Category</span>
-                <button
-                  onClick={() => setIsCategoryFabOpen(false)}
-                  className="p-1 text-text-muted hover:text-white transition-colors cursor-pointer"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-
-              <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                {categories.map((cat) => {
-                  const isSelected = selectedCategory === cat;
-                  const count = cat === 'All' ? menuItems.length : menuItems.filter(m => m.category === cat).length;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => {
-                        setSelectedCategory(cat);
-                        setIsCategoryFabOpen(false);
-                      }}
-                      className={`w-full px-3 py-2 rounded-xl text-xs font-bold text-left flex items-center justify-between transition-colors cursor-pointer ${isSelected ? 'bg-primary text-black font-extrabold' : 'hover:bg-glass text-text-secondary hover:text-white'
-                        }`}
-                    >
-                      <span>{cat}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-md ${isSelected ? 'bg-black/20 text-black' : 'bg-glass text-text-muted'}`}>
-                        {count} items
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </>
   );

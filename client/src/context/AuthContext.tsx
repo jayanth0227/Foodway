@@ -9,6 +9,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, password?: string) => Promise<{ success: boolean; role?: Role; error?: string }>;
   logout: () => void;
   register: (name: string, email: string, password?: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (data: { name?: string; email?: string; phone?: string }) => Promise<{ success: boolean; user?: User; error?: string }>;
   refreshAuth: () => Promise<void>;
 }
 
@@ -131,6 +132,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const handleUpdateProfile = async (data: { name?: string; email?: string; phone?: string }) => {
+    try {
+      const res = await authService.updateProfile(data);
+      if (res.success && res.user && res.token) {
+        setUser(res.user);
+        setRole(res.user.role);
+        setToken(res.token);
+        saveSession(res.token, res.user);
+        return { success: true, user: res.user };
+      }
+      return { success: false, error: res.error || 'Failed to update profile' };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.response?.data?.error || err.message || 'Error updating profile'
+      };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -144,6 +164,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login: handleLogin,
         logout: handleLogout,
         register: handleRegister,
+        updateProfile: handleUpdateProfile,
         refreshAuth
       }}
     >

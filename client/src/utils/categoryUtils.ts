@@ -74,3 +74,21 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
 
   return merged;
 };
+
+export const getTranslatedCategoryName = (name: string = '', t: (key: string) => string): string => {
+  const clean = cleanCategoryName(name).toLowerCase();
+  if (clean.includes('biryani')) return t('cat_biryani');
+  if (clean.includes('tiffin') || clean.includes('breakfast')) return t('cat_tiffins');
+  if (clean.includes('fast food') || clean.includes('starter')) return t('cat_fast_food');
+  if (clean.includes('dessert') || clean.includes('sweet') || clean.includes('ice cream')) return t('cat_desserts');
+  if (clean.includes('beverage') || clean.includes('drink') || clean.includes('juice')) return t('cat_beverages');
+  if (clean.includes('bakery') || clean.includes('cake')) return t('cat_bakery');
+  if (clean.includes('meal') || clean.includes('thali')) return t('cat_meals');
+  if (clean.includes('non veg') || clean.includes('chicken') || clean.includes('mutton')) return t('cat_non_veg');
+  if (clean.includes('veg')) return t('cat_veg');
+  if (clean.includes('chinese') || clean.includes('noodle')) return t('cat_chinese');
+  if (clean.includes('pizza') || clean.includes('burger')) return t('cat_pizza_burger');
+  if (clean.includes('south indian')) return t('cat_south_indian');
+  if (clean.includes('north indian')) return t('cat_north_indian');
+  return cleanCategoryName(name);
+};

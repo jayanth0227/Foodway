@@ -17,7 +17,7 @@ interface CartContextType {
   totalItemsCount: number;
   isCartOpen: boolean;
   setCartOpen: (open: boolean) => void;
-  lastAddedItem: { name: string; quantity: number; image: string; price: number } | null;
+  lastAddedItem: { name: string; quantity: number; image: string; price: number; timestamp?: number } | null;
   dismissToast: () => void;
 }
 
@@ -26,7 +26,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setCartOpen] = useState(false);
-  const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number } | null>(null);
+  const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number; timestamp?: number } | null>(null);
 
   // Load cart from localStorage on init
   useEffect(() => {
@@ -72,7 +72,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         name: dish.name,
         quantity: newQty,
         image: dish.image,
-        price: dish.price
+        price: dish.price,
+        timestamp: Date.now()
       });
 
       return newItems;

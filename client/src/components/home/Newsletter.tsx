@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Mail } from 'lucide-react';
+import { NewsletterSkeleton } from './HomePageSkeleton';
 
 export const Newsletter: React.FC = () => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 300);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,6 +20,9 @@ export const Newsletter: React.FC = () => {
       setEmail('');
     }
   };
+
+  if (loading) return <NewsletterSkeleton />;
+
 
   return (
     <section id="newsletter" className="py-16 md:py-20 lg:py-30 bg-bg-dark border-t border-glass relative overflow-hidden">

@@ -89,6 +89,8 @@ export const RestaurantDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'profile' | 'settings'>('profile');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [incomingOrderPopup, setIncomingOrderPopup] = useState<OrderItem | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
 
   // Stats
   const [activities, setActivities] = useState<Array<{ id: string; type: string; title: string; time: string }>>([]);
@@ -231,7 +233,8 @@ export const RestaurantDashboard: React.FC = () => {
     }
 
     setRestaurant(restProfile);
-    setProfileForm({
+    setProfileForm(prev => ({
+      ...prev,
       name: restProfile.name || '',
       ownerName: restProfile.ownerName || '',
       email: restProfile.email || '',
@@ -242,7 +245,7 @@ export const RestaurantDashboard: React.FC = () => {
       image: restProfile.image || '',
       description: restProfile.description || '',
       cuisine: restProfile.cuisine || ''
-    });
+    }));
     if (typeof restProfile.isOpen === 'boolean') {
       setIsRestaurantOpen(restProfile.isOpen);
     }
@@ -324,8 +327,8 @@ export const RestaurantDashboard: React.FC = () => {
 
     try {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(() => {});
-    } catch (e) {}
+      audio.play().catch(() => { });
+    } catch (e) { }
   };
 
   // Helper: Trigger Native Browser Push Notification
@@ -429,6 +432,8 @@ export const RestaurantDashboard: React.FC = () => {
 
     try {
       await axios.put(`${API_BASE_URL}/restaurant/status/${resId}`, { isOpen: nextStatus });
+      localStorage.setItem('foodway_status_changed_at', Date.now().toString());
+      window.dispatchEvent(new Event('foodway_restaurant_status_updated'));
     } catch (err) {
       console.error('Failed to update restaurant status on backend:', err);
     } finally {
@@ -786,11 +791,11 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'pending') {
       return (
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center gap-2 justify-end whitespace-nowrap shrink-0">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Accepted')}
-            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Accept Order"
           >
             <Check size={14} />
@@ -799,7 +804,7 @@ export const RestaurantDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Rejected')}
-            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Reject Order"
           >
             <X size={14} />
@@ -811,11 +816,11 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'accepted') {
       return (
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center gap-2 justify-end whitespace-nowrap shrink-0">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Preparing')}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Start Preparing Food in Kitchen"
           >
             <ChefHat size={14} />
@@ -824,7 +829,7 @@ export const RestaurantDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Rejected')}
-            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
             title="Reject Order"
           >
             <X size={13} />
@@ -835,11 +840,11 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'preparing') {
       return (
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Ready')}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Mark Food Ready for Pickup / Delivery"
           >
             <CheckCircle size={14} />
@@ -851,9 +856,9 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'ready') {
       return (
-        <div className="flex items-center justify-end">
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase">
-            <Clock size={14} />
+        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase whitespace-nowrap shrink-0">
+            <Clock size={13} className="shrink-0" />
             <span>Food Ready (Awaiting Courier)</span>
           </span>
         </div>
@@ -862,19 +867,23 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'rejected') {
       return (
-        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase">
-          <XCircle size={13} />
-          <span>Rejected</span>
-        </span>
+        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase whitespace-nowrap shrink-0">
+            <XCircle size={13} className="shrink-0" />
+            <span>Rejected</span>
+          </span>
+        </div>
       );
     }
 
     if (status === 'completed' || status === 'delivered') {
       return (
-        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase">
-          <CheckCircle size={13} />
-          <span>Completed</span>
-        </span>
+        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase whitespace-nowrap shrink-0">
+            <CheckCircle size={13} className="shrink-0" />
+            <span>Completed</span>
+          </span>
+        </div>
       );
     }
 
@@ -1165,8 +1174,8 @@ export const RestaurantDashboard: React.FC = () => {
           >
             <Bell size={16} className="text-primary" />
             {pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white font-black text-[9px] flex items-center justify-center animate-pulse shadow-sm">
-                {pendingCount}
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[11px] rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-lg shadow-rose-500/40 pointer-events-none z-10">
+                {pendingCount > 99 ? '99+' : pendingCount}
               </span>
             )}
           </motion.button>
@@ -1237,20 +1246,18 @@ export const RestaurantDashboard: React.FC = () => {
                       <button
                         key={item.id}
                         onClick={() => { setActiveTab(item.id as any); setIsMobileSidebarOpen(false); }}
-                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl font-extrabold text-xs transition-all cursor-pointer ${
-                          isActive
+                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl font-extrabold text-xs transition-all cursor-pointer ${isActive
                             ? 'bg-primary text-black font-black shadow-lg shadow-primary/25'
                             : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/90 dark:bg-glass hover:bg-slate-200/80'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-3">
                           <Icon size={18} className={isActive ? 'text-black' : 'text-primary'} />
                           <span>{item.label}</span>
                         </div>
                         {item.badge && (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                            isActive ? 'bg-black text-primary' : 'bg-primary/20 text-primary'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-black text-primary' : 'bg-primary/20 text-primary'
+                            }`}>
                             {item.badge}
                           </span>
                         )}
@@ -1877,7 +1884,7 @@ export const RestaurantDashboard: React.FC = () => {
                         <span>{catName}</span>
                         <button
                           type="button"
-                          onClick={() => setCategoryToDelete(catName)}
+                          onClick={() => handleDeleteCategorySubmit(catName)}
                           className="p-1 rounded-md text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                           title={`Delete '${catName}' category`}
                         >
@@ -2987,9 +2994,8 @@ export const RestaurantDashboard: React.FC = () => {
                           <div className="space-y-1 min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <span className="font-black text-primary font-mono">{o.id}</span>
-                              <span className={`px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${
-                                isPending ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/20 text-emerald-500'
-                              }`}>
+                              <span className={`px-2 py-0.2 rounded-full text-[9px] font-black uppercase ${isPending ? 'bg-amber-500/20 text-amber-500' : 'bg-emerald-500/20 text-emerald-500'
+                                }`}>
                                 {o.orderStatus}
                               </span>
                             </div>
@@ -3005,7 +3011,7 @@ export const RestaurantDashboard: React.FC = () => {
                             {isPending ? (
                               <button
                                 onClick={() => {
-                                  handleUpdateOrderStatus(o.id, 'Preparing');
+                                  updateOrderStatus(o.id, 'Preparing');
                                   setIsNotificationOpen(false);
                                 }}
                                 className="px-2.5 py-1 rounded-lg bg-primary text-black font-black text-[9.5px] cursor-pointer shadow-xs"

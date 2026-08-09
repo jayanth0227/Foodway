@@ -48,6 +48,7 @@ import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import { getCurrentUser, clearSession } from '../utils/auth.utils';
 import { useAuth } from '../hooks/useAuth';
+import { AdminDeliveryLocations } from '../components/admin/AdminDeliveryLocations';
 
 interface DBItem {
   id: string;
@@ -70,9 +71,11 @@ interface AWSStatus {
   dynamoTableConfigured: boolean;
 }
 
+interface AdminDashboardProps {
+  initialTab?: 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings';
+}
 
-
-export const AdminDashboard: React.FC = () => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
@@ -80,8 +83,8 @@ export const AdminDashboard: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
 
   // Navigation & UI States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'settings'>(
-    (location.state as any)?.activeTab || 'dashboard'
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings'>(
+    (location.state as any)?.activeTab || initialTab || 'dashboard'
   );
 
   useEffect(() => {
@@ -89,6 +92,7 @@ export const AdminDashboard: React.FC = () => {
       setActiveTab((location.state as any).activeTab);
     }
   }, [location.state]);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const [resViewMode, setResViewMode] = useState<'grid' | 'table'>('grid');
@@ -882,6 +886,16 @@ export const AdminDashboard: React.FC = () => {
             </button>
 
             <button
+              onClick={() => { setActiveTab('locations'); setIsSidebarOpen(false); }}
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
+                activeTab === 'locations' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
+              }`}
+            >
+              <MapPin size={16} />
+              <span>Delivery Locations</span>
+            </button>
+
+            <button
               onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
               className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
                 activeTab === 'settings' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
@@ -890,6 +904,7 @@ export const AdminDashboard: React.FC = () => {
               <Settings size={16} />
               <span>Settings</span>
             </button>
+
           </nav>
         </div>
 
@@ -2403,9 +2418,17 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ==================================================== */}
+        {/* DELIVERY LOCATIONS TAB */}
+        {/* ==================================================== */}
+        {activeTab === 'locations' && (
+          <AdminDeliveryLocations />
+        )}
+
+        {/* ==================================================== */}
         {/* SETTINGS TAB */}
         {/* ==================================================== */}
         {activeTab === 'settings' && (
+
           <div className="space-y-8">
             <div>
               <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Console Options</span>

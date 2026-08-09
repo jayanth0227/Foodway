@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, User as UserIcon, Sun, Moon, Home, Compass, Store, Heart, Package, Bell, LayoutGrid, Utensils, ReceiptText, ShoppingCart } from 'lucide-react';
+import { ShoppingBag, User as UserIcon, Sun, Moon, Home, Package, Bell, LayoutGrid, Utensils, ReceiptText, ShoppingCart } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { MobileProfileOverlay } from './MobileProfileOverlay';
+import { NotificationCenterModal } from './NotificationCenterModal';
 
 interface NavbarProps {
   onOpenAuth: (type: 'login' | 'register') => void;
@@ -16,13 +18,31 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   const [scrollProgress, setScrollProgress] = useState(0);
   const [activeSection, setActiveSection] = useState('home');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
 
   const { totalItemsCount } = useCart();
   const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
   const { user, role, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkUnread = () => {
+      try {
+        const stored = localStorage.getItem('mk_user_notifications');
+        if (stored) {
+          const list = JSON.parse(stored);
+          setUnreadCount(list.filter((n: any) => !n.read).length);
+        }
+      } catch (e) { }
+    };
+    checkUnread();
+    const interval = setInterval(checkUnread, 2000);
+    return () => clearInterval(interval);
+  }, [isNotificationModalOpen]);
 
   const navLinks = [
     { name: 'Home', id: 'home', hash: 'home' },
@@ -223,20 +243,25 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
               )}
             </button>
 
-            {/* Notification Icon - Mobile Only */}
+            {/* Notification Icon - Desktop & Mobile */}
             <button
               onClick={() => {
                 if (isAuthenticated) {
-                  navigate('/orders');
+                  setIsNotificationModalOpen(true);
                 } else {
                   onOpenAuth('login');
                 }
               }}
-              className="lg:hidden relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
+              className="relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
               title="Notifications"
               aria-label="Notifications"
             >
               <Bell size={18} className="group-hover:scale-110 transition-transform duration-300" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-rose-500 to-red-600 text-white text-[11px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-lg shadow-rose-500/40 pointer-events-none z-10">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* Profile Icon / User Initial Avatar - Mobile Only */}
@@ -356,13 +381,20 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         user={user}
         role={role}
         onLogout={handleLogoutClick}
+        onOpenAuth={onOpenAuth}
       />
 
-      {/* Static Solid Bottom Navigation Bar for Mobile/Tablet */}
+      {/* Notification Center Modal */}
+      <NotificationCenterModal
+        isOpen={isNotificationModalOpen}
+        onClose={() => setIsNotificationModalOpen(false)}
+      />
+
+      {/* Fixed Solid Bottom Navigation Bar for Mobile/Tablet */}
       <div
-        className={`fixed bottom-3 left-1/2 -translate-x-1/2 z-50 lg:hidden w-[calc(100%-24px)] max-w-md bg-white dark:bg-bg-cardSec border border-slate-200 dark:border-glass shadow-xl rounded-2xl px-2 py-1 flex items-center justify-around overflow-visible transition-all duration-300 ${isKeyboardOpen
-            ? 'opacity-0 pointer-events-none translate-y-12 scale-95'
-            : 'opacity-100 translate-y-0 scale-100'
+        className={`fixed bottom-3 inset-x-3 max-w-md mx-auto z-[99999] lg:hidden bg-white dark:bg-bg-cardSec border border-slate-200 dark:border-glass shadow-2xl rounded-2xl px-2 py-1 flex items-center justify-around overflow-visible transition-all duration-200 ${isKeyboardOpen
+          ? 'opacity-0 pointer-events-none translate-y-16'
+          : 'opacity-100 translate-y-0'
           }`}
       >
         {/* 1. Home */}
@@ -373,26 +405,26 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             setActiveSection('home');
           }}
           className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/' && activeSection === 'home'
-              ? 'text-primary font-black'
-              : 'text-text-muted hover:text-text-primary'
+            ? 'text-primary font-black'
+            : 'text-text-muted hover:text-text-primary'
             }`}
           aria-label="Home"
         >
           <Home size={19} className={location.pathname === '/' && activeSection === 'home' ? 'text-primary fill-primary/20' : ''} />
-          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Home</span>
+          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_home')}</span>
         </button>
 
         {/* 2. Explore Categories */}
         <button
           onClick={() => navigate('/categories')}
           className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/categories'
-              ? 'text-primary font-black'
-              : 'text-text-muted hover:text-text-primary'
+            ? 'text-primary font-black'
+            : 'text-text-muted hover:text-text-primary'
             }`}
           aria-label="Explore Categories"
         >
           <LayoutGrid size={19} className={location.pathname === '/categories' ? 'text-primary fill-primary/20' : ''} />
-          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Explore</span>
+          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_explore')}</span>
         </button>
 
         {/* 3. CENTER ACTION BUTTON: Stores & Restaurants */}
@@ -404,8 +436,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           {/* Solid Circular FAB Button */}
           <div
             className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/restaurants')
-                ? 'bg-gradient-to-r from-primary to-amber-400 text-black ring-2 ring-primary/40'
-                : 'bg-gradient-to-r from-primary to-amber-400 text-black hover:brightness-105'
+              ? 'bg-gradient-to-r from-primary to-amber-400 text-black ring-2 ring-primary/40'
+              : 'bg-gradient-to-r from-primary to-amber-400 text-black hover:brightness-105'
               }`}
           >
             <Utensils size={20} className="stroke-[2.5]" />
@@ -414,7 +446,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/restaurants') ? 'text-primary' : 'text-text-muted group-hover:text-text-primary'
               }`}
           >
-            Stores
+            {t('nav_stores')}
           </span>
         </button>
 
@@ -428,13 +460,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             }
           }}
           className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/orders'
-              ? 'text-primary font-black'
-              : 'text-text-muted hover:text-text-primary'
+            ? 'text-primary font-black'
+            : 'text-text-muted hover:text-text-primary'
             }`}
           aria-label="My Orders"
         >
           <ReceiptText size={19} className={location.pathname === '/orders' ? 'text-primary' : ''} />
-          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Orders</span>
+          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_orders')}</span>
         </button>
 
         {/* 5. Cart */}
@@ -442,8 +474,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           <button
             onClick={() => navigate('/cart')}
             className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/cart'
-                ? 'text-primary font-black'
-                : 'text-text-muted hover:text-text-primary'
+              ? 'text-primary font-black'
+              : 'text-text-muted hover:text-text-primary'
               }`}
             aria-label="Shopping Cart"
           >
@@ -455,7 +487,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                 </span>
               )}
             </div>
-            <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">Cart</span>
+            <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_cart')}</span>
           </button>
         )}
       </div>
