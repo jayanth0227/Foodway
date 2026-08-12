@@ -10,13 +10,26 @@ export class OrderService {
   async createOrder(data: {
     customerId: string;
     customerEmail: string;
-    restaurantId: string;
+    shopId?: string;
+    restaurantId?: string;
+    shopName?: string;
     restaurantName?: string;
     deliveryAddress: string;
     customerName?: string;
     customerPhone?: string;
     paymentMethod?: string;
-    items: Array<{ menuItemId: string; foodName: string; quantity: number; price: number }>;
+    items: Array<{
+      itemId?: string;
+      menuItemId?: string;
+      itemName?: string;
+      foodName?: string;
+      variantId?: string;
+      variantLabel?: string;
+      unit?: string;
+      quantity: number;
+      price?: number;
+      unitPrice?: number;
+    }>;
     subtotal: number;
     deliveryCharge?: number;
     tax?: number;
@@ -25,13 +38,39 @@ export class OrderService {
   }): Promise<{ order: IOrder; orderItems: IOrderItem[] }> {
     const orderId = generateOrderId();
     const now = new Date().toISOString();
+    const targetShopId = data.shopId || data.restaurantId || '';
+    const targetShopName = data.shopName || data.restaurantName || 'Partner Shop';
+
+    const orderItems: IOrderItem[] = data.items.map((item) => {
+      const itmId = item.itemId || item.menuItemId || '';
+      const itmName = item.itemName || item.foodName || 'Item';
+      const uPrice = item.unitPrice !== undefined ? Number(item.unitPrice) : Number(item.price || 0);
+      const qty = Number(item.quantity || 1);
+
+      return {
+        orderItemId: generateOrderItemId(),
+        orderId,
+        itemId: itmId,
+        menuItemId: itmId,
+        itemName: itmName,
+        foodName: itmName,
+        variantId: item.variantId || '',
+        variantLabel: item.variantLabel || '',
+        unit: item.unit || '',
+        quantity: qty,
+        price: uPrice,
+        total: qty * uPrice
+      };
+    });
 
     const order: IOrder = {
       orderId,
       customerId: data.customerId,
       customerEmail: data.customerEmail,
-      restaurantId: data.restaurantId,
-      restaurantName: data.restaurantName || 'Partner Restaurant',
+      shopId: targetShopId,
+      restaurantId: targetShopId,
+      shopName: targetShopName,
+      restaurantName: targetShopName,
       paymentMethod: data.paymentMethod || 'Online Payment',
       paymentStatus: 'SUCCESS',
       subtotal: Number(data.subtotal),
@@ -43,24 +82,13 @@ export class OrderService {
       deliveryAddress: data.deliveryAddress,
       customerName: data.customerName || 'Valued Customer',
       customerPhone: data.customerPhone || '',
-      items: data.items,
+      items: orderItems as any[],
       orderedAt: now,
       createdAt: now,
       updatedAt: now
     };
 
     await orderRepository.create(order);
-
-    const orderItems: IOrderItem[] = data.items.map((item) => ({
-      orderItemId: generateOrderItemId(),
-      orderId,
-      menuItemId: item.menuItemId,
-      foodName: item.foodName,
-      quantity: Number(item.quantity),
-      price: Number(item.price),
-      total: Number(item.quantity) * Number(item.price)
-    }));
-
     await orderItemRepository.createBatch(orderItems);
 
     // Phase 1 Real-Time Trigger: Emit Socket.io event to Merchant room
@@ -73,7 +101,7 @@ export class OrderService {
     // Phase 1 Push Notification Trigger: Send FCM push to Merchant
     void notificationService.notifyMerchantNewOrder({
       orderId: order.orderId,
-      restaurantId: order.restaurantId,
+      restaurantId: order.shopId,
       customerName: order.customerName || 'Valued Customer',
       totalAmount: order.totalAmount,
       itemsCount: orderItems.length,
@@ -112,12 +140,14 @@ export class OrderService {
         console.warn('Socket status emit error (non-blocking):', e);
       }
 
+      const sId = updated.shopId || updated.restaurantId || '';
+
       // FCM Push Notifications (Single non-duplicate triggers per event)
       if (status === 'CANCELLED') {
         void notificationService.notifyOrderCancelled({
           orderId: updated.orderId,
           customerId: updated.customerId,
-          restaurantId: updated.restaurantId,
+          restaurantId: sId,
           cancelledBy: cancelledByRole || 'RESTAURANT',
         });
       } else {
@@ -125,20 +155,20 @@ export class OrderService {
           orderId: updated.orderId,
           customerId: updated.customerId,
           customerEmail: updated.customerEmail,
-          restaurantName: updated.restaurantName || 'Partner Restaurant',
+          restaurantName: updated.shopName || updated.restaurantName || 'Partner Shop',
           status: updated.status,
         });
 
         if (status === 'READY') {
           void notificationService.notifyDeliveryPartnersPickupAvailable({
             orderId: updated.orderId,
-            restaurantId: updated.restaurantId,
-            restaurantName: updated.restaurantName || 'Partner Restaurant',
+            restaurantId: sId,
+            restaurantName: updated.shopName || updated.restaurantName || 'Partner Shop',
           });
         } else if (status === 'DELIVERED') {
           void notificationService.notifyDeliveryCompleted({
             orderId: updated.orderId,
-            restaurantId: updated.restaurantId,
+            restaurantId: sId,
           });
         }
       }

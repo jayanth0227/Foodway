@@ -22,11 +22,8 @@ export const FloatingCartBar: React.FC = () => {
   }
 
   const handleCheckout = () => {
-    if (window.innerWidth < 1024) {
-      navigate('/cart');
-    } else {
-      setCartOpen(true);
-    }
+    setCartOpen(false);
+    navigate('/cart');
   };
 
   const displayName = lastAddedItem?.name || (lastAddedItem as any)?.restaurantName || 'Foodway Orders';

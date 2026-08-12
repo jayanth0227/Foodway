@@ -28,15 +28,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  const userRole = role.toUpperCase() as Role;
+  const userRole = (role || '').toUpperCase() as Role;
+  const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole as string);
 
-  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole) && !(isShopVendor && (allowedRoles.includes('SHOP') || allowedRoles.includes('RESTAURANT')))) {
     // Authenticated user attempting to access unauthorized role route
     // Redirect based on user's actual role:
     if (userRole === 'ADMIN') {
       return <Navigate to="/admin/dashboard" replace />;
-    } else if (userRole === 'RESTAURANT') {
-      return <Navigate to="/restaurant/dashboard" replace />;
+    } else if (isShopVendor) {
+      return <Navigate to="/shop/dashboard" replace />;
+    } else if (userRole === 'DELIVERY_PARTNER' || (userRole as string) === 'DELIVERY' || (userRole as string) === 'RIDER') {
+      return <Navigate to="/delivery/dashboard" replace />;
     } else {
       return <Navigate to="/" replace />;
     }

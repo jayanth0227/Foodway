@@ -46,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
   const navLinks = [
     { name: 'Home', id: 'home', hash: 'home' },
-    { name: 'Restaurants', id: 'restaurants', hash: 'featured-restaurants' },
+    { name: 'Shops & Stores', id: 'shops', hash: 'featured-shops' },
     { name: 'Contact', id: 'contact', hash: 'footer' },
   ];
 
@@ -146,7 +146,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, link: typeof navLinks[0]) => {
     e.preventDefault();
-    if (location.pathname !== '/') {
+    if (link.id === 'shops') {
+      navigate('/shops');
+    } else if (location.pathname !== '/') {
       navigate('/', { state: { scrollTo: link.hash } });
     } else {
       const el = document.getElementById(link.hash);
@@ -205,11 +207,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           {/* Navigation Links - Desktop */}
           <nav className="hidden lg:flex items-center space-x-9">
             {navLinks.map((link) => {
-              const isActive = activeSection === link.id && location.pathname === '/';
+              const isActive = (link.id === 'shops' && (location.pathname === '/shops' || location.pathname.startsWith('/shops/'))) || (activeSection === link.id && location.pathname === '/');
               return (
                 <a
                   key={link.id}
-                  href={`#${link.hash}`}
+                  href={link.id === 'shops' ? '/shops' : `#${link.hash}`}
                   onClick={(e) => handleNavClick(e, link)}
                   className={`text-xs font-bold tracking-[0.12em] uppercase transition-colors duration-300 relative py-2.5 ${isActive ? 'text-primary' : 'text-text-muted hover:text-text-primary'
                     }`}
@@ -427,15 +429,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_explore')}</span>
         </button>
 
-        {/* 3. CENTER ACTION BUTTON: Stores & Restaurants */}
+        {/* 3. CENTER ACTION BUTTON: Shops & Supermarkets */}
         <button
-          onClick={() => navigate('/restaurants')}
+          onClick={() => navigate('/shops')}
           className="relative -top-3 flex flex-col items-center justify-center cursor-pointer group z-20 shrink-0"
-          aria-label="Stores & Restaurants"
+          aria-label="Shops & Supermarkets"
         >
           {/* Solid Circular FAB Button */}
           <div
-            className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/restaurants')
+            className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants')
               ? 'bg-gradient-to-r from-primary to-amber-400 text-black ring-2 ring-primary/40'
               : 'bg-gradient-to-r from-primary to-amber-400 text-black hover:brightness-105'
               }`}
@@ -443,10 +445,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             <Utensils size={20} className="stroke-[2.5]" />
           </div>
           <span
-            className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/restaurants') ? 'text-primary' : 'text-text-muted group-hover:text-text-primary'
+            className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants') ? 'text-primary' : 'text-text-muted group-hover:text-text-primary'
               }`}
           >
-            {t('nav_stores')}
+            Shops
           </span>
         </button>
 

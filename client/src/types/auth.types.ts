@@ -1,10 +1,20 @@
-export type Role = 'ADMIN' | 'RESTAURANT' | 'USER' | 'DELIVERY_PARTNER';
+export type Role = 'ADMIN' | 'SHOP' | 'RESTAURANT' | 'USER' | 'DELIVERY_PARTNER';
+
+export type ShopType =
+  | 'FOOD'
+  | 'SWEETS'
+  | 'GROCERY'
+  | 'FRUITS_VEGETABLES'
+  | 'DAIRY'
+  | 'BEVERAGES'
+  | 'GENERAL_STORE';
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: Role;
+  shopId?: string;
   restaurantId?: string;
 }
 
@@ -23,6 +33,7 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  shopId: string | null;
   restaurantId: string | null;
   userId: string | null;
 }
@@ -30,5 +41,4 @@ export interface AuthState {
 export interface LoginCredentials {
   email: string;
   password?: string;
-  targetRole?: string;
 }

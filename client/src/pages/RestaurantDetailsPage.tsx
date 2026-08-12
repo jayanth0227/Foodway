@@ -25,6 +25,7 @@ export const RestaurantDetailsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDietary, setSelectedDietary] = useState<'All' | 'Veg' | 'Non-Veg'>('All');
+  const [selectedVariantsMap, setSelectedVariantsMap] = useState<Record<string, any>>({});
   const [isCategoryFabOpen, setIsCategoryFabOpen] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -341,7 +342,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
                   type="text"
-                  placeholder={`Search in ${restaurant?.name || 'this restaurant'}...`}
+                  placeholder={`Search in ${restaurant?.name || 'this store'}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-11 pr-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/60 outline-none transition-all"
@@ -416,14 +417,23 @@ export const RestaurantDetailsPage: React.FC = () => {
                 const dishId = item.menuItemId || item.id;
                 const isRestaurantClosed = restaurant && (restaurant.isOpen === false || restaurant.status === 'closed');
                 const isOutOfStock = isRestaurantClosed || item.isAvailable === false || item.status === 'UNAVAILABLE' || item.status === 'disabled';
-                const qtyInCart = getItemQuantity(dishId);
+
+                const itemVariants = Array.isArray(item.variants) && item.variants.length > 0
+                  ? item.variants
+                  : [{ id: `${dishId}-V1`, variantId: `${dishId}-V1`, quantity: 1, unit: 'pcs', price: Number(item.price), label: 'Standard' }];
+
+                const activeVariant = selectedVariantsMap[dishId] || itemVariants[0];
+                const effectivePrice = activeVariant ? Number(activeVariant.price) : Number(item.price);
+                const activeVariantId = activeVariant?.id || activeVariant?.variantId;
+                const itemKey = `${dishId}-${activeVariantId}`;
+                const qtyInCart = getItemQuantity(dishId, activeVariantId);
 
                 const dishObj = {
                   id: dishId,
                   name: removeEmojis(item.foodName || item.name || ''),
                   description: removeEmojis(item.description || ''),
-                  price: Number(item.price),
-                  category: removeEmojis(item.category || item.foodCategory || 'Main Course'),
+                  price: effectivePrice,
+                  category: removeEmojis(item.category || item.foodCategory || 'General'),
                   image: item.foodImage || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
                   type: (item.isVeg !== false ? 'veg' : 'non-veg') as 'veg' | 'non-veg',
                   isVeg: item.isVeg !== false,
@@ -431,7 +441,8 @@ export const RestaurantDetailsPage: React.FC = () => {
                   restaurantIsOpen: !isRestaurantClosed,
                   rating: 4.8,
                   restaurantId: restaurant?.id || id || item.restaurantId,
-                  restaurantName: removeEmojis(restaurant?.name || 'Partner Restaurant')
+                  restaurantName: removeEmojis(restaurant?.name || 'Partner Shop'),
+                  variants: itemVariants
                 };
 
                 return (
@@ -467,9 +478,38 @@ export const RestaurantDetailsPage: React.FC = () => {
                         {dishObj.name}
                       </h3>
 
+                      {/* Interactive Weight / Quantity Variant Selector Chips */}
+                      {itemVariants.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 pb-1">
+                          {itemVariants.map((v: any, idx: number) => {
+                            const isSelected = (activeVariant.id || activeVariant.variantId) === (v.id || v.variantId);
+                            const vLabel = v.label || `${v.quantity} ${v.unit}`;
+                            return (
+                              <button
+                                key={v.id || idx}
+                                type="button"
+                                onClick={() => setSelectedVariantsMap(prev => ({ ...prev, [dishId]: v }))}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all duration-200 cursor-pointer ${isSelected
+                                  ? 'bg-primary text-black border-primary font-black shadow-md scale-105'
+                                  : 'bg-bg-dark/70 text-text-secondary border-glass hover:border-primary/40 hover:text-primary'
+                                  }`}
+                              >
+                                <span>{vLabel}</span>
+                                <span className="ml-1 opacity-90">₹{Number(v.price).toFixed(0)}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
                       {/* Dish Price */}
-                      <div className="font-black text-base sm:text-lg text-text-primary font-display">
-                        ₹{dishObj.price.toFixed(2)}
+                      <div className="font-black text-base sm:text-lg text-text-primary font-display flex items-center gap-2 pt-0.5">
+                        <span>₹{effectivePrice.toFixed(2)}</span>
+                        {activeVariant?.compareAtPrice && Number(activeVariant.compareAtPrice) > effectivePrice && (
+                          <span className="text-xs text-text-muted line-through font-normal">
+                            ₹{Number(activeVariant.compareAtPrice).toFixed(2)}
+                          </span>
+                        )}
                       </div>
 
                       {/* Description */}
@@ -518,7 +558,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                           <div className="flex items-center bg-bg-cardSec text-primary rounded-xl px-2 py-1 shadow-md border-2 border-primary">
                             <button
                               type="button"
-                              onClick={() => reduceQuantity(dishId)}
+                              onClick={() => reduceQuantity(itemKey)}
                               className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                               title="Decrease quantity"
                             >
@@ -529,7 +569,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                             </span>
                             <button
                               type="button"
-                              onClick={() => addToCart(dishObj)}
+                              onClick={() => addToCart(dishObj, activeVariant)}
                               className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                               title="Increase quantity"
                             >
@@ -539,7 +579,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => addToCart(dishObj)}
+                            onClick={() => addToCart(dishObj, activeVariant)}
                             className="px-5 py-1.5 rounded-xl bg-bg-cardSec text-primary border-2 border-primary/80 hover:border-primary font-black text-xs uppercase tracking-wider shadow-md hover:bg-primary hover:text-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
                           >
                             <span>ADD</span>

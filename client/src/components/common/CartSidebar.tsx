@@ -164,50 +164,62 @@ export const CartSidebar: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      cartItems.map((item) => (
-                        <div
-                          key={item.dish.id}
-                          className="flex items-center space-x-4 bg-bg-cardSec/40 backdrop-blur-md p-3.5 rounded-2xl border border-glass hover:border-primary/30 transition-all duration-500 group"
-                        >
-                          <img
-                            src={item.dish.image}
-                            alt={item.dish.name}
-                            className="w-16 h-16 rounded-xl object-cover border border-glass group-hover:scale-[1.03] transition-transform duration-500"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-sm font-bold text-text-primary truncate font-display tracking-tight">
-                              {item.dish.name}
-                            </h4>
-                            <p className="text-xs text-primary font-bold mt-1">
-                              ₹{item.dish.price.toFixed(2)}
-                            </p>
-                            <div className="flex items-center space-x-2 mt-2.5">
-                               <button
-                                 onClick={() => reduceQuantity(item.dish.id)}
-                                 className="p-1 rounded bg-glass-subtle hover:bg-glass-subtleHover text-text-secondary transition-colors"
-                               >
-                                 <Minus size={12} />
-                               </button>
-                               <span className="text-xs font-bold px-2 w-4 text-center">
-                                 {item.quantity}
-                               </span>
-                               <button
-                                 onClick={() => addToCart(item.dish)}
-                                 disabled={isRestaurantClosed}
-                                 className="p-1 rounded bg-glass-subtle hover:bg-glass-subtleHover text-text-secondary transition-colors disabled:opacity-40"
-                               >
-                                 <Plus size={12} />
-                               </button>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(item.dish.id)}
-                            className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                      cartItems.map((item) => {
+                        const variantPrice = item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price);
+                        const variantLabel = item.selectedVariant ? (item.selectedVariant.label || `${item.selectedVariant.quantity} ${item.selectedVariant.unit}`) : null;
+                        const key = item.itemKey || item.dish.id;
+
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center space-x-4 bg-bg-cardSec/40 backdrop-blur-md p-3.5 rounded-2xl border border-glass hover:border-primary/30 transition-all duration-500 group"
                           >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ))
+                            <img
+                              src={item.dish.image}
+                              alt={item.dish.name}
+                              className="w-16 h-16 rounded-xl object-cover border border-glass group-hover:scale-[1.03] transition-transform duration-500 shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-bold text-text-primary truncate font-display tracking-tight">
+                                {item.dish.name}
+                              </h4>
+                              {variantLabel && (
+                                <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-primary/15 text-primary border border-primary/25">
+                                  {variantLabel}
+                                </span>
+                              )}
+                              <p className="text-xs text-primary font-extrabold mt-1">
+                                ₹{variantPrice.toFixed(2)}
+                              </p>
+                              <div className="flex items-center space-x-2 mt-2">
+                                <button
+                                  onClick={() => reduceQuantity(key)}
+                                  className="p-1 rounded bg-glass-subtle hover:bg-glass-subtleHover text-text-secondary transition-colors cursor-pointer"
+                                >
+                                  <Minus size={12} />
+                                </button>
+                                <span className="text-xs font-bold px-2 w-4 text-center">
+                                  {item.quantity}
+                                </span>
+                                <button
+                                  onClick={() => addToCart(item.dish, item.selectedVariant)}
+                                  disabled={isRestaurantClosed}
+                                  className="p-1 rounded bg-glass-subtle hover:bg-glass-subtleHover text-text-secondary transition-colors disabled:opacity-40 cursor-pointer"
+                                >
+                                  <Plus size={12} />
+                                </button>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => removeFromCart(key)}
+                              className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer shrink-0"
+                              title="Remove item"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
 

@@ -453,23 +453,29 @@ export const AdminDeliveryLocations: React.FC = () => {
 
       {/* Empty State */}
       {!loading && !error && filteredLocations.length === 0 && (
-        <div className="p-12 rounded-3xl border border-glass bg-glass-subtle text-center space-y-4 max-w-lg mx-auto">
-          <div className="p-4 rounded-full bg-primary/10 text-primary inline-flex">
-            <MapPin size={32} />
+        <div className="p-10 sm:p-14 rounded-3xl border border-primary/20 bg-bg-cardSec/80 backdrop-blur-xl text-center space-y-5 max-w-lg mx-auto shadow-luxury relative overflow-hidden group">
+          <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none group-hover:scale-150 transition-all duration-700" />
+          
+          <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/30 text-primary flex items-center justify-center mx-auto shadow-lg shadow-primary/10 group-hover:scale-110 transition-transform duration-300">
+            <MapPin size={36} />
           </div>
-          <h3 className="text-lg font-bold text-text-primary">No delivery locations found</h3>
-          <p className="text-xs text-text-muted font-medium">
-            {searchQuery || statusFilter !== 'ALL' || regionFilter !== 'ALL'
-              ? 'No locations match your current search or filter criteria.'
-              : 'Start by adding your first delivery location.'}
-          </p>
+          
+          <div className="space-y-1.5">
+            <h3 className="text-xl font-black font-display text-text-primary tracking-tight">No Delivery Locations Found</h3>
+            <p className="text-xs text-text-muted font-medium max-w-sm mx-auto leading-relaxed">
+              {searchQuery || statusFilter !== 'ALL' || regionFilter !== 'ALL'
+                ? 'No locations match your current search or filter criteria. Try clearing search filters.'
+                : 'Start expanding your service territory by adding your first delivery area in Konaseema.'}
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={handleOpenAddModal}
-            className="px-5 py-2.5 rounded-xl bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-md hover:brightness-110 transition-all inline-flex items-center gap-2 cursor-pointer"
+            className="px-6 py-3.5 rounded-xl bg-primary hover:bg-primary-dark text-black font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all duration-300 inline-flex items-center gap-2.5 cursor-pointer"
           >
-            <Plus size={16} />
-            <span>+ Add Location</span>
+            <Plus size={18} />
+            <span>+ Add Delivery Location</span>
           </button>
         </div>
       )}
@@ -670,25 +676,25 @@ export const AdminDeliveryLocations: React.FC = () => {
       {/* ========================================================= */}
       <AnimatePresence>
         {(isAddModalOpen || editingLocation) && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="w-full max-w-lg rounded-3xl border border-glass bg-bg-darkSec p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden"
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-lg rounded-3xl border border-primary/30 bg-bg-cardSec p-6 sm:p-8 shadow-luxury space-y-6 relative overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-glass pb-4">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
-                    <MapPin size={18} />
+              <div className="flex items-center justify-between border-b border-glass pb-5">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-primary/15 text-primary border border-primary/30 shadow-md">
+                    <MapPin size={22} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold font-display text-text-primary">
-                      {editingLocation ? 'Edit Delivery Location' : 'Add Delivery Location'}
+                    <h2 className="text-xl font-black font-display text-text-primary tracking-tight">
+                      {editingLocation ? 'Edit Delivery Location' : 'Add New Delivery Location'}
                     </h2>
-                    <p className="text-xs text-text-muted font-medium">
-                      {editingLocation ? 'Update details for this delivery area.' : 'Add a new area where MK Delivery operates.'}
+                    <p className="text-xs text-text-muted font-medium mt-0.5">
+                      {editingLocation ? 'Update operational details for this location.' : 'Register a new active service zone in Konaseema.'}
                     </p>
                   </div>
                 </div>
@@ -699,26 +705,26 @@ export const AdminDeliveryLocations: React.FC = () => {
                     setIsAddModalOpen(false);
                     setEditingLocation(null);
                   }}
-                  className="p-2 rounded-xl bg-glass border border-glass text-text-muted hover:text-text-primary transition-all cursor-pointer"
+                  className="p-2 rounded-xl bg-glass border border-glass text-text-muted hover:text-text-primary hover:bg-glass-subtle transition-all cursor-pointer"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
 
               {/* Form Error Banner */}
               {formError && (
-                <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs font-semibold text-rose-300 flex items-center gap-2">
-                  <AlertTriangle size={15} className="shrink-0 text-rose-400" />
+                <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-semibold text-rose-300 flex items-center gap-2.5 shadow-md">
+                  <AlertTriangle size={16} className="shrink-0 text-rose-400" />
                   <span>{formError}</span>
                 </div>
               )}
 
               {/* Form Body */}
-              <form onSubmit={editingLocation ? handleEditSubmit : handleAddSubmit} className="space-y-4">
+              <form onSubmit={editingLocation ? handleEditSubmit : handleAddSubmit} className="space-y-5">
                 
                 {/* Location Name */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-1.5">
+                  <label className="block text-[10px] font-extrabold uppercase tracking-widest text-text-muted mb-2">
                     Location Name <span className="text-rose-400">*</span>
                   </label>
                   <input
@@ -727,7 +733,7 @@ export const AdminDeliveryLocations: React.FC = () => {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g. Eethakota"
-                    className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass text-xs font-semibold text-text-primary outline-none focus:border-primary transition-all"
+                    className="w-full px-4 py-3 rounded-xl bg-bg-dark/80 border border-glass text-xs font-semibold text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted/50"
                   />
                 </div>
 

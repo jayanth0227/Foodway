@@ -1,12 +1,4 @@
-import React from 'react';
-import { ProtectedRoute } from '../auth/ProtectedRoute';
+import ShopRouteGuard from './ShopRouteGuard';
 
-interface RestaurantRouteGuardProps {
-  children: React.ReactElement;
-}
-
-export const RestaurantRouteGuard: React.FC<RestaurantRouteGuardProps> = ({ children }) => {
-  return <ProtectedRoute allowedRoles={['RESTAURANT']}>{children}</ProtectedRoute>;
-};
-
-export default RestaurantRouteGuard;
+export { ShopRouteGuard as RestaurantRouteGuard };
+export default ShopRouteGuard;

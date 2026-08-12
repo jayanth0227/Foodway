@@ -10,10 +10,6 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  UserCheck,
-  Store,
-  ShieldAlert,
-  ChevronDown,
   ShieldCheck,
   Bike,
   UtensilsCrossed,
@@ -32,7 +28,6 @@ interface AuthModalsProps {
 export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, setType }) => {
   const navigate = useNavigate();
   const { login, register, isLoading } = useAuth();
-  const [selectedRole, setSelectedRole] = useState<'USER' | 'RESTAURANT' | 'ADMIN'>('USER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -58,7 +53,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
         return;
       }
 
-      const res = await login(email, password, selectedRole);
+      const res = await login(email, password);
       if (res.success && res.role) {
         onClose();
         const roleUpper = res.role.toUpperCase();
@@ -182,37 +177,7 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
 
               {/* Form Fields */}
               <form onSubmit={handleSubmit} className="space-y-3.5">
-                {/* Role Selection Dropdown (Only shown for Login) */}
-                {type === 'login' && (
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-[#A67C52] flex items-center gap-1.5">
-                      <UserCheck size={14} />
-                      <span>LOGIN AS (SELECT MODULE)</span>
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A67C52]">
-                        {selectedRole === 'USER' && <UserIcon size={17} />}
-                        {selectedRole === 'RESTAURANT' && <Store size={17} />}
-                        {selectedRole === 'ADMIN' && <ShieldAlert size={17} />}
-                      </div>
-                      <select
-                        value={selectedRole}
-                        onChange={(e) => {
-                          setSelectedRole(e.target.value as any);
-                          setError(null);
-                        }}
-                        className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 focus:border-[#A67C52] rounded-xl py-2.5 pl-10 pr-10 text-sm text-stone-900 dark:text-white font-semibold focus:outline-none transition-all cursor-pointer appearance-none"
-                      >
-                        <option value="USER">User / Customer Portal</option>
-                        <option value="RESTAURANT">Merchant / Restaurant Partner</option>
-                        <option value="ADMIN">System Administrator</option>
-                      </select>
-                      <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-stone-400">
-                        <ChevronDown size={17} />
-                      </div>
-                    </div>
-                  </div>
-                )}
+
 
                 {type === 'register' && (
                   <>

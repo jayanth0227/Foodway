@@ -4,20 +4,22 @@ import type { DishItem } from '../utils/mockData';
 export interface CartItem {
   dish: DishItem;
   quantity: number;
+  selectedVariant?: any;
+  itemKey: string;
 }
 
 interface CartContextType {
   cartItems: CartItem[];
-  addToCart: (dish: DishItem) => void;
-  removeFromCart: (dishId: string) => void;
-  reduceQuantity: (dishId: string) => void;
+  addToCart: (dish: DishItem, selectedVariant?: any) => void;
+  removeFromCart: (itemKey: string) => void;
+  reduceQuantity: (itemKey: string) => void;
   clearCart: () => void;
-  getItemQuantity: (dishId: string) => number;
+  getItemQuantity: (dishId: string, variantId?: string) => number;
   totalAmount: number;
   totalItemsCount: number;
   isCartOpen: boolean;
   setCartOpen: (open: boolean) => void;
-  lastAddedItem: { name: string; quantity: number; image: string; price: number; timestamp?: number } | null;
+  lastAddedItem: { name: string; quantity: number; image: string; price: number; variantLabel?: string; timestamp?: number } | null;
   dismissToast: () => void;
 }
 
@@ -26,7 +28,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setCartOpen] = useState(false);
-  const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number; timestamp?: number } | null>(null);
+  const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number; variantLabel?: string; timestamp?: number } | null>(null);
 
   // Load cart from localStorage on init
   useEffect(() => {
@@ -45,34 +47,47 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('mk_cart', JSON.stringify(cartItems));
   }, [cartItems]);
 
-  const getItemQuantity = (dishId: string): number => {
-    const found = cartItems.find(item => item.dish.id === dishId);
+  const getItemKey = (dishId: string, variantId?: string) => {
+    return variantId ? `${dishId}-${variantId}` : dishId;
+  };
+
+  const getItemQuantity = (dishId: string, variantId?: string): number => {
+    const key = getItemKey(dishId, variantId);
+    const found = cartItems.find(item => item.itemKey === key || item.dish.id === dishId);
     return found ? found.quantity : 0;
   };
 
-  const addToCart = (dish: DishItem) => {
+  const addToCart = (dish: DishItem, selectedVariant?: any) => {
     if (dish.isAvailable === false || (dish as any).isOpen === false || (dish as any).restaurantIsOpen === false) {
-      alert('This restaurant is currently closed or offline and not accepting orders.');
+      alert('This shop is currently closed or offline and not accepting orders.');
       return;
     }
+
+    const variantToUse = selectedVariant || (dish.variants && dish.variants.length > 0 ? dish.variants[0] : dish.selectedVariant);
+    const itemKey = variantToUse ? `${dish.id}-${variantToUse.id || variantToUse.variantId}` : dish.id;
+    const effectivePrice = variantToUse ? Number(variantToUse.price) : Number(dish.price);
+
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.dish.id === dish.id);
+      const existingItem = prevItems.find((item) => item.itemKey === itemKey);
       let newQty = 1;
       let newItems: CartItem[];
       if (existingItem) {
         newQty = existingItem.quantity + 1;
         newItems = prevItems.map((item) =>
-          item.dish.id === dish.id ? { ...item, quantity: newQty } : item
+          item.itemKey === itemKey ? { ...item, quantity: newQty } : item
         );
       } else {
-        newItems = [...prevItems, { dish, quantity: 1 }];
+        newItems = [...prevItems, { dish, quantity: 1, selectedVariant: variantToUse, itemKey }];
       }
+
+      const variantLabel = variantToUse ? `${variantToUse.quantity} ${variantToUse.unit}` : undefined;
 
       setLastAddedItem({
         name: dish.name,
         quantity: newQty,
         image: dish.image,
-        price: dish.price,
+        price: effectivePrice,
+        variantLabel,
         timestamp: Date.now()
       });
 
@@ -80,23 +95,26 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const reduceQuantity = (dishId: string) => {
+  const reduceQuantity = (itemKeyOrDishId: string) => {
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.dish.id === dishId);
+      const existingItem = prevItems.find((item) => item.itemKey === itemKeyOrDishId || item.dish.id === itemKeyOrDishId);
       if (existingItem) {
+        const targetKey = existingItem.itemKey;
         if (existingItem.quantity === 1) {
-          return prevItems.filter((item) => item.dish.id !== dishId);
+          return prevItems.filter((item) => item.itemKey !== targetKey);
         }
         const updated = prevItems.map((item) =>
-          item.dish.id === dishId ? { ...item, quantity: item.quantity - 1 } : item
+          item.itemKey === targetKey ? { ...item, quantity: item.quantity - 1 } : item
         );
-        const updatedItem = updated.find(i => i.dish.id === dishId);
+        const updatedItem = updated.find(i => i.itemKey === targetKey);
         if (updatedItem) {
+          const v = updatedItem.selectedVariant;
           setLastAddedItem({
             name: updatedItem.dish.name,
             quantity: updatedItem.quantity,
             image: updatedItem.dish.image,
-            price: updatedItem.dish.price
+            price: v ? Number(v.price) : updatedItem.dish.price,
+            variantLabel: v ? `${v.quantity} ${v.unit}` : undefined
           });
         }
         return updated;
@@ -105,8 +123,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const removeFromCart = (dishId: string) => {
-    setCartItems((prevItems) => prevItems.filter((item) => item.dish.id !== dishId));
+  const removeFromCart = (itemKeyOrDishId: string) => {
+    setCartItems((prevItems) => prevItems.filter((item) => item.itemKey !== itemKeyOrDishId && item.dish.id !== itemKeyOrDishId));
   };
 
   const clearCart = () => {
@@ -119,7 +137,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const totalAmount = cartItems.reduce(
-    (acc, item) => acc + item.dish.price * item.quantity,
+    (acc, item) => {
+      const p = item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price);
+      return acc + p * item.quantity;
+    },
     0
   );
 

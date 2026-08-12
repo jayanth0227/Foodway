@@ -47,10 +47,14 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+import shopRouter from './routes/shop.routes';
+
 // Unified Authentication & Notification API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api', deliveryLocationRouter);
+app.use('/api/shops', shopRouter);
+app.use('/api/restaurants', shopRouter);
 
 
 // Health Check API
@@ -158,10 +162,13 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
     );
 
     if (targetRes) {
-      await restaurantService.updateProfile(targetRes.restaurantId, {
-        isOpen,
-        status: nextStatus
-      });
+      const targetId = targetRes.shopId || targetRes.restaurantId || '';
+      if (targetId) {
+        await restaurantService.updateProfile(targetId, {
+          isOpen,
+          status: nextStatus
+        });
+      }
     }
 
     // 2. Also update in main table if present
@@ -585,7 +592,7 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
               price: Number(di.price || 0),
               image: di.foodImage || '',
               restaurantId: di.restaurantId || o.restaurantId,
-              restaurantName: di.restaurantName || o.restaurantName || resMap[di.restaurantId] || resMap[o.restaurantId]
+              restaurantName: di.restaurantName || o.restaurantName || (di.restaurantId ? resMap[di.restaurantId] : '') || (o.restaurantId ? resMap[o.restaurantId] : '')
             }));
           }
         } catch (e) { }
@@ -595,30 +602,32 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
       const enrichedItems = itemsList.map((i: any) => ({
         ...i,
         restaurantId: i.restaurantId || o.restaurantId,
-        restaurantName: i.restaurantName || o.restaurantName || resMap[i.restaurantId] || resMap[o.restaurantId] || 'Gourmet Kitchen'
+        restaurantName: i.restaurantName || o.restaurantName || (i.restaurantId ? resMap[i.restaurantId] : '') || (o.restaurantId ? resMap[o.restaurantId] : '') || 'Gourmet Kitchen'
       }));
 
       if (!parentGroupMap[parentId]) {
+        const resName = o.restaurantName || (o.restaurantId ? resMap[o.restaurantId] : '') || 'Multi-Vendor Order';
         parentGroupMap[parentId] = {
           ...o,
           orderId: parentId,
           id: parentId,
-          restaurantName: o.restaurantName || resMap[o.restaurantId] || 'Multi-Vendor Order',
+          restaurantName: resName,
           items: [...enrichedItems],
           subtotal: Number(o.subtotal || 0),
           deliveryCharge: Number(o.deliveryCharge || 0),
           tax: Number(o.tax || 0),
           totalAmount: Number(o.totalAmount || 0),
-          vendorNames: new Set([o.restaurantName || resMap[o.restaurantId] || 'Vendor'])
+          vendorNames: new Set([resName])
         };
       } else {
         const existing = parentGroupMap[parentId];
+        const resName = o.restaurantName || (o.restaurantId ? resMap[o.restaurantId] : '') || 'Vendor';
         existing.items = [...existing.items, ...enrichedItems];
         existing.subtotal += Number(o.subtotal || 0);
         existing.deliveryCharge += Number(o.deliveryCharge || 0);
         existing.tax += Number(o.tax || 0);
         existing.totalAmount += Number(o.totalAmount || 0);
-        existing.vendorNames.add(o.restaurantName || resMap[o.restaurantId] || 'Vendor');
+        existing.vendorNames.add(resName);
       }
     }
 
@@ -842,7 +851,7 @@ app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
       bannerImage: data.image || data.bannerImage || ''
     });
 
-    const saved = result.restaurant;
+    const saved = result.shop || (result as any).restaurant;
 
     return res.json({
       success: true,
@@ -1154,25 +1163,29 @@ app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
       menuItemId: menuItemData.id || menuItemData.menuItemId,
       restaurantId,
       foodName: name,
+      name,
       description: menuItemData.description,
       category: menuItemData.category,
       price: menuItemData.price,
       preparationTime: menuItemData.prepTime || menuItemData.preparationTime,
       isVeg: menuItemData.isVeg,
       foodImage: menuItemData.image || menuItemData.foodImage,
-      isAvailable: menuItemData.isAvailable
+      image: menuItemData.image || menuItemData.foodImage,
+      isAvailable: menuItemData.isAvailable,
+      variants: Array.isArray(menuItemData.variants) ? menuItemData.variants : []
     });
 
     res.json({
       success: true,
       message: 'Menu item saved successfully.',
-      item: {
+      item: saved ? {
         ...saved,
-        id: saved.menuItemId,
-        name: saved.foodName,
-        image: saved.foodImage,
-        prepTime: saved.preparationTime
-      }
+        id: saved.itemId || saved.menuItemId,
+        name: saved.name || saved.foodName,
+        image: saved.image || saved.foodImage,
+        prepTime: saved.preparationTime,
+        variants: saved.variants || menuItemData.variants || []
+      } : null
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to save menu item.', details: error.message });

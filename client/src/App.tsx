@@ -13,7 +13,9 @@ import { CartSidebar } from './components/common/CartSidebar';
 import { AuthModals } from './components/common/AuthModals';
 import { Home } from './pages/Home';
 import { RestaurantsPage } from './pages/RestaurantsPage';
+import { ShopsPage } from './pages/ShopsPage';
 import { RestaurantDetailsPage } from './pages/RestaurantDetailsPage';
+import { ShopDetailsPage } from './pages/ShopDetailsPage';
 import { CartPage } from './pages/CartPage';
 import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
 import { ItemAddedToast } from './components/common/ItemAddedToast';
@@ -23,6 +25,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminOrderDetailsPage } from './pages/AdminOrderDetailsPage';
 import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartnerPage';
 import { RestaurantDashboard } from './pages/RestaurantDashboard';
+import { ShopDashboard } from './pages/ShopDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { DishesPage } from './pages/DishesPage';
@@ -78,8 +81,8 @@ const AppContent: React.FC = () => {
   }, [location.pathname, location.search]);
 
   const isPortalRoute = location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/restaurant/') ||
-    location.pathname === '/restaurant' ||
+    location.pathname.startsWith('/shop/dashboard') ||
+    location.pathname.startsWith('/restaurant/dashboard') ||
     location.pathname.startsWith('/delivery') ||
     location.pathname === '/login' ||
     location.pathname === '/register';
@@ -99,8 +102,11 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/dishes" element={<DishesPage />} />
-          <Route path="/restaurants" element={<RestaurantsPage />} />
-          <Route path="/restaurants/:id" element={<RestaurantDetailsPage />} />
+          <Route path="/items" element={<DishesPage />} />
+          <Route path="/restaurants" element={<ShopsPage />} />
+          <Route path="/shops" element={<ShopsPage />} />
+          <Route path="/restaurants/:id" element={<ShopDetailsPage />} />
+          <Route path="/shops/:id" element={<ShopDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/orders" element={<CustomerOrdersPage />} />
@@ -157,13 +163,23 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/shop" element={<Login />} />
+          <Route path="/shop/login" element={<Login />} />
           <Route path="/restaurant" element={<Login />} />
           <Route path="/restaurant/login" element={<Login />} />
           <Route
+            path="/shop/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT', 'ADMIN']}>
+                <ShopDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/restaurant/dashboard"
             element={
-              <ProtectedRoute allowedRoles={['RESTAURANT']}>
-                <RestaurantDashboard />
+              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT', 'ADMIN']}>
+                <ShopDashboard />
               </ProtectedRoute>
             }
           />

@@ -98,6 +98,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const [resViewMode, setResViewMode] = useState<'grid' | 'table'>('grid');
   const [selectedResProfile, setSelectedResProfile] = useState<any | null>(null);
 
+  // Expandable variants state for single item card display in admin dashboard
+  const [expandedAdminItemIds, setExpandedAdminItemIds] = useState<Record<string, boolean>>({});
+  const toggleAdminExpandVariants = (itemId: string) => {
+    setExpandedAdminItemIds(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+  };
+
   // Authentication
   const [adminEmail, setAdminEmail] = useState('');
 
@@ -862,7 +868,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               }`}
             >
               <Store size={16} />
-              <span>Restaurants</span>
+              <span>Shops & Stores</span>
             </button>
 
             <button
@@ -1353,6 +1359,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                                   <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
                                     {dish.description || 'Vendor Menu Product'}
                                   </p>
+                                  
+                                  {/* Variant expand button if item has variants */}
+                                  {dish.variants && dish.variants.length > 0 && (
+                                    <div className="mt-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAdminExpandVariants(dish.id)}
+                                        className="w-full flex items-center justify-between px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-bold transition-all cursor-pointer"
+                                      >
+                                        <span>{dish.variants.length} Variants Available</span>
+                                        <span>{expandedAdminItemIds[dish.id] ? '▲' : '▼'}</span>
+                                      </button>
+
+                                      {expandedAdminItemIds[dish.id] && (
+                                        <div className="mt-1.5 p-2 rounded-lg bg-bg-dark/90 border border-glass space-y-1">
+                                          {dish.variants.map((v: any, vIdx: number) => (
+                                            <div key={v.id || vIdx} className="flex items-center justify-between text-[10px] text-text-secondary border-b border-glass/30 last:border-0 py-0.5">
+                                              <span>{v.label || `${v.quantity} ${v.unit}`}</span>
+                                              <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex justify-between items-center mt-2.5">
@@ -1437,11 +1468,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 {/* Header section with title on left and Back button on right */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6 mb-8">
                   <div>
-                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Establishment Onboarding</span>
+                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Shop Onboarding</span>
                     <h2 className="text-2xl md:text-3xl font-black font-display text-primary tracking-tight">
-                      {editingRes ? 'Edit Establishment Profile' : 'Add New Restaurant Partner'}
+                      {editingRes ? 'Edit Shop / Store Profile' : 'Add New Merchant Shop / Store'}
                     </h2>
-                    <p className="text-xs text-text-muted mt-1">Provide the required establishment credentials and information below.</p>
+                    <p className="text-xs text-text-muted mt-1">Provide the required shop credentials and store details below.</p>
                   </div>
                   <button
                     type="button"
@@ -1449,7 +1480,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                     className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all duration-300"
                   >
                     <ArrowLeft size={14} />
-                    <span>Back to Establishments</span>
+                    <span>Back to Shops & Stores</span>
                   </button>
                 </div>
 
@@ -1461,10 +1492,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 )}
 
                 <form onSubmit={saveRestaurant} className="space-y-6 text-xs font-semibold text-text-secondary w-full">
-                  {/* Auto-Generated Unique Restaurant ID Banner */}
+                  {/* Auto-Generated Unique Shop ID Banner */}
                   <div className="p-4 rounded-xl bg-glass-subtle/50 border border-glass flex items-center justify-between gap-4">
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-text-muted block">Restaurant ID (Auto-Generated)</span>
+                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-text-muted block">Shop ID (Auto-Generated)</span>
                       <span className="text-sm font-mono font-black text-primary tracking-wider mt-0.5 block">
                         {editingRes ? editingRes.id : generateUniqueResId(restaurants)}
                       </span>
@@ -1476,13 +1507,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Restaurant Name *</label>
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Shop / Store Name *</label>
                       <input
                         type="text"
                         required
                         value={resForm.name}
                         onChange={(e) => setResForm({ ...resForm, name: e.target.value })}
-                        placeholder="e.g. The Gilded Fork"
+                        placeholder="e.g. Vijaya Durga Sweets & Bakery"
                         className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
                       />
                     </div>
@@ -1633,25 +1664,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             <div className="space-y-8 animate-fadeIn">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Michelin Partners</span>
-                  <h1 className="text-3xl font-black font-display text-primary tracking-tight">Manage Establishments</h1>
+                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Merchant Partners & Stores</span>
+                  <h1 className="text-3xl font-black font-display text-primary tracking-tight">Manage Merchant Shops & Stores</h1>
                 </div>
                 <button
                   onClick={() => { clearResForm(); setEditingRes(null); setIsResFormOpen(true); }}
                   className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
                 >
                   <PlusCircle size={16} />
-                  <span>Add Restaurant</span>
+                  <span>Add Shop / Store</span>
                 </button>
               </div>
 
-              {/* Filter Controls Bar (Requirement 2: Search Restaurant only) */}
+              {/* Filter Controls Bar */}
               <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
                 <div className="relative w-full sm:w-72 md:w-96 shrink-0">
                   <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                   <input
                     type="text"
-                    placeholder="Search restaurants or owner..."
+                    placeholder="Search shops, stores, or owner..."
                     value={resSearch}
                     onChange={(e) => setResSearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none transition-all focus:ring-1 focus:ring-primary/20"

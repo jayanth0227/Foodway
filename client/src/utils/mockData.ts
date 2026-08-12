@@ -1,38 +1,73 @@
+export type ShopType =
+  | 'FOOD'
+  | 'SWEETS'
+  | 'GROCERY'
+  | 'FRUITS_VEGETABLES'
+  | 'DAIRY'
+  | 'BEVERAGES'
+  | 'GENERAL_STORE';
+
+export interface ItemVariant {
+  id: string;
+  variantId?: string;
+  quantity: number | string;
+  unit: string;
+  price: number;
+  compareAtPrice?: number;
+  isAvailable?: boolean;
+  label: string;
+}
+
 export interface CategoryItem {
   id: string;
   name: string;
   image: string;
   description: string;
   itemCount: number;
+  shopType?: ShopType;
 }
 
-export interface RestaurantItem {
+export interface ShopItem {
   id: string;
+  shopId?: string;
   name: string;
-  cuisine: string;
+  shopType?: ShopType;
+  cuisine?: string;
   rating: number;
   deliveryTime: string;
   distance: string;
   offerBadge: string;
   image: string;
   isPopular?: boolean;
+  address?: string;
+  phone?: string;
+  isOpen?: boolean;
 }
 
-export interface DishItem {
+export interface RestaurantItem extends ShopItem {} // Backward compatibility alias
+
+export interface MarketplaceItem {
   id: string;
+  itemId?: string;
+  shopId?: string;
+  shopName?: string;
+  restaurantId?: string;
+  restaurantName?: string;
   name: string;
   price: number;
   rating: number;
   image: string;
-  type: 'veg' | 'non-veg';
+  type?: 'veg' | 'non-veg';
   isVeg?: boolean;
   category: string;
   description: string;
   isAvailable?: boolean;
   status?: string;
-  restaurantId?: string;
-  restaurantName?: string;
+  variants?: ItemVariant[];
+  selectedVariant?: ItemVariant;
 }
+
+export interface DishItem extends MarketplaceItem {} // Backward compatibility alias
 
 export interface TestimonialItem {
   id: string;
@@ -115,137 +150,9 @@ export const CATEGORIES: CategoryItem[] = [
   },
 ];
 
-export const RESTAURANTS: RestaurantItem[] = [
-  {
-    id: 'res-1',
-    name: 'The Gilded Fork',
-    cuisine: 'Modern French & European',
-    rating: 4.9,
-    deliveryTime: '20-30 min',
-    distance: '1.2 km',
-    offerBadge: 'Complimentary Caviar on ₹1000+',
-    image: 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&w=800&q=85',
-    isPopular: true,
-  },
-  {
-    id: 'res-2',
-    name: 'Nippon Kaiseki',
-    cuisine: 'Premium Japanese & Sushi',
-    rating: 4.8,
-    deliveryTime: '25-35 min',
-    distance: '2.4 km',
-    offerBadge: '20% OFF Signature Omakase',
-    image: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&w=800&q=85',
-    isPopular: true,
-  },
-  {
-    id: 'res-3',
-    name: "Trattoria D'Oro",
-    cuisine: 'Artisanal Italian & Truffles',
-    rating: 4.8,
-    deliveryTime: '15-25 min',
-    distance: '0.8 km',
-    offerBadge: 'Free Delivery on Gold Menu',
-    image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
-    isPopular: false,
-  },
-  {
-    id: 'res-4',
-    name: 'Saffron Royal Hall',
-    cuisine: 'Mughlai & Awadhi Heritage',
-    rating: 4.7,
-    deliveryTime: '30-40 min',
-    distance: '3.1 km',
-    offerBadge: 'Complimentary Royal Shahi Tukda',
-    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=800&q=85',
-    isPopular: false,
-  },
-  {
-    id: 'res-5',
-    name: 'Black Pearl Grill',
-    cuisine: 'Premium Steaks & Seafood',
-    rating: 4.9,
-    deliveryTime: '35-45 min',
-    distance: '4.0 km',
-    offerBadge: 'Buy 1 Get 1 Wagyu Ribeye',
-    image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=85',
-    isPopular: true,
-  },
-  {
-    id: 'res-6',
-    name: 'L\'Avenue Patisserie',
-    cuisine: 'Luxury Bakery & Tea Room',
-    rating: 4.9,
-    deliveryTime: '10-20 min',
-    distance: '0.5 km',
-    offerBadge: 'Complimentary Macaron Box',
-    image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=800&q=85',
-    isPopular: false,
-  },
-];
+export const RESTAURANTS: RestaurantItem[] = [];
 
-export const DISHES: DishItem[] = [
-  {
-    id: 'dish-1',
-    name: 'Gourmet Black Truffle Pizza',
-    price: 34.0,
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=85',
-    type: 'veg',
-    category: 'pizza',
-    description: 'Fresh black truffle shavings, porcini paste, buffalo mozzarella, and gold-pressed olive oil.',
-  },
-  {
-    id: 'dish-2',
-    name: 'Wagyu A5 Brioche Burger',
-    price: 48.0,
-    rating: 5.0,
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=600&q=85',
-    type: 'non-veg',
-    category: 'burger',
-    description: '200g prime Wagyu beef patty, vintage cheddar, caramelized shallots, and house-infused truffle aioli.',
-  },
-  {
-    id: 'dish-3',
-    name: 'Royal Saffron Lobster Biryani',
-    price: 42.0,
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=85',
-    type: 'non-veg',
-    category: 'biryani',
-    description: 'Poached lobster tail, premium aged basmati rice, handpicked saffron, rose water, and organic gold leaf.',
-  },
-  {
-    id: 'dish-4',
-    name: 'Peking Duck Crispy Noodles',
-    price: 28.0,
-    rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1585032226651-759b368d7246?auto=format&fit=crop&w=600&q=85',
-    type: 'non-veg',
-    category: 'chinese',
-    description: 'Crispy roasted duck breast slices with honey glaze, served over hand-pulled egg noodles.',
-  },
-  {
-    id: 'dish-5',
-    name: 'Caviar-Ghee Roast Dosa',
-    price: 26.0,
-    rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=600&q=85',
-    type: 'veg',
-    category: 'south-indian',
-    description: 'Crisp paper dosa smeared with premium A2 cow ghee, garnished with premium sturgeon caviar and truffle oil.',
-  },
-  {
-    id: 'dish-6',
-    name: 'Signature Madagascar Lava Fondant',
-    price: 18.0,
-    rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1551024601-bec78aea704b?auto=format&fit=crop&w=600&q=85',
-    type: 'veg',
-    category: 'desserts',
-    description: 'Warm liquid chocolate core using 75% Single Origin Madagascar cocoa, served with edible gold foil.',
-  },
-];
+export const DISHES: DishItem[] = [];
 
 export const TESTIMONIALS: TestimonialItem[] = [
   {

@@ -39,7 +39,10 @@ import {
   Bell,
   RefreshCw,
   Plus,
-  Sparkles
+  Sparkles,
+  Store,
+  ShoppingBag,
+  Layers
 } from 'lucide-react';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
@@ -110,7 +113,26 @@ export const RestaurantDashboard: React.FC = () => {
   const [isFoodImageUploading, setIsFoodImageUploading] = useState(false);
   const [foodImageUploadSuccess, setFoodImageUploadSuccess] = useState(false);
 
-  const [foodForm, setFoodForm] = useState({
+  const [foodForm, setFoodForm] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    price: string;
+    prepTime: string;
+    isVeg: boolean;
+    image: string;
+    isAvailable: boolean;
+    isCategoryFavourite: boolean;
+    variants: Array<{
+      id: string;
+      quantity: string;
+      unit: string;
+      price: string;
+      compareAtPrice: string;
+      isAvailable: boolean;
+      label: string;
+    }>;
+  }>({
     name: '',
     description: '',
     category: '',
@@ -119,8 +141,19 @@ export const RestaurantDashboard: React.FC = () => {
     isVeg: true,
     image: '',
     isAvailable: true,
-    isCategoryFavourite: false
+    isCategoryFavourite: false,
+    variants: [
+      { id: 'v1', quantity: '250', unit: 'gms', price: '', compareAtPrice: '', isAvailable: true, label: '250 gms' },
+      { id: 'v2', quantity: '500', unit: 'gms', price: '', compareAtPrice: '', isAvailable: true, label: '500 gms' },
+      { id: 'v3', quantity: '1', unit: 'kg', price: '', compareAtPrice: '', isAvailable: true, label: '1 kg' }
+    ]
   });
+
+  // Expandable variants state for single item card display
+  const [expandedItemIds, setExpandedItemIds] = useState<Record<string, boolean>>({});
+  const toggleExpandVariants = (itemId: string) => {
+    setExpandedItemIds(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+  };
 
   // Categories State (Dynamic from Database)
   const [categories, setCategories] = useState<string[]>([]);
@@ -134,13 +167,18 @@ export const RestaurantDashboard: React.FC = () => {
   const [editingCategoryValue, setEditingCategoryValue] = useState<string>('');
 
   const SUGGESTED_CATEGORIES = [
-    'Starters',
-    'Main Course',
-    'Biryani',
-    'Fast Food',
-    'Beverages',
-    'Desserts',
-    ' Combos'
+    'Sweets & Desserts',
+    'Vegetables & Farm Fresh',
+    'Fresh Fruits',
+    'Dairy & Milk Products',
+    'Daily Groceries',
+    'Cold Drinks & Juices',
+    'Bakery & Cakes',
+    'Snacks & Namkeen',
+    'Biryani & Rice Specialties',
+    'Starters & Tiffins',
+    'Main Course Food',
+    'Fast Food & Combo Deals'
   ];
 
   const normCat = (s: string) =>
@@ -209,7 +247,9 @@ export const RestaurantDashboard: React.FC = () => {
   // 1. Initial Load & Auth check
   useEffect(() => {
     const user = getCurrentUser();
-    if (!user || user.role !== 'RESTAURANT') {
+    const uRole = (user?.role || '').toUpperCase();
+    const isVendor = ['RESTAURANT', 'SHOP', 'VENDOR', 'ADMIN'].includes(uRole);
+    if (!user || !isVendor) {
       navigate('/login', { replace: true });
       return;
     }
@@ -594,7 +634,12 @@ export const RestaurantDashboard: React.FC = () => {
       isVeg: true,
       image: '',
       isAvailable: true,
-      isCategoryFavourite: false
+      isCategoryFavourite: false,
+      variants: [
+        { id: 'v1', quantity: '250', unit: 'gms', price: '', compareAtPrice: '', isAvailable: true, label: '250 gms' },
+        { id: 'v2', quantity: '500', unit: 'gms', price: '', compareAtPrice: '', isAvailable: true, label: '500 gms' },
+        { id: 'v3', quantity: '1', unit: 'kg', price: '', compareAtPrice: '', isAvailable: true, label: '1 kg' }
+      ]
     });
     setFoodFormError(null);
     setFoodImageUploadSuccess(false);
@@ -603,16 +648,40 @@ export const RestaurantDashboard: React.FC = () => {
 
   const openEditFoodModal = (item: FoodItem) => {
     setEditingFood(item);
+    const existingVariants = Array.isArray((item as any).variants) && (item as any).variants.length > 0
+      ? (item as any).variants.map((v: any, idx: number) => {
+          const rawM = v && v.M ? v.M : (v || {});
+          const vId = rawM.id?.S || rawM.id || rawM.variantId?.S || rawM.variantId || `v${idx + 1}`;
+          const qty = rawM.quantity?.N || rawM.quantity?.S || rawM.quantity || '1';
+          const u = rawM.unit?.S || rawM.unit || 'pcs';
+          const p = rawM.price?.N || rawM.price?.S || rawM.price || item.price || '';
+          const cmpPrice = rawM.compareAtPrice?.N || rawM.compareAtPrice?.S || rawM.compareAtPrice || '';
+          const avail = rawM.isAvailable?.BOOL !== undefined ? rawM.isAvailable.BOOL : (rawM.isAvailable !== false);
+          const lbl = rawM.label?.S || rawM.label || `${qty} ${u}`;
+
+          return {
+            id: String(vId),
+            quantity: String(qty),
+            unit: String(u),
+            price: String(p),
+            compareAtPrice: String(cmpPrice),
+            isAvailable: Boolean(avail),
+            label: String(lbl)
+          };
+        })
+      : [{ id: 'v1', quantity: '1', unit: 'pcs', price: String(item.price || ''), compareAtPrice: '', isAvailable: true, label: 'Standard' }];
+
     setFoodForm({
-      name: item.name,
-      description: item.description,
-      category: item.category,
-      price: String(item.price),
-      prepTime: item.prepTime,
-      isVeg: item.isVeg,
-      image: item.image,
-      isAvailable: item.isAvailable,
-      isCategoryFavourite: item.isCategoryFavourite || false
+      name: item.name || '',
+      description: item.description || '',
+      category: item.category || '',
+      price: String(item.price || ''),
+      prepTime: item.prepTime || '15 mins',
+      isVeg: item.isVeg !== false,
+      image: item.image || '',
+      isAvailable: item.isAvailable !== false,
+      isCategoryFavourite: item.isCategoryFavourite || false,
+      variants: existingVariants
     });
     setFoodFormError(null);
     setFoodImageUploadSuccess(false);
@@ -659,40 +728,59 @@ export const RestaurantDashboard: React.FC = () => {
     e.preventDefault();
     setFoodFormError(null);
 
-    const { name, description, category, price, prepTime, isVeg, image, isAvailable, isCategoryFavourite } = foodForm;
+    const { name, description, category, price, prepTime, isVeg, image, isAvailable, isCategoryFavourite, variants } = foodForm;
 
-    if (!name.trim()) {
-      setFoodFormError('Food Item Name is required.');
-      return;
-    }
-    if (!price || isNaN(Number(price)) || Number(price) <= 0) {
-      setFoodFormError('Please enter a valid price greater than 0.');
-      return;
-    }
-
+    const cleanName = (name || '').trim();
+    const cleanDesc = (description || '').trim();
+    const cleanPrepTime = (prepTime || '').trim() || '15 mins';
     const defaultImg = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800';
-    const finalImage = image.trim() || defaultImg;
+    const finalImage = (image || '').trim() || defaultImg;
+    const cleanCategory = category || categories[0] || 'General';
+
+    if (!cleanName) {
+      setFoodFormError('Item Name is required.');
+      return;
+    }
+
+    const formattedVariants = (variants || []).map((v, idx) => ({
+      id: v.id || `v${idx + 1}`,
+      variantId: v.id || `v${idx + 1}`,
+      quantity: Number(v.quantity) || 1,
+      unit: v.unit || 'pcs',
+      price: Number(v.price) || Number(price) || 0,
+      compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+      isAvailable: v.isAvailable !== false,
+      label: v.label || `${v.quantity} ${v.unit}`
+    }));
+
+    const effectivePrice = formattedVariants.length > 0 && formattedVariants[0].price ? formattedVariants[0].price : (Number(price) || 0);
+
+    if (effectivePrice <= 0) {
+      setFoodFormError('Please enter a valid price for at least one variation option.');
+      return;
+    }
 
     const resId = restaurant?.id || 'RES-001';
 
-    if (category && !categories.includes(category)) {
-      setCategories(prev => [...prev, category]);
+    if (cleanCategory && !categories.includes(cleanCategory)) {
+      setCategories(prev => [...prev, cleanCategory]);
     }
 
     if (editingFood) {
       // Edit mode
-      const updatedItem: FoodItem = {
+      const updatedItem: FoodItem & { variants?: any[] } = {
         ...editingFood,
-        name: name.trim(),
-        description: description.trim(),
-        category,
-        price: Number(price),
-        prepTime: prepTime.trim() || '15 mins',
+        name: cleanName,
+        description: cleanDesc,
+        category: cleanCategory,
+        price: effectivePrice,
+        prepTime: cleanPrepTime,
         isVeg,
         image: finalImage,
         isAvailable,
         isCategoryFavourite,
-        status: isAvailable ? 'active' : 'disabled'
+        status: isAvailable ? 'active' : 'disabled',
+        variants: formattedVariants
       };
 
       setMenuItems(prev => prev.map(m => m.id === editingFood.id ? updatedItem : m));
@@ -704,30 +792,32 @@ export const RestaurantDashboard: React.FC = () => {
           setMenuItems(prev => prev.map(m => (m.id === editingFood.id || m.name.toLowerCase() === updatedItem.name.toLowerCase()) ? {
             ...updatedItem,
             id: saved.id || saved.menuItemId || updatedItem.id,
-            image: saved.image || saved.foodImage || updatedItem.image
+            image: saved.image || saved.foodImage || updatedItem.image,
+            variants: saved.variants || formattedVariants
           } : m));
         }
       } catch (err) {
         console.warn('Backend update failed:', err);
       }
 
-      logActivity('menu', `Food item "${updatedItem.name}" was updated.`);
+      logActivity('menu', `Marketplace item "${updatedItem.name}" was updated.`);
     } else {
       // Add mode
-      const tempId = `food_${Date.now()}`;
-      const newItem: FoodItem = {
+      const tempId = `item_${Date.now()}`;
+      const newItem: FoodItem & { variants?: any[] } = {
         id: tempId,
         restaurantId: resId,
-        name: name.trim(),
-        description: description.trim(),
-        category,
-        price: Number(price),
-        prepTime: prepTime.trim() || '15 mins',
+        name: cleanName,
+        description: cleanDesc,
+        category: cleanCategory,
+        price: effectivePrice,
+        prepTime: cleanPrepTime,
         isVeg,
         image: finalImage,
         isAvailable,
         isCategoryFavourite,
-        status: isAvailable ? 'active' : 'disabled'
+        status: isAvailable ? 'active' : 'disabled',
+        variants: formattedVariants
       };
 
       setMenuItems(prev => [newItem, ...prev]);
@@ -739,14 +829,15 @@ export const RestaurantDashboard: React.FC = () => {
           setMenuItems(prev => prev.map(m => m.id === tempId ? {
             ...newItem,
             id: saved.id || saved.menuItemId || tempId,
-            image: saved.image || saved.foodImage || newItem.image
+            image: saved.image || saved.foodImage || newItem.image,
+            variants: saved.variants || formattedVariants
           } : m));
         }
       } catch (err) {
         console.warn('Backend save failed:', err);
       }
 
-      logActivity('menu', `New food item "${newItem.name}" added to menu.`);
+      logActivity('menu', `New marketplace item "${newItem.name}" added with ${formattedVariants.length} variation options.`);
     }
 
     setIsFoodModalOpen(false);
@@ -1084,12 +1175,12 @@ export const RestaurantDashboard: React.FC = () => {
         <div className="p-6 border-b border-glass flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
-              <Utensils size={20} />
+              <Store size={20} />
             </div>
             <div>
               <span className="text-[10px] font-black uppercase tracking-widest text-primary block">MK DELIVERY</span>
               <h2 className="text-sm font-black font-display tracking-tight text-text-primary truncate w-36">
-                {restaurant?.name || 'Restaurant Console'}
+                {restaurant?.name || 'Shop Console'}
               </h2>
             </div>
           </div>
@@ -1167,8 +1258,8 @@ export const RestaurantDashboard: React.FC = () => {
             {isMobileSidebarOpen ? <X size={20} /> : <MenuIcon size={20} />}
           </button>
           <div>
-            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">RESTAURANT PORTAL</span>
-            <span className="text-xs font-black text-text-primary truncate block max-w-[160px] sm:max-w-xs">{restaurant?.name || 'Restaurant Console'}</span>
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">SHOP & VENDOR PORTAL</span>
+            <span className="text-xs font-black text-text-primary truncate block max-w-[160px] sm:max-w-xs">{restaurant?.name || 'Shop Console'}</span>
           </div>
         </div>
 
@@ -1255,8 +1346,8 @@ export const RestaurantDashboard: React.FC = () => {
                         key={item.id}
                         onClick={() => { setActiveTab(item.id as any); setIsMobileSidebarOpen(false); }}
                         className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl font-extrabold text-xs transition-all cursor-pointer ${isActive
-                            ? 'bg-primary text-black font-black shadow-lg shadow-primary/25'
-                            : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/90 dark:bg-glass hover:bg-slate-200/80'
+                          ? 'bg-primary text-black font-black shadow-lg shadow-primary/25'
+                          : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/90 dark:bg-glass hover:bg-slate-200/80'
                           }`}
                       >
                         <div className="flex items-center gap-3">
@@ -1634,11 +1725,11 @@ export const RestaurantDashboard: React.FC = () => {
                 {/* Header section with title on left and Back button on right */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6 mb-8">
                   <div>
-                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Culinary Item Onboarding</span>
+                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Shop Item Onboarding</span>
                     <h2 className="text-2xl md:text-3xl font-black font-display text-primary tracking-tight">
-                      {editingFood ? 'Edit Food Item' : 'Add New Food Item'}
+                      {editingFood ? 'Edit Marketplace Item' : 'Add New Marketplace Item'}
                     </h2>
-                    <p className="text-xs text-text-muted mt-1">Provide item details, pricing, dietary specifications, and cover image.</p>
+                    <p className="text-xs text-text-muted mt-1">Provide item details, variation pricing (weights/quantities), categories, and product image.</p>
                   </div>
                   <button
                     type="button"
@@ -1646,7 +1737,7 @@ export const RestaurantDashboard: React.FC = () => {
                     className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all duration-300"
                   >
                     <ArrowLeft size={14} />
-                    <span>Back to Menu Catalog</span>
+                    <span>Back to Item Catalog</span>
                   </button>
                 </div>
 
@@ -1660,13 +1751,13 @@ export const RestaurantDashboard: React.FC = () => {
                 <form onSubmit={saveFoodItem} className="space-y-6 text-xs font-semibold text-text-secondary w-full">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Food Name *</label>
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Item / Product Name *</label>
                       <input
                         type="text"
                         required
                         value={foodForm.name}
                         onChange={(e) => setFoodForm({ ...foodForm, name: e.target.value })}
-                        placeholder="e.g. Hyderabadi Chicken Biryani"
+                        placeholder="e.g. Kaju Katli / Fresh Tomatoes / Organic Honey"
                         className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
                       />
                     </div>
@@ -1685,30 +1776,204 @@ export const RestaurantDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Price ($) *</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        value={foodForm.price}
-                        onChange={(e) => setFoodForm({ ...foodForm, price: e.target.value })}
-                        placeholder="e.g. 15.50"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
+                  {/* Dynamic Item Variations / Quantity & Weight Pricing Builder */}
+                  <div className="p-4 sm:p-5 rounded-2xl border border-primary/30 bg-primary/5 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-primary/20 pb-3">
+                      <div>
+                        <h4 className="font-extrabold text-sm text-primary flex items-center gap-2">
+                          <Layers size={16} />
+                          <span>Item Variations & Quantity Pricing (Weight / Pack Sizes)</span>
+                        </h4>
+                        <p className="text-[11px] text-text-muted mt-0.5">
+                          Set different prices for weights (e.g. 100g, 250g, 500g, 1kg) or portion sizes.
+                        </p>
+                      </div>
+
+                      {/* Quick Presets for Shop Types */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 sm:pt-0">
+                        <button
+                          type="button"
+                          onClick={() => setFoodForm(prev => ({
+                            ...prev,
+                            variants: [
+                              { id: `v_${Date.now()}_1`, quantity: '100', unit: 'gms', price: '40', compareAtPrice: '50', isAvailable: true, label: '100 gms' },
+                              { id: `v_${Date.now()}_2`, quantity: '250', unit: 'gms', price: '95', compareAtPrice: '110', isAvailable: true, label: '250 gms' },
+                              { id: `v_${Date.now()}_3`, quantity: '500', unit: 'gms', price: '180', compareAtPrice: '200', isAvailable: true, label: '500 gms' },
+                              { id: `v_${Date.now()}_4`, quantity: '1', unit: 'kg', price: '340', compareAtPrice: '380', isAvailable: true, label: '1 kg' }
+                            ]
+                          }))}
+                          className="px-2 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold uppercase tracking-wider hover:bg-amber-500/30 transition-all cursor-pointer"
+                        >
+                          🍬 Sweets Preset
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFoodForm(prev => ({
+                            ...prev,
+                            variants: [
+                              { id: `v_${Date.now()}_1`, quantity: '250', unit: 'gms', price: '15', compareAtPrice: '20', isAvailable: true, label: '250 gms' },
+                              { id: `v_${Date.now()}_2`, quantity: '500', unit: 'gms', price: '28', compareAtPrice: '35', isAvailable: true, label: '500 gms' },
+                              { id: `v_${Date.now()}_3`, quantity: '1', unit: 'kg', price: '50', compareAtPrice: '65', isAvailable: true, label: '1 kg' }
+                            ]
+                          }))}
+                          className="px-2 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold uppercase tracking-wider hover:bg-emerald-500/30 transition-all cursor-pointer"
+                        >
+                          🥦 Veg/Fruit Preset
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFoodForm(prev => ({
+                            ...prev,
+                            variants: [
+                              { id: `v_${Date.now()}_1`, quantity: '200', unit: 'ml', price: '18', compareAtPrice: '', isAvailable: true, label: '200 ml' },
+                              { id: `v_${Date.now()}_2`, quantity: '500', unit: 'ml', price: '32', compareAtPrice: '', isAvailable: true, label: '500 ml' },
+                              { id: `v_${Date.now()}_3`, quantity: '1', unit: 'Litre', price: '60', compareAtPrice: '', isAvailable: true, label: '1 Litre' }
+                            ]
+                          }))}
+                          className="px-2 py-1 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold uppercase tracking-wider hover:bg-blue-500/30 transition-all cursor-pointer"
+                        >
+                          🥛 Dairy/Drinks
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFoodForm(prev => ({
+                            ...prev,
+                            variants: [
+                              { id: `v_${Date.now()}_1`, quantity: '1', unit: 'plate', price: '120', compareAtPrice: '', isAvailable: true, label: 'Half Portion' },
+                              { id: `v_${Date.now()}_2`, quantity: '1', unit: 'plate', price: '220', compareAtPrice: '', isAvailable: true, label: 'Full Portion' }
+                            ]
+                          }))}
+                          className="px-2 py-1 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold uppercase tracking-wider hover:bg-purple-500/30 transition-all cursor-pointer"
+                        >
+                          🍱 Food Portion
+                        </button>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Preparation Time</label>
-                      <input
-                        type="text"
-                        value={foodForm.prepTime}
-                        onChange={(e) => setFoodForm({ ...foodForm, prepTime: e.target.value })}
-                        placeholder="e.g. 15-20 mins"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
+                    {/* Variant Table / Rows */}
+                    <div className="space-y-2.5">
+                      {foodForm.variants.map((variant, idx) => (
+                        <div key={variant.id || idx} className="grid grid-cols-12 gap-2 items-center bg-bg-dark/80 p-2.5 rounded-xl border border-glass">
+                          <div className="col-span-3">
+                            <label className="text-[9px] text-text-muted font-bold block uppercase">Quantity</label>
+                            <input
+                              type="number"
+                              required
+                              value={variant.quantity}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFoodForm(prev => ({
+                                  ...prev,
+                                  variants: prev.variants.map((v, i) => i === idx ? { ...v, quantity: val, label: `${val} ${v.unit}` } : v)
+                                }));
+                              }}
+                              placeholder="e.g. 250"
+                              className="w-full bg-bg-cardSec border border-glass px-2.5 py-1.5 rounded-lg text-xs text-text-primary font-bold outline-none"
+                            />
+                          </div>
+
+                          <div className="col-span-3">
+                            <label className="text-[9px] text-text-muted font-bold block uppercase">Unit</label>
+                            <select
+                              value={variant.unit}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFoodForm(prev => ({
+                                  ...prev,
+                                  variants: prev.variants.map((v, i) => i === idx ? { ...v, unit: val, label: `${v.quantity} ${val}` } : v)
+                                }));
+                              }}
+                              className="w-full bg-bg-cardSec border border-glass px-2 py-1.5 rounded-lg text-xs text-text-primary font-bold outline-none cursor-pointer"
+                            >
+                              <option value="gms">gms</option>
+                              <option value="kg">kg</option>
+                              <option value="ml">ml</option>
+                              <option value="Litre">Litre</option>
+                              <option value="pcs">pcs</option>
+                              <option value="pack">pack</option>
+                              <option value="plate">plate</option>
+                              <option value="box">box</option>
+                            </select>
+                          </div>
+
+                          <div className="col-span-3">
+                            <label className="text-[9px] text-text-muted font-bold block uppercase">Price (₹)</label>
+                            <input
+                              type="number"
+                              required
+                              step="0.01"
+                              value={variant.price}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFoodForm(prev => {
+                                  const updated = prev.variants.map((v, i) => i === idx ? { ...v, price: val } : v);
+                                  return {
+                                    ...prev,
+                                    price: idx === 0 ? val : prev.price,
+                                    variants: updated
+                                  };
+                                });
+                              }}
+                              placeholder="Price ₹"
+                              className="w-full bg-bg-cardSec border border-glass px-2.5 py-1.5 rounded-lg text-xs text-primary font-black outline-none"
+                            />
+                          </div>
+
+                          <div className="col-span-2">
+                            <label className="text-[9px] text-text-muted font-bold block uppercase">MRP (₹)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={variant.compareAtPrice || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFoodForm(prev => ({
+                                  ...prev,
+                                  variants: prev.variants.map((v, i) => i === idx ? { ...v, compareAtPrice: val } : v)
+                                }));
+                              }}
+                              placeholder="Optional"
+                              className="w-full bg-bg-cardSec border border-glass px-2.5 py-1.5 rounded-lg text-xs text-text-muted outline-none"
+                            />
+                          </div>
+
+                          <div className="col-span-1 flex justify-end pt-3">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (foodForm.variants.length > 1) {
+                                  setFoodForm(prev => ({
+                                    ...prev,
+                                    variants: prev.variants.filter((_, i) => i !== idx)
+                                  }));
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete variation"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFoodForm(prev => ({
+                          ...prev,
+                          variants: [
+                            ...prev.variants,
+                            { id: `v_${Date.now()}`, quantity: '1', unit: 'kg', price: '', compareAtPrice: '', isAvailable: true, label: '1 kg' }
+                          ]
+                        }));
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-dashed border-primary/40 text-primary hover:bg-primary/10 text-xs font-bold transition-all cursor-pointer"
+                    >
+                      <Plus size={13} />
+                      <span>Add Another Weight / Variant Option</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1849,9 +2114,9 @@ export const RestaurantDashboard: React.FC = () => {
               {/* Header & Add Buttons */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6">
                 <div>
-                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Culinary Catalog</span>
-                  <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Menu Management</h1>
-                  <p className="text-xs text-text-muted mt-1">Manage food items, prices, availability, and categories for your establishment.</p>
+                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Marketplace Store Catalog</span>
+                  <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Item & Inventory Management</h1>
+                  <p className="text-xs text-text-muted mt-1">Manage shop items, prices, weights/variants, availability, and categories for your store.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button
@@ -1866,7 +2131,7 @@ export const RestaurantDashboard: React.FC = () => {
                     className="flex items-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all"
                   >
                     <PlusCircle size={16} />
-                    <span>Add Food Item</span>
+                    <span>Add Shop Item</span>
                   </button>
                 </div>
               </div>
@@ -1993,9 +2258,57 @@ export const RestaurantDashboard: React.FC = () => {
                       <div className="p-4 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <h3 className="font-bold text-sm text-text-primary tracking-tight line-clamp-1">{item.name}</h3>
-                          <span className="font-black text-sm text-primary shrink-0">₹{item.price.toFixed(2)}</span>
+                          <div className="text-right shrink-0">
+                            {item.variants && item.variants.length > 1 ? (
+                              <div>
+                                <span className="text-[10px] text-text-muted font-bold block uppercase tracking-wider">From</span>
+                                <span className="font-black text-sm text-primary">₹{Math.min(...item.variants.map((v: any) => Number(v.price) || Number(item.price))).toFixed(2)}</span>
+                              </div>
+                            ) : (
+                              <span className="font-black text-sm text-primary">₹{item.price.toFixed(2)}</span>
+                            )}
+                          </div>
                         </div>
                         <p className="text-xs text-text-muted line-clamp-2 leading-relaxed">{item.description}</p>
+
+                        {/* Variants Toggle Badge if item has multiple variants */}
+                        {item.variants && item.variants.length > 0 && (
+                          <div className="pt-1.5 border-t border-glass/40">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpandVariants(item.id)}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 text-[11px] font-extrabold transition-all cursor-pointer"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <Layers size={13} />
+                                <span>{item.variants.length} Variation Options</span>
+                              </span>
+                              <ChevronRight size={14} className={`transform transition-transform duration-200 ${expandedItemIds[item.id] ? 'rotate-90' : ''}`} />
+                            </button>
+
+                            {/* Inline Expandable Variants Drawer */}
+                            {expandedItemIds[item.id] && (
+                              <div className="mt-2 p-2.5 rounded-xl bg-bg-dark/80 border border-glass space-y-1.5 animate-fadeIn">
+                                <div className="text-[9.5px] font-black uppercase tracking-widest text-text-muted border-b border-glass/50 pb-1">
+                                  Pack / Weight Options
+                                </div>
+                                {item.variants.map((v: any, vIdx: number) => (
+                                  <div key={v.id || vIdx} className="flex items-center justify-between text-xs py-1 border-b border-glass/30 last:border-0">
+                                    <span className="font-bold text-text-primary">
+                                      {v.label || `${v.quantity} ${v.unit}`}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      {v.compareAtPrice && Number(v.compareAtPrice) > Number(v.price) && (
+                                        <span className="line-through text-text-muted text-[10px]">₹{Number(v.compareAtPrice).toFixed(2)}</span>
+                                      )}
+                                      <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         <div className="pt-2 flex items-center justify-between text-[10px] text-text-muted font-bold border-t border-glass/40">
                           <span className="flex items-center gap-1">
@@ -2332,9 +2645,9 @@ export const RestaurantDashboard: React.FC = () => {
         {activeTab === 'profile' && (
           <div className="space-y-5 animate-fadeIn w-full max-h-[calc(100vh-120px)] overflow-y-auto pr-1 sm:pr-2 pb-12">
             <div className="border-b border-glass pb-5">
-              <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Establishment Details</span>
-              <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Restaurant Profile</h1>
-              <p className="text-xs text-text-muted mt-1">Manage your restaurant details, contact information, credentials, timings, and cover image.</p>
+              <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Shop & Store Details</span>
+              <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Shop & Store Profile</h1>
+              <p className="text-xs text-text-muted mt-1">Manage your shop details, contact information, credentials, timings, and store image.</p>
             </div>
 
             <div className="glass-panel border border-glass rounded-2xl p-4 sm:p-8 shadow-luxury w-full">
@@ -2359,14 +2672,14 @@ export const RestaurantDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                   <div>
                     <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
-                      Restaurant Name <span className="text-rose-500">*</span>
+                      Shop / Store Name <span className="text-rose-500">*</span>
                     </label>
                     <div className="relative">
-                      <Utensils size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <Store size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                       <input
                         type="text"
                         required
-                        placeholder="e.g. Royal Bawarchi Restaurant"
+                        placeholder="e.g. Vijaya Durga Sweets & Bakery"
                         value={profileForm.name}
                         onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
                         className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
@@ -2485,15 +2798,15 @@ export const RestaurantDashboard: React.FC = () => {
 
                   <div>
                     <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
-                      Cuisine Specialty
+                      Shop Specialty / Categories
                     </label>
                     <div className="relative">
-                      <ChefHat size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <Sparkles size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                       <input
                         type="text"
                         value={profileForm.cuisine}
                         onChange={(e) => setProfileForm({ ...profileForm, cuisine: e.target.value })}
-                        placeholder="e.g. Gourmet Biryani, South Indian, Tandoori, Chinese"
+                        placeholder="e.g. Sweets, Vegetables, Groceries, Daily Fresh Products"
                         className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
                       />
                     </div>

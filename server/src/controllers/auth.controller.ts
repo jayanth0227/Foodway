@@ -10,7 +10,7 @@ import { generateUserId } from '../utils/idGenerator';
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password, targetRole } = req.body;
+    const { email, password } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -20,20 +20,12 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const expectedRole = targetRole ? String(targetRole).toUpperCase() : null;
 
     // 1. Check Admin Credentials in process.env
     const adminEmail = (process.env.ADMIN_EMAIL || 'admin@foodway.com').toLowerCase();
     const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
     if (cleanEmail === adminEmail) {
-      if (expectedRole && expectedRole !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          error: `This account is an Admin account. Please select "Admin Portal" from the Login As dropdown.`
-        });
-      }
-
       const isAdminPasswordValid = await comparePassword(password, adminPassword);
       if (isAdminPasswordValid) {
         // Ensure Admin user exists in foodway-users table
@@ -80,7 +72,7 @@ export const login = async (req: Request, res: Response) => {
     // 2. Authenticate against foodway-users table
     let authenticatedUser = await userService.authenticateUser(cleanEmail, password);
 
-    // 3. Fallback check for Restaurant accounts in foodway-restaurants table
+    // 3. Fallback check for Shop / Restaurant accounts in foodway-shops & foodway-restaurants tables
     if (!authenticatedUser) {
       const restaurant = await restaurantRepository.findByEmail(cleanEmail);
       if (restaurant) {
@@ -90,11 +82,11 @@ export const login = async (req: Request, res: Response) => {
 
         if (!ownerUser) {
           // Auto-sync owner user into foodway-users table
-          const ownerUserId = restaurant.ownerUserId || generateUserId('RESTAURANT');
+          const ownerUserId = restaurant.ownerUserId || generateUserId('SHOP');
           ownerUser = await userRepository.create({
             userId: ownerUserId,
-            role: 'RESTAURANT',
-            name: restaurant.restaurantName,
+            role: 'SHOP',
+            name: restaurant.shopName || restaurant.restaurantName || 'Shop Owner',
             email: cleanEmail,
             phone: restaurant.phone || '',
             password: hashedPassword,
@@ -104,15 +96,18 @@ export const login = async (req: Request, res: Response) => {
           });
 
           if (!restaurant.ownerUserId) {
-            await restaurantRepository.update(restaurant.restaurantId, { ownerUserId });
+            const sId = restaurant.shopId || restaurant.restaurantId || '';
+            if (sId) {
+              await restaurantRepository.update(sId, { ownerUserId });
+            }
           }
 
           authenticatedUser = ownerUser;
         } else {
-          // Owner exists in foodway-users; update password for seamless access
+          // Owner exists in foodway-users; update password & role for seamless access
           ownerUser = (await userRepository.update(ownerUser.userId, {
             password: hashedPassword,
-            role: 'RESTAURANT',
+            role: 'SHOP',
             status: 'ACTIVE'
           })) || ownerUser;
 
@@ -128,37 +123,13 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // Enforce role validation if user specified a targetRole
-    const userRoleUpper = authenticatedUser.role.toUpperCase();
-    if (expectedRole) {
-      const isRoleMatching =
-        (expectedRole === 'USER' && (userRoleUpper === 'USER' || userRoleUpper === 'CUSTOMER')) ||
-        (expectedRole === 'RESTAURANT' && userRoleUpper === 'RESTAURANT') ||
-        (expectedRole === 'ADMIN' && userRoleUpper === 'ADMIN') ||
-        (expectedRole === 'DELIVERY' && (userRoleUpper === 'DELIVERY_PARTNER' || userRoleUpper === 'DELIVERY'));
-
-      if (!isRoleMatching) {
-        const roleDisplayNames: Record<string, string> = {
-          USER: 'Customer Portal',
-          RESTAURANT: 'Merchant / Restaurant Partner Portal',
-          ADMIN: 'Admin Portal'
-        };
-        const actualRoleName = roleDisplayNames[userRoleUpper] || userRoleUpper;
-        const selectedRoleName = roleDisplayNames[expectedRole] || expectedRole;
-
-        return res.status(403).json({
-          success: false,
-          error: `Role Mismatch: Your account is registered under "${actualRoleName}". You cannot log in via "${selectedRoleName}". Please select your correct role from the dropdown.`
-        });
-      }
-    }
-
-    // If user is RESTAURANT, fetch restaurant ID from foodway-restaurants table
+    // If user is RESTAURANT, SHOP, or VENDOR, fetch shop/restaurant ID
     let restaurantId: string | undefined = undefined;
-    if (authenticatedUser.role === 'RESTAURANT') {
+    const userRoleUpper = (authenticatedUser.role || '').toUpperCase();
+    if (['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRoleUpper)) {
       const restaurant = await restaurantService.getRestaurantByOwnerUserId(authenticatedUser.userId) ||
                          await restaurantRepository.findByEmail(cleanEmail);
-      restaurantId = restaurant?.restaurantId || authenticatedUser.userId;
+      restaurantId = restaurant?.restaurantId || restaurant?.shopId || authenticatedUser.userId;
     }
 
     const payload: JwtUserPayload = {
@@ -181,7 +152,8 @@ export const login = async (req: Request, res: Response) => {
         name: payload.name,
         email: payload.email,
         role: payload.role,
-        restaurantId: payload.restaurantId
+        restaurantId: payload.restaurantId,
+        shopId: payload.restaurantId
       },
       expiresIn: expiresInSeconds
     });
