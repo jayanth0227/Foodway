@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, Utensils, Store } from 'lucide-react';
+import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, Utensils, Store, Search, Calendar, ArrowUpDown, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
@@ -94,13 +94,35 @@ export const CustomerOrdersPage: React.FC = () => {
     }
   };
 
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST'>('NEWEST');
+
   const isOrderFinished = (statusStr: string) => {
     const s = (statusStr || '').toUpperCase();
     return ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'REJECT'].includes(s);
   };
 
-  const activeOrders = orders.filter(o => !isOrderFinished(o.status || (o as any).orderStatus));
-  const pastOrders = orders.filter(o => isOrderFinished(o.status || (o as any).orderStatus));
+  // Sort orders date/day-wise (Newest first by default)
+  const sortedOrders = [...orders].sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.orderedAt || 0).getTime();
+    const timeB = new Date(b.createdAt || b.orderedAt || 0).getTime();
+    return sortOrder === 'NEWEST' ? timeB - timeA : timeA - timeB;
+  });
+
+  // Filter orders by search query
+  const searchFilteredOrders = sortedOrders.filter(order => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase().trim();
+    const orderId = (order.orderId || order.id || '').toLowerCase();
+    const restaurantName = (order.restaurantName || '').toLowerCase();
+    const itemsList = Array.isArray(order.items) ? order.items : Array.isArray(order.rawItems) ? order.rawItems : [];
+    const itemNames = itemsList.map((i: any) => (i.foodName || i.name || '').toLowerCase()).join(' ');
+
+    return orderId.includes(query) || restaurantName.includes(query) || itemNames.includes(query);
+  });
+
+  const activeOrders = searchFilteredOrders.filter(o => !isOrderFinished(o.status || (o as any).orderStatus));
+  const pastOrders = searchFilteredOrders.filter(o => isOrderFinished(o.status || (o as any).orderStatus));
   const displayedOrders = activeTab === 'ACTIVE' ? activeOrders : pastOrders;
 
   const handleReorder = (order: any) => {
@@ -194,6 +216,46 @@ export const CustomerOrdersPage: React.FC = () => {
             </button>
           </div>
 
+          {/* Search & Date Sort Controls */}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            {/* User Friendly Search Input */}
+            <div className="relative flex-1 w-full">
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search orders by Order ID, Dish name, or Restaurant..."
+                className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-glass border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted text-xs font-semibold focus:outline-none transition-all"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-0.5 rounded-full transition-colors cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Date/Day Wise Sort Selector */}
+            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+              <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-glass border border-glass text-text-secondary text-xs font-bold w-full sm:w-auto justify-between sm:justify-start">
+                <span className="flex items-center gap-1.5 text-text-muted">
+                  <Calendar size={14} className="text-primary" />
+                  <span>Sort by:</span>
+                </span>
+                <button
+                  onClick={() => setSortOrder(prev => prev === 'NEWEST' ? 'OLDEST' : 'NEWEST')}
+                  className="flex items-center gap-1 text-primary font-black cursor-pointer hover:underline"
+                >
+                  <span>{sortOrder === 'NEWEST' ? 'Newest Date First' : 'Oldest Date First'}</span>
+                  <ArrowUpDown size={13} />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Active vs Past Order Tabs */}
           <div className="flex items-center gap-2 border-b border-glass/60 pb-2">
             <button
@@ -248,9 +310,10 @@ export const CustomerOrdersPage: React.FC = () => {
                   ? order.items
                   : Array.isArray(order.rawItems) ? order.rawItems : [];
 
-                const rawResName = order.restaurantName || order.restaurantId || '';
-                const restaurantDisplayName = (!rawResName || rawResName.includes('RES_') || rawResName === 'RES_DEFAULT')
-                  ? 'Likhith foods'
+                const itemShopName = itemsList[0]?.restaurantName;
+                const rawResName = itemShopName || order.restaurantName || order.restaurantId || '';
+                const restaurantDisplayName = (!rawResName || rawResName.includes('RES_') || rawResName === 'RES_DEFAULT' || rawResName === 'Partner Restaurant')
+                  ? 'Gourmet Kitchen'
                   : rawResName;
                 const formattedDate = order.createdAt ? new Date(order.createdAt).toLocaleString('en-IN', {
                   day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -326,7 +389,7 @@ export const CustomerOrdersPage: React.FC = () => {
                             return (
                               <div
                                 key={idx}
-                                className="p-3 rounded-2xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/30 transition-all shadow-sm"
+                                className="p-3 rounded-2xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/30 transition-all shadow-sm relative overflow-hidden"
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <img
@@ -338,6 +401,15 @@ export const CustomerOrdersPage: React.FC = () => {
                                     <h4 className="text-xs font-extrabold text-text-primary truncate">
                                       {itemName}
                                     </h4>
+                                    {/* Item level exact vendor name badge */}
+                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-600 dark:text-primary bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25 my-0.5">
+                                      <Store size={10} className="shrink-0" />
+                                      <span>
+                                        {item.restaurantName && item.restaurantName !== 'Partner Restaurant'
+                                          ? item.restaurantName
+                                          : restaurantDisplayName}
+                                      </span>
+                                    </div>
                                     <div className="flex items-center gap-2 text-[11px]">
                                       <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary font-black">
                                         x{itemQty}

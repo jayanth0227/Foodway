@@ -129,10 +129,10 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: '100%' }}
           transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          className="fixed inset-0 z-[100] bg-bg-dark text-text-primary overflow-y-auto overscroll-y-contain touch-pan-y lg:hidden min-h-screen flex flex-col font-sans"
+          className="fixed inset-0 z-[100000] bg-bg-dark text-text-primary h-[100dvh] flex flex-col font-sans lg:hidden"
         >
-          {/* 1. Header Bar (Clean back arrow + Page Title matching website theme) */}
-          <div className="sticky top-0 z-20 bg-bg-card/90 dark:bg-bg-cardSec/90 backdrop-blur-md border-b border-glass px-4 py-3.5 flex items-center justify-between shadow-xs">
+          {/* 1. Header Bar (Clean back arrow + Page Title + Top Logout Shortcut) */}
+          <div className="sticky top-0 z-20 bg-bg-card/95 dark:bg-bg-cardSec/95 backdrop-blur-md border-b border-glass px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center space-x-3">
               <button
                 type="button"
@@ -147,14 +147,27 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
               </h1>
             </div>
 
-            {/* Role / Region Tag Badge */}
-            <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-primary/10 text-primary border border-primary/20">
-              {role || 'Customer'}
-            </span>
+            <div className="flex items-center space-x-2">
+              <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-full bg-primary/10 text-primary border border-primary/20">
+                {role || 'Customer'}
+              </span>
+
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutConfirm(true)}
+                  className="px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider rounded-xl bg-error/10 hover:bg-error/20 text-error border border-error/20 flex items-center gap-1 transition-all cursor-pointer"
+                  title="Logout"
+                >
+                  <LogOut size={13} />
+                  <span>Logout</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* 2. Main Scrollable Body */}
-          <div className="flex-1 px-4 py-4 space-y-4 pb-28 max-w-md mx-auto w-full">
+          {/* 2. Dedicated Scrollable Body Container with generous bottom padding for mobile navbar clearance */}
+          <div className="flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 space-y-4 pb-36 sm:pb-40 max-w-md mx-auto w-full custom-scroll">
             {isLoading ? (
               /* Skeleton loader */
               <div className="space-y-4 animate-pulse">

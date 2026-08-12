@@ -59,11 +59,13 @@ export interface IMenuItem {
 
 export interface IOrder {
   orderId: string;
+  parentOrderId?: string;
   customerId: string; // References foodway-users.userId
   customerEmail: string;
   restaurantId: string; // References foodway-restaurants.restaurantId
   restaurantName?: string;
   items?: any[];
+  rawItems?: any[];
   deliveryUserId?: string; // References foodway-users.userId
   paymentMethod: string;
   paymentStatus: PaymentStatus;

@@ -17,7 +17,7 @@ export const Footer: React.FC = () => {
           <Link to="/" onClick={handleScrollToTop} className="flex items-center space-x-3 group">
             <img
               src="/logo.jpeg"
-              alt="MK Delivery Services Logo"
+              alt="MK Delivery Logo"
               className="w-10 h-10 rounded-full object-cover border border-primary/20 group-hover:border-primary/50 transition-colors"
             />
             <div className="flex flex-col leading-none">

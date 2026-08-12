@@ -357,14 +357,22 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Socket.io Real-Time Room Join & Order Event Subscriptions
   useEffect(() => {
-    const resId = restaurant?.id || 'RES-001';
-    socketService.joinRestaurant(resId);
-    socketService.joinRestaurant('RES_DEFAULT');
-    socketService.joinRestaurant('all');
+    const resId = restaurant?.id || '';
+    if (resId) {
+      socketService.joinRestaurant(resId);
+    }
 
     // Phase 1: Real-Time Order Creation Listener (0ms UI Update + Loud Buzz Alarm + Modal + Push Notif)
     const unsubscribeCreated = socketService.onOrderCreated((newOrder: any) => {
       console.log('⚡ [Real-Time Socket Event: ORDER_CREATED] Received:', newOrder);
+
+      const targetResId = (restaurant?.id || '').toLowerCase();
+      const orderResId = (newOrder.restaurantId || '').toLowerCase();
+
+      // Guard: strictly ignore orders belonging to other vendors!
+      if (targetResId && orderResId && orderResId !== targetResId) {
+        return;
+      }
 
       const formattedOrder: OrderItem = {
         id: newOrder.orderId || newOrder.id,

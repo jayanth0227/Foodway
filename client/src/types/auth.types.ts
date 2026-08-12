@@ -30,4 +30,5 @@ export interface AuthState {
 export interface LoginCredentials {
   email: string;
   password?: string;
+  targetRole?: string;
 }

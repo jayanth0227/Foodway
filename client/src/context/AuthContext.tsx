@@ -6,7 +6,7 @@ import authService from '../services/auth.service';
 import notificationService from '../services/notification.service';
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password?: string) => Promise<{ success: boolean; role?: Role; error?: string }>;
+  login: (email: string, password?: string, targetRole?: string) => Promise<{ success: boolean; role?: Role; error?: string }>;
   logout: () => void;
   register: (name: string, email: string, password?: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (data: { name?: string; email?: string; phone?: string }) => Promise<{ success: boolean; user?: User; error?: string }>;
@@ -59,10 +59,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initializeAuth();
   }, []);
 
-  const handleLogin = async (email: string, password?: string) => {
+  const handleLogin = async (email: string, password?: string, targetRole?: string) => {
     try {
       setIsLoading(true);
-      const res = await authService.login({ email, password });
+      const res = await authService.login({ email, password, targetRole });
 
       if (res.success && res.token && res.user) {
         saveSession(res.token, res.user, res.expiresIn);

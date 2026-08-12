@@ -383,6 +383,7 @@ app.get('/api/admin/orders', async (req: Request, res: Response) => {
 });
 
 // Create New Customer Order (Persists directly to DynamoDB foodway-orders & foodway-order-items tables)
+// Supports multi-vendor order splitting: items from different vendors are logically split into sub-orders per vendor.
 app.post('/api/orders', async (req: Request, res: Response) => {
   try {
     const {
@@ -404,78 +405,113 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Order must contain at least one item.' });
     }
 
-    // Extract restaurant ID & Name from first item or body
-    const targetRestaurantId = bodyResId || items[0]?.restaurantId || 'RES_DEFAULT';
-    const targetRestaurantName = bodyResName || items[0]?.restaurantName || 'Partner Restaurant';
+    // Group items by vendor / restaurantId
+    const vendorItemsMap: Record<string, { restaurantName: string; items: any[] }> = {};
 
-    const orderData = {
-      customerId: customerId || `CUST_${Date.now()}`,
-      restaurantId: targetRestaurantId,
-      restaurantName: targetRestaurantName,
-      customerName: customerName || 'Valued Customer',
-      customerPhone: customerPhone || '',
-      deliveryAddress: deliveryAddress || '',
-      paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
-      items: items.map((i: any) => ({
-        menuItemId: i.id || i.menuItemId || `item_${Date.now()}`,
-        foodName: i.name || i.foodName || 'Food Item',
-        quantity: Number(i.quantity || 1),
-        price: Number(i.price || 0),
-        image: i.image || ''
-      })),
-      subtotal: Number(subtotal || totalAmount),
-      deliveryCharge: Number(deliveryFee || 0),
-      tax: Number(taxes || 0),
-      totalAmount: Number(totalAmount),
-      rawItems: items
-    };
-
-    const created = await orderService.createOrder(orderData as any);
-
-    const newOrderObj = {
-      ...created.order,
-      orderId: created.order.orderId,
-      id: created.order.orderId,
-      restaurantId: targetRestaurantId,
-      restaurantName: targetRestaurantName,
-      customerName: customerName || 'Valued Customer',
-      customerPhone: customerPhone || '',
-      deliveryAddress: deliveryAddress || '',
-      totalAmount: Number(totalAmount),
-      total: Number(totalAmount),
-      status: 'Pending',
-      orderStatus: 'Pending',
-      items: items,
-      orderedAt: new Date().toISOString(),
-      time: 'Just Now'
-    };
-
-    // Attach raw items to order object for instant client rendering
-    (created.order as any).items = items;
-
-    // ⚡ Real-Time Socket Emission to Merchant Room & Broadcast
-    try {
-      if (socketService) {
-        socketService.emitOrderCreated(newOrderObj);
-        socketService.getIO().emit('order_created', newOrderObj);
-        console.log(`📡 [Real-Time Order Alert] Emitted order_created for Order #${created.order.orderId} to restaurant ${targetRestaurantId}`);
+    items.forEach((item: any) => {
+      const vId = item.restaurantId || bodyResId || 'RES_DEFAULT';
+      const vName = item.restaurantName || bodyResName || 'Partner Restaurant';
+      if (!vendorItemsMap[vId]) {
+        vendorItemsMap[vId] = { restaurantName: vName, items: [] };
       }
-    } catch (e: any) {
-      console.warn('⚠️ Socket emission error on order creation:', e?.message);
+      vendorItemsMap[vId].items.push(item);
+    });
+
+    const vendorIds = Object.keys(vendorItemsMap);
+    const parentOrderId = `ORD-${Date.now()}`;
+    const createdSubOrders: any[] = [];
+
+    // Create sub-order for each vendor
+    for (let index = 0; index < vendorIds.length; index++) {
+      const vId = vendorIds[index];
+      const { restaurantName: vName, items: vItems } = vendorItemsMap[vId];
+
+      // Calculate vendor-specific subtotal and portion of delivery/taxes
+      const vSubtotal = vItems.reduce((acc: number, i: any) => acc + Number(i.price || 0) * Number(i.quantity || 1), 0);
+      const vRatio = subtotal > 0 ? vSubtotal / Number(subtotal) : 1 / vendorIds.length;
+      const vDelivery = Number((Number(deliveryFee || 0) * vRatio).toFixed(2));
+      const vTax = Number((Number(taxes || 0) * vRatio).toFixed(2));
+      const vTotal = Number((vSubtotal + vDelivery + vTax).toFixed(2));
+
+      // Append suffix if multiple vendors in order
+      const subOrderId = vendorIds.length > 1 ? `${parentOrderId}-${index + 1}` : parentOrderId;
+
+      const orderData = {
+        orderId: subOrderId,
+        parentOrderId,
+        customerId: customerId || `CUST_${Date.now()}`,
+        restaurantId: vId,
+        restaurantName: vName,
+        customerName: customerName || 'Valued Customer',
+        customerPhone: customerPhone || '',
+        deliveryAddress: deliveryAddress || '',
+        paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
+        items: vItems.map((i: any) => ({
+          menuItemId: i.id || i.menuItemId || `item_${Date.now()}`,
+          foodName: i.name || i.foodName || 'Food Item',
+          quantity: Number(i.quantity || 1),
+          price: Number(i.price || 0),
+          image: i.image || '',
+          restaurantId: vId,
+          restaurantName: vName
+        })),
+        subtotal: vSubtotal,
+        deliveryCharge: vDelivery,
+        tax: vTax,
+        totalAmount: vTotal,
+        rawItems: vItems
+      };
+
+      const created = await orderService.createOrder(orderData as any);
+
+      const newOrderObj = {
+        ...created.order,
+        orderId: created.order.orderId,
+        id: created.order.orderId,
+        parentOrderId,
+        restaurantId: vId,
+        restaurantName: vName,
+        customerName: customerName || 'Valued Customer',
+        customerPhone: customerPhone || '',
+        deliveryAddress: deliveryAddress || '',
+        totalAmount: vTotal,
+        total: vTotal,
+        status: 'Pending',
+        orderStatus: 'Pending',
+        items: vItems,
+        orderedAt: new Date().toISOString(),
+        time: 'Just Now'
+      };
+
+      // Attach raw items to order object
+      (created.order as any).items = vItems;
+
+      // ⚡ Real-Time Socket Emission to Merchant Room & Broadcast
+      try {
+        if (socketService) {
+          socketService.emitOrderCreated(newOrderObj);
+          socketService.getIO().emit('order_created', newOrderObj);
+          console.log(`📡 [Real-Time Order Alert] Emitted order_created for Order #${created.order.orderId} to vendor ${vId}`);
+        }
+      } catch (e: any) {
+        console.warn('⚠️ Socket emission error on order creation:', e?.message);
+      }
+
+      createdSubOrders.push(newOrderObj);
     }
 
     res.status(201).json({
       success: true,
-      message: 'Order created and saved to DynamoDB successfully.',
-      orderId: created.order.orderId,
-      order: created.order,
-      items: created.orderItems
+      message: 'Order created and logically split per vendor successfully.',
+      parentOrderId,
+      orderId: createdSubOrders[0]?.orderId || parentOrderId,
+      orders: createdSubOrders
     });
   } catch (error: any) {
     console.error('Error creating order in DynamoDB:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to save order to DynamoDB database.',
+      error: 'Failed to save order to database.',
       details: error.message
     });
   }
@@ -514,7 +550,7 @@ app.put('/api/orders/:orderId/status', handleOrderStatusUpdate);
 app.patch('/api/restaurant/orders/:orderId/status', handleOrderStatusUpdate);
 app.put('/api/restaurant/orders/:orderId/status', handleOrderStatusUpdate);
 
-// Fetch Orders for a specific Customer
+// Fetch Orders for a specific Customer (Consolidates multi-vendor sub-orders under a single Parent Order for Customer view)
 app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) => {
   try {
     const { customerId } = req.params;
@@ -526,7 +562,16 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
       allRestaurants = await restaurantService.getAllRestaurants();
     } catch (e) { }
 
-    const enriched = await Promise.all(orders.map(async (o: any) => {
+    const resMap: Record<string, string> = {};
+    allRestaurants.forEach((r: any) => {
+      resMap[r.id || r.restaurantId] = r.name || r.restaurantName;
+    });
+
+    const parentGroupMap: Record<string, any> = {};
+
+    for (const o of orders) {
+      const parentId = o.parentOrderId || o.orderId;
+
       let itemsList = o.items || o.rawItems || [];
       if (!Array.isArray(itemsList) || itemsList.length === 0) {
         try {
@@ -538,35 +583,54 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
               name: di.foodName || 'Food Item',
               quantity: Number(di.quantity || 1),
               price: Number(di.price || 0),
-              image: di.foodImage || ''
+              image: di.foodImage || '',
+              restaurantId: di.restaurantId || o.restaurantId,
+              restaurantName: di.restaurantName || o.restaurantName || resMap[di.restaurantId] || resMap[o.restaurantId]
             }));
           }
-        } catch (e) {
-          console.warn(`Error fetching items for order ${o.orderId}:`, e);
-        }
+        } catch (e) { }
       }
 
-      // Resolve human-readable restaurant name
-      let resName = o.restaurantName;
-      if (!resName || resName === 'RES_DEFAULT' || resName === 'Partner Restaurant') {
-        const found = allRestaurants.find((r: any) => r.id === o.restaurantId || r.restaurantId === o.restaurantId);
-        if (found && found.name) {
-          resName = found.name;
-        } else if (allRestaurants.length > 0 && allRestaurants[0]?.name) {
-          resName = allRestaurants[0].name;
-        } else {
-          resName = 'Likhith foods';
-        }
-      }
+      // Ensure each item has its specific shop/restaurant name
+      const enrichedItems = itemsList.map((i: any) => ({
+        ...i,
+        restaurantId: i.restaurantId || o.restaurantId,
+        restaurantName: i.restaurantName || o.restaurantName || resMap[i.restaurantId] || resMap[o.restaurantId] || 'Gourmet Kitchen'
+      }));
 
+      if (!parentGroupMap[parentId]) {
+        parentGroupMap[parentId] = {
+          ...o,
+          orderId: parentId,
+          id: parentId,
+          restaurantName: o.restaurantName || resMap[o.restaurantId] || 'Multi-Vendor Order',
+          items: [...enrichedItems],
+          subtotal: Number(o.subtotal || 0),
+          deliveryCharge: Number(o.deliveryCharge || 0),
+          tax: Number(o.tax || 0),
+          totalAmount: Number(o.totalAmount || 0),
+          vendorNames: new Set([o.restaurantName || resMap[o.restaurantId] || 'Vendor'])
+        };
+      } else {
+        const existing = parentGroupMap[parentId];
+        existing.items = [...existing.items, ...enrichedItems];
+        existing.subtotal += Number(o.subtotal || 0);
+        existing.deliveryCharge += Number(o.deliveryCharge || 0);
+        existing.tax += Number(o.tax || 0);
+        existing.totalAmount += Number(o.totalAmount || 0);
+        existing.vendorNames.add(o.restaurantName || resMap[o.restaurantId] || 'Vendor');
+      }
+    }
+
+    const consolidatedOrders = Object.values(parentGroupMap).map((o: any) => {
+      const vendorsList = Array.from(o.vendorNames).filter(Boolean);
       return {
         ...o,
-        restaurantName: resName,
-        items: itemsList
+        restaurantName: vendorsList.length > 1 ? vendorsList.join(' • ') : (vendorsList[0] || 'Multi-Vendor Order')
       };
-    }));
+    });
 
-    res.json({ success: true, orders: enriched });
+    res.json({ success: true, orders: consolidatedOrders });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch customer orders.', details: error.message });
   }
@@ -1156,33 +1220,52 @@ app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Respon
     const resName = targetRestaurant?.name?.toLowerCase() || '';
     const resIdStr = restaurantId.toLowerCase();
 
-    // 3. Filter orders belonging to this restaurant
+    // 3. Filter orders belonging strictly to this restaurant/vendor
     const filteredOrders = allOrders.filter((ord: any) => {
       if (restaurantId === 'all') return true;
 
       const ordResId = (ord.restaurantId || '').toLowerCase();
       const ordResName = (ord.restaurantName || '').toLowerCase();
+      const itemsList = ord.items || ord.rawItems || [];
 
-      // Direct match on restaurantId
+      // Check if any item in the order explicitly belongs to this vendor
+      const hasVendorItem = Array.isArray(itemsList) && itemsList.some((item: any) => {
+        const itemResId = (item.restaurantId || '').toLowerCase();
+        const itemResName = (item.restaurantName || '').toLowerCase();
+        return itemResId ? (
+          itemResId === resIdStr ||
+          itemResId === targetRestaurant?.id?.toLowerCase() ||
+          itemResId === targetRestaurant?.restaurantId?.toLowerCase()
+        ) : (resName && itemResName && itemResName === resName);
+      });
+
+      if (hasVendorItem) {
+        return true;
+      }
+
+      // Check direct order-level match (only if order items don't explicitly belong to other vendors)
+      const hasOtherVendorItems = Array.isArray(itemsList) && itemsList.some((item: any) => {
+        const itemResId = (item.restaurantId || '').toLowerCase();
+        return itemResId && itemResId !== resIdStr && itemResId !== targetRestaurant?.id?.toLowerCase() && itemResId !== targetRestaurant?.restaurantId?.toLowerCase();
+      });
+
+      if (hasOtherVendorItems) {
+        return false;
+      }
+
       if (ordResId && (ordResId === resIdStr || ordResId === targetRestaurant?.id?.toLowerCase() || ordResId === targetRestaurant?.restaurantId?.toLowerCase())) {
         return true;
       }
 
-      // Name match
-      if (resName && ordResName && (ordResName.includes(resName) || resName.includes(ordResName))) {
-        return true;
-      }
-
-      // Fallback for single restaurant or RES_DEFAULT
-      if (ordResId === 'res_default' || !ordResId) {
+      if (resName && ordResName && ordResName === resName) {
         return true;
       }
 
       return false;
     });
 
-    // 4. Enrich orders with items if missing
-    const mapped = await Promise.all(filteredOrders.map(async (ord: any) => {
+    // 4. Enrich and strictly scope items and totals to this vendor only
+    const mappedPromises = filteredOrders.map(async (ord: any) => {
       let itemsList = ord.items || ord.rawItems || [];
       if (!Array.isArray(itemsList) || itemsList.length === 0) {
         try {
@@ -1193,23 +1276,49 @@ app.get('/api/restaurant/orders/:restaurantId', async (req: Request, res: Respon
               name: di.foodName || 'Food Item',
               foodName: di.foodName || 'Food Item',
               quantity: Number(di.quantity || 1),
-              price: Number(di.price || 0)
+              price: Number(di.price || 0),
+              restaurantId: di.restaurantId,
+              restaurantName: di.restaurantName
             }));
           }
         } catch (e) { }
       }
+
+      // Filter items to vendor-only items
+      const vendorItems = itemsList.filter((i: any) => {
+        if (restaurantId === 'all') return true;
+        const iResId = (i.restaurantId || '').toLowerCase();
+        const iResName = (i.restaurantName || '').toLowerCase();
+        if (iResId) {
+          return (
+            iResId === resIdStr ||
+            iResId === targetRestaurant?.id?.toLowerCase() ||
+            iResId === targetRestaurant?.restaurantId?.toLowerCase()
+          );
+        }
+        if (resName && iResName) {
+          return iResName === resName;
+        }
+        return (ord.restaurantId || '').toLowerCase() === resIdStr;
+      });
+
+      const finalItems = vendorItems;
+      const vendorSubtotal = finalItems.reduce((acc: number, item: any) => acc + Number(item.price || 0) * Number(item.quantity || 1), 0);
 
       return {
         ...ord,
         id: ord.orderId,
         customerPhone: ord.customerPhone || '',
         customerAddress: ord.deliveryAddress,
-        total: ord.totalAmount,
-        orderStatus: ord.status,
+        total: vendorSubtotal > 0 ? vendorSubtotal : ord.totalAmount,
+        totalAmount: vendorSubtotal > 0 ? vendorSubtotal : ord.totalAmount,
+        orderStatus: ord.status || ord.orderStatus || 'Pending',
         time: ord.orderedAt,
-        items: itemsList
+        items: finalItems
       };
-    }));
+    });
+
+    const mapped = (await Promise.all(mappedPromises)).filter(ord => ord.items && ord.items.length > 0);
 
     res.json({ success: true, orders: mapped });
   } catch (error: any) {

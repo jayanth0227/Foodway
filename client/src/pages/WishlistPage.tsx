@@ -43,6 +43,9 @@ export const WishlistPage: React.FC = () => {
       restaurantId: item.restaurantId || '',
       restaurantName: item.restaurantName || '',
       category: item.category || '',
+      rating: item.rating || 0,
+      type: 'veg',
+      description: '',
     });
   };
 

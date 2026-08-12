@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
 import { CartProvider } from './context/CartContext';
@@ -35,10 +35,7 @@ import { requestNotificationPermission } from "./utils/requestNotificationPermis
 import { setupForegroundMessageListener } from "./utils/onForegroundMessage";
 
 const AppContent: React.FC = () => {
-  const [authModal, setAuthModal] = useState<{ isOpen: boolean; type: 'login' | 'register' }>({
-    isOpen: false,
-    type: 'login',
-  });
+  const navigate = useNavigate();
 
   // Lenis Smooth Scroll Initialization
   useEffect(() => {
@@ -63,21 +60,13 @@ const AppContent: React.FC = () => {
   }, []);
 
   const openAuthModal = (type: 'login' | 'register') => {
-    setAuthModal({ isOpen: true, type });
+    navigate(type === 'register' ? '/register' : '/login', { state: { authType: type } });
   };
 
   useEffect(() => {
     requestNotificationPermission();
     setupForegroundMessageListener();
   }, []);
-
-  const closeAuthModal = () => {
-    setAuthModal((prev) => ({ ...prev, isOpen: false }));
-  };
-
-  const setAuthType = (type: 'login' | 'register') => {
-    setAuthModal((prev) => ({ ...prev, type }));
-  };
 
   const location = useLocation();
 
@@ -92,7 +81,8 @@ const AppContent: React.FC = () => {
     location.pathname.startsWith('/restaurant/') ||
     location.pathname === '/restaurant' ||
     location.pathname.startsWith('/delivery') ||
-    location.pathname === '/login';
+    location.pathname === '/login' ||
+    location.pathname === '/register';
 
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
@@ -102,13 +92,6 @@ const AppContent: React.FC = () => {
       <ItemAddedToast />
       <FloatingCartBar />
       <OfflineDetector />
-
-      <AuthModals
-        isOpen={authModal.isOpen}
-        onClose={closeAuthModal}
-        type={authModal.type}
-        setType={setAuthType}
-      />
 
       {/* Main Page Content */}
       <main className="relative z-10">
@@ -122,6 +105,7 @@ const AppContent: React.FC = () => {
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/orders" element={<CustomerOrdersPage />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Login />} />
           <Route path="/admin" element={<Login />} />
           <Route path="/admin/login" element={<Login />} />
           <Route

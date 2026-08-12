@@ -26,7 +26,7 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
   const merged: CategoryItem[] = [];
   const seen = new Set<string>();
 
-  // 1. Add DB categories first
+  // Only include categories that exist in the database (or are created by vendors)
   if (Array.isArray(dbCategories)) {
     dbCategories.forEach((cat) => {
       const rawName = cat.name || '';
@@ -62,15 +62,6 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
       }
     });
   }
-
-  // 2. Add remaining default culinary categories
-  DEFAULT_CULINARY_CATEGORIES.forEach((defaultCat) => {
-    const lowerName = defaultCat.name.toLowerCase();
-    if (!seen.has(lowerName)) {
-      seen.add(lowerName);
-      merged.push(defaultCat);
-    }
-  });
 
   return merged;
 };

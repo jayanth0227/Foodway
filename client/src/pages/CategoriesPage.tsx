@@ -156,26 +156,24 @@ export const CategoriesPage: React.FC = () => {
     if (!selectedCategory) return true;
     const catLower = selectedCategory.toLowerCase();
 
-    // 1. Check shop cuisine or name
+    const shopId = shop.id || shop.restaurantId;
     const shopCuisine = (shop.cuisine || '').toLowerCase();
     const shopName = (shop.name || '').toLowerCase();
-    const matchesCuisine = shopCuisine.includes(catLower) || shopName.includes(catLower);
 
-    // 2. Check keywords mapping
-    const keywords = currentCategoryObj.keywords || [];
-    const matchesKeyword = keywords.some(kw => shopCuisine.includes(kw) || shopName.includes(kw));
+    // 1. Check if shop cuisine directly matches category
+    const matchesCuisine = shopCuisine.includes(catLower);
 
-    // 3. Check menu items matching category
-    const shopDishes = dishes.filter(d => d.restaurantId === (shop.id || shop.restaurantId));
+    // 2. Check if shop has menu items under this category
+    const shopDishes = dishes.filter(d => (d.restaurantId === shopId || d.restaurantName === shop.name));
     const matchesDishCategory = shopDishes.some(d =>
-      (d.category || '').toLowerCase().includes(catLower) ||
-      keywords.some(kw => (d.category || '').toLowerCase().includes(kw) || (d.name || '').toLowerCase().includes(kw))
+      (d.category || '').toLowerCase() === catLower ||
+      (d.category || '').toLowerCase().includes(catLower)
     );
 
-    // Matches search term inside category view as well
+    // Matches search term inside category view
     const matchesShopSearch = !searchTerm || shopName.includes(searchTerm.toLowerCase()) || shopCuisine.includes(searchTerm.toLowerCase());
 
-    return (matchesCuisine || matchesKeyword || matchesDishCategory || restaurants.length <= 2) && matchesShopSearch;
+    return (matchesCuisine || matchesDishCategory) && matchesShopSearch;
   });
 
   return (

@@ -77,7 +77,8 @@ export const CartPage: React.FC = () => {
           price: item.dish.price,
           quantity: item.quantity,
           image: item.dish.image,
-          restaurantId: (item.dish as any).restaurantId || targetRestaurantId
+          restaurantId: (item.dish as any).restaurantId || targetRestaurantId,
+          restaurantName: (item.dish as any).restaurantName || targetRestaurantName
         })),
         subtotal: totalAmount,
         deliveryFee,

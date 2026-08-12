@@ -1,115 +1,142 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { motion, useScroll, useSpring } from 'framer-motion';
+import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
+import { Utensils, Zap, MapPin, ShieldCheck, HeartHandshake, Smile, Sparkles, CheckCircle2, Award, Star } from 'lucide-react';
 import { TIMELINE_STEPS } from '../../utils/mockData';
 import { DeliveryProcessSkeleton } from './HomePageSkeleton';
+
+// Map icon names to Lucide icons
+const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
+  Utensils,
+  Zap,
+  MapPin,
+  ShieldCheck,
+  HeartHandshake,
+  Smile
+};
 
 export const DeliveryProcess: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
+    const timer = setTimeout(() => setLoading(false), 250);
     return () => clearTimeout(timer);
   }, []);
 
   // Track scroll inside the timeline container
   const { scrollYProgress } = useScroll({
     target: containerRef,
-    offset: ['start center', 'end center'],
+    offset: ['start 80%', 'end 50%'],
   });
 
   // Smooth scroll progression line
   const scaleY = useSpring(scrollYProgress, {
-    stiffness: 100,
-    damping: 30,
+    stiffness: 90,
+    damping: 25,
     restDelta: 0.001,
   });
 
   if (loading) return <DeliveryProcessSkeleton />;
 
- 
   return (
     <section
       id="delivery-process"
       ref={containerRef}
-      className="py-16 md:py-20 lg:py-30 bg-bg-darkSec border-t border-glass relative"
+      className="py-16 sm:py-24 lg:py-32 bg-bg-darkSec border-t border-glass relative overflow-hidden selection:bg-primary/30"
     >
-      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
-       
-        {/* Section Header */}
-        <div className="text-center max-w-2xl mx-auto mb-20 space-y-4">
+      {/* Dynamic Background Glowing Spheres */}
+      <div className="absolute top-1/4 left-1/4 w-[450px] h-[450px] bg-primary/10 rounded-full blur-[140px] pointer-events-none -z-10 animate-pulse" />
+      <div className="absolute bottom-1/4 right-1/4 w-[550px] h-[550px] bg-amber-500/10 rounded-full blur-[160px] pointer-events-none -z-10" />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 relative z-10">
+
+        {/* Animated Section Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="text-center max-w-3xl mx-auto mb-16 sm:mb-24 space-y-4"
+        >
          
-          <h2 className="text-3xl md:text-4xl font-extrabold font-display text-gradient-gold">
-          Why Choose MK Delivery..!
+
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black font-display text-gradient-gold tracking-tight leading-tight">
+            Why Choose MK Delivery..!
           </h2>
-          <p className="text-xs md:text-sm text-text-secondary font-medium">
-            Follow the meticulous progression of your gourmet order, from organic prep to temperature-sealed delivery.
+
+          <p className="text-xs sm:text-sm md:text-base text-text-muted font-medium max-w-xl mx-auto leading-relaxed">
+            From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.
           </p>
-        </div>
- 
-        {/* Timeline Component Container */}
-        <div className="relative mt-16 max-w-4xl mx-auto">
-          {/* Vertical progress bar line */}
-          <div className="absolute left-[16px] md:left-1/2 top-0 bottom-0 w-[2px] bg-glass-subtle -translate-x-[1px]" />
-         
+        </motion.div>
+
+        {/* Interactive Timeline Component Container */}
+        <div className="relative mt-6 sm:mt-12 max-w-4xl mx-auto">
+          {/* Background vertical connector track */}
+          <div className="absolute left-[14px] md:left-1/2 top-4 bottom-4 w-[2px] bg-glass-subtle -translate-x-[1px] rounded-full" />
+
+          {/* Smooth Scroll Moving Line (Pure Website Primary Theme Color) */}
           <motion.div
             style={{ scaleY }}
-            className="absolute left-[16px] md:left-1/2 top-0 bottom-0 w-[2px] bg-gradient-to-b from-primary to-accent -translate-x-[1px] origin-top z-10"
+            className="absolute left-[14px] md:left-1/2 top-4 bottom-4 w-[2px] bg-primary -translate-x-[1px] origin-top z-10 shadow-[0_0_8px_var(--color-primary)] rounded-full"
           />
- 
-          {/* Steps list */}
-          <div className="space-y-16 relative z-20">
+
+          {/* Timeline Step Cards */}
+          <div className="space-y-10 sm:space-y-14 relative z-20">
             {TIMELINE_STEPS.map((step, idx) => {
               const isEven = idx % 2 === 0;
- 
+              const IconComp = iconMap[step.iconName] || Utensils;
+
               return (
                 <div
                   key={step.id}
                   className={`flex flex-col md:flex-row items-start ${
                     isEven ? 'md:flex-row-reverse' : ''
-                  } relative`}
+                  } relative group`}
                 >
-                  {/* Glowing bubble anchor */}
-                  <div className="absolute left-[16px] md:left-1/2 w-8.5 h-8.5 rounded-full bg-bg-card border border-glass group flex items-center justify-center -translate-x-1/2 z-20 shadow-md">
+                  {/* Micro-sized Glowing Dot Anchor Node (Website Primary Theme) */}
+                  <div className="absolute left-[14px] md:left-1/2 top-4 w-5 h-5 rounded-full bg-bg-dark border border-primary/50 flex items-center justify-center -translate-x-1/2 z-30 shadow-sm transition-all duration-300 group-hover:scale-125 group-hover:border-primary group-hover:shadow-[0_0_10px_var(--color-primary)]">
                     <motion.div
-                      initial={{ scale: 0.7, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
+                      initial={{ scale: 0.6, opacity: 0.3 }}
                       whileInView={{
-                        scale: 1,
+                        scale: [0.7, 1.2, 1],
+                        opacity: 1,
                         backgroundColor: 'var(--color-primary)',
-                        boxShadow: '0 0 15px var(--color-primary)',
+                        boxShadow: '0 0 8px var(--color-primary)'
                       }}
-                      viewport={{ once: false, margin: '-100px 0px -50% 0px' }}
-                      transition={{ duration: 0.5 }}
-                      className="w-3.5 h-3.5 rounded-full"
+                      viewport={{ once: false, margin: '-20px' }}
+                      transition={{ duration: 0.4, ease: 'easeOut' }}
+                      className="w-2 h-2 rounded-full bg-primary"
                     />
                   </div>
- 
-                  {/* Card Content Column */}
-                  <div className={`w-full md:w-1/2 pl-12 md:pl-0 ${isEven ? 'md:pr-12 text-left md:text-right' : 'md:pl-12 text-left'}`}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 25, scale: 0.98 }}
-                      whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                      viewport={{ once: true, margin: '-60px' }}
-                      transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] as any }}
-                      className="premium-card p-6 inline-block w-full max-w-md relative group"
-                    >
-                      {/* Card Header (Title & Badge side-by-side) */}
-                      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2.5 ${isEven ? 'sm:flex-row-reverse' : ''}`}>
-                        <h3 className="font-display font-bold text-text-primary group-hover:text-primary transition-colors duration-300 tracking-tight text-sm sm:text-base">
-                          {step.title}
-                        </h3>
-                        <span className="self-start sm:self-center text-[9px] font-bold uppercase tracking-wider text-primary bg-glass-subtle border border-primary/20 px-2.5 py-1 rounded-md whitespace-nowrap">
+
+                  {/* Original Compact Premium Card Content with Foodway Brown Accent Background */}
+                  <div className={`w-full md:w-1/2 pl-10 md:pl-0 ${isEven ? 'md:pr-8 text-left md:text-right' : 'md:pl-8 text-left'}`}>
+                    <div className="premium-card p-4 sm:p-5 inline-block w-full max-w-md relative group bg-gradient-to-br from-secondary/15 via-bg-cardSec to-secondary/10 border border-secondary/30 hover:border-primary/60 shadow-luxury transition-all duration-300">
+                      {/* Card Header (Title on left, Tag Line Right-Aligned) */}
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className={`w-7 h-7 rounded-lg border ${step.iconBg || 'bg-primary/20 border-primary/40'} ${step.iconColor || 'text-primary'} flex items-center justify-center shrink-0 shadow-xs transition-transform duration-300 group-hover:scale-110`}>
+                            <IconComp size={15} />
+                          </div>
+                          <h3 className="font-display font-bold text-text-primary group-hover:text-primary transition-colors duration-300 tracking-tight text-xs sm:text-sm truncate">
+                            {step.title}
+                          </h3>
+                        </div>
+
+                        {/* Tagline Badge Right Aligned */}
+                        <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/15 border border-primary/30 px-2 py-0.5 rounded-md whitespace-nowrap ml-auto">
                           {step.timeEstimate}
                         </span>
                       </div>
- 
-                      <p className="text-xs text-text-muted mt-2 leading-relaxed font-medium">
+
+                      <p className="text-[11px] sm:text-xs text-text-muted mt-1.5 leading-relaxed font-medium">
                         {step.description}
                       </p>
-                    </motion.div>
+                    </div>
                   </div>
- 
-                  {/* Spacer column for desktop */}
+
+                  {/* Spacer column for desktop symmetry */}
                   <div className="hidden md:block w-1/2" />
                 </div>
               );
@@ -120,4 +147,5 @@ export const DeliveryProcess: React.FC = () => {
     </section>
   );
 };
+
 export default DeliveryProcess;

@@ -1,17 +1,45 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft, ShieldCheck, Sun, Moon, AlertCircle, CheckCircle2, User as UserIcon, Phone } from 'lucide-react';
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Sun,
+  Moon,
+  AlertCircle,
+  CheckCircle2,
+  User as UserIcon,
+  Phone,
+  Store,
+  ShieldAlert,
+  ChevronDown,
+  Home as HomeIcon
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 
 export const Login: React.FC = () => {
-  const [authType, setAuthType] = useState<'login' | 'register'>('login');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const [authType, setAuthType] = useState<'login' | 'register'>(() => {
+    if ((location.state as any)?.authType) return (location.state as any).authType;
+    if (location.pathname === '/register') return 'register';
+    return 'login';
+  });
+
+  const [selectedRole, setSelectedRole] = useState<'USER' | 'RESTAURANT' | 'ADMIN'>('USER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [agreedTerms, setAgreedTerms] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
@@ -19,8 +47,27 @@ export const Login: React.FC = () => {
 
   const { login, register, isLoading, isAuthenticated, role } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
-  const location = useLocation();
+
+  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotSubmitted(true);
+    setTimeout(() => {
+      setForgotSubmitted(false);
+      setShowForgotPasswordModal(false);
+      setForgotEmail('');
+    }, 2500);
+  };
+
+  React.useEffect(() => {
+    if ((location.state as any)?.authType) {
+      setAuthType((location.state as any).authType);
+    } else if (location.pathname === '/register') {
+      setAuthType('register');
+    } else if (location.pathname === '/login') {
+      setAuthType('login');
+    }
+  }, [location.pathname, location.state]);
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -42,13 +89,18 @@ export const Login: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
+    if (!agreedTerms) {
+      setErrorMessage('Please accept the Terms of use and Privacy Policy to proceed.');
+      return;
+    }
+
     if (authType === 'login') {
       if (!email.trim() || !password) {
         setErrorMessage('Please enter both email address and password.');
         return;
       }
 
-      const result = await login(email, password);
+      const result = await login(email, password, selectedRole);
 
       if (result.success && result.role) {
         const userRole = result.role.toUpperCase();
@@ -71,6 +123,11 @@ export const Login: React.FC = () => {
         return;
       }
 
+      if (confirmPassword && password !== confirmPassword) {
+        setErrorMessage('Passwords do not match. Please verify your password.');
+        return;
+      }
+
       const result = await register(name, email, password, phone);
       if (result.success) {
         navigate('/', { replace: true });
@@ -80,298 +137,396 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotEmail.trim()) return;
-    setForgotSubmitted(true);
-    setTimeout(() => {
-      setForgotSubmitted(false);
-      setShowForgotPasswordModal(false);
-      setForgotEmail('');
-    }, 2500);
-  };
+
 
   return (
-    <div className="relative min-h-screen bg-bg-dark text-text-primary flex flex-col justify-between overflow-hidden selection:bg-primary/30 selection:text-primary transition-colors duration-500">
-      {/* Background Decorator Elements */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none -z-10 animate-pulse" />
-      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-secondary/10 rounded-full blur-[160px] pointer-events-none -z-10" />
-
-      {/* Top Header Navigation */}
-      <header className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex items-center justify-between z-20">
+    <div className="min-h-screen bg-[#FAF8F6] dark:bg-[#090B10] text-[#1A1A1A] dark:text-white flex flex-col justify-between font-sans transition-colors duration-400 selection:bg-[#C59363]/30">
+      
+      {/* Top Header Navigation (Minimal & Elegant) */}
+      <header className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between z-20">
         <Link to="/" className="flex items-center space-x-2.5 group">
           <img
             src="/logo.jpeg"
-            alt="Foodway"
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover border border-primary/30 group-hover:border-primary transition-all duration-300 shadow-md"
+            alt="MK Delivery Logo"
+            className="w-10 h-10 rounded-full object-cover border border-[#C59363]/40 shadow-sm group-hover:scale-105 transition-all"
           />
           <div className="flex flex-col leading-none">
-            <span className="text-sm font-black tracking-[0.18em] font-display text-text-primary uppercase group-hover:text-primary transition-colors">
-              Foodway
+            <span className="text-base font-extrabold tracking-wider font-display text-[#1A1A1A] dark:text-white uppercase group-hover:text-[#C59363] transition-colors">
+              MK Delivery
             </span>
-            <span className="text-[9px] font-bold tracking-[0.2em] text-primary uppercase mt-0.5">
+            <span className="text-[9px] font-bold tracking-[0.2em] text-[#C59363] uppercase mt-0.5">
               Services
             </span>
           </div>
         </Link>
 
-        <div className="flex items-center space-x-2 sm:space-x-3">
+        <div className="flex items-center space-x-2.5">
           <Link
             to="/"
-            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-glass-subtle border border-glass hover:border-primary/40 hover:bg-glass text-[11px] sm:text-xs font-bold text-text-secondary hover:text-primary transition-all duration-300 shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white dark:bg-[#181C25] border border-stone-200 dark:border-white/10 text-xs font-bold text-stone-700 dark:text-stone-300 hover:text-[#C59363] dark:hover:text-[#C59363] hover:border-[#C59363]/50 transition-all shadow-sm group"
           >
-            <ArrowLeft size={14} />
-            <span>Home</span>
+            <HomeIcon size={14} className="text-[#C59363] group-hover:scale-110 transition-transform" />
+            <span className="hidden sm:inline">Home</span>
           </Link>
 
           <button
             onClick={toggleTheme}
-            className="p-2 sm:p-2.5 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 text-text-secondary hover:text-primary transition-all duration-300"
+            className="p-2 rounded-full bg-white dark:bg-[#181C25] border border-stone-200 dark:border-white/10 text-stone-700 dark:text-stone-300 hover:text-[#C59363] transition-all shadow-sm group cursor-pointer"
             aria-label="Toggle Theme"
+            title="Toggle Theme"
           >
-            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            {theme === 'light' ? (
+              <Moon size={16} className="group-hover:scale-110 group-hover:rotate-[15deg] transition-all duration-300 text-[#C59363]" />
+            ) : (
+              <Sun size={16} className="group-hover:scale-110 group-hover:rotate-[45deg] transition-all duration-300 text-[#C59363]" />
+            )}
           </button>
         </div>
       </header>
 
-      {/* Main Login Card Center Container */}
-      <main className="flex-1 flex items-center justify-center px-3.5 sm:px-4 py-4 sm:py-8 z-10 overflow-y-auto min-h-[calc(100dvh-70px)]">
+      {/* Main Centered User-Friendly Form Card */}
+      <main className="flex-1 flex items-center justify-center px-4 py-4 sm:py-8 z-10 my-auto">
         <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-md my-auto"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="w-full max-w-md bg-white dark:bg-[#181C25] rounded-3xl p-6 sm:p-8 shadow-xl dark:shadow-2xl border border-stone-200/80 dark:border-white/10 relative overflow-hidden"
         >
-          <div className="bg-glass-card backdrop-blur-2xl border border-glass rounded-3xl p-5 sm:p-10 shadow-luxury relative overflow-hidden group">
-            {/* Ambient Card Glow Header */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary-dark" />
+          
+          {/* Top Switcher Segmented Tabs */}
+          <div className="flex bg-stone-100 dark:bg-[#11141B] p-1 rounded-2xl mb-6 border border-stone-200/60 dark:border-white/5">
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage(null);
+                setAuthType('login');
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+                authType === 'login'
+                  ? 'bg-[#C59363] text-white shadow-md'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage(null);
+                setAuthType('register');
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+                authType === 'register'
+                  ? 'bg-[#C59363] text-white shadow-md'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+              }`}
+            >
+              Register
+            </button>
+          </div>
 
-            {/* Mode Switcher Tabs */}
-            <div className="flex bg-glass/60 p-1 rounded-2xl border border-glass mb-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage(null);
-                  setAuthType('login');
-                }}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'login'
-                  ? 'btn-primary shadow-md'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage(null);
-                  setAuthType('register');
-                }}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'register'
-                  ? 'btn-primary shadow-md'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                Register
-              </button>
-            </div>
+          {/* Form Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight font-display">
+              {authType === 'login' ? 'Welcome Back!' : 'Create Your Account'}
+            </h1>
+            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1 font-medium leading-relaxed">
+              {authType === 'login'
+                ? 'Sign in to continue to MK Delivery'
+                : 'Register for gourmet food delivery & orders'}
+            </p>
+          </div>
 
-            {/* Header Content */}
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary mb-3 shadow-sm overflow-hidden p-1">
-                {/* Mobile: Foodway MK Logo Image */}
-                <img
-                  src="/logo.jpeg"
-                  alt="MK Logo"
-                  className="w-full h-full rounded-xl object-cover sm:hidden"
-                />
-                {/* Desktop: ShieldCheck Icon */}
-                <ShieldCheck size={26} className="hidden sm:block" />
-              </div>
-              <h1 className="text-xl sm:text-3xl font-extrabold tracking-tight font-display text-text-primary">
-                {authType === 'login' ? 'Welcome Back' : 'Join Foodway'}
-              </h1>
-              <p className="text-[11px] sm:text-xs text-text-muted mt-1.5 tracking-wide uppercase font-semibold">
-                {authType === 'login' ? 'Sign in to access your account' : 'Register for gourmet food delivery & orders'}
-              </p>
-            </div>
-
-            {/* Error Message Alert */}
-            <AnimatePresence>
-              {errorMessage && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  animate={{ opacity: 1, height: 'auto', marginBottom: 16 }}
-                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  className="bg-error/10 border border-error/20 rounded-2xl p-3.5 flex items-start space-x-2.5 text-error text-xs overflow-hidden"
-                >
-                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                  <span className="font-semibold leading-relaxed">{errorMessage}</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Auth Form */}
-            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-              {authType === 'register' && (
-                <>
-                  <div className="space-y-1">
-                    <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
-                      Full Name
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
-                        <UserIcon size={16} />
-                      </div>
-                      <input
-                        type="text"
-                        required
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Enter your full name"
-                        className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-4 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
-                      Phone Number (Optional)
-                    </label>
-                    <div className="relative group">
-                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
-                        <Phone size={16} />
-                      </div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="Enter phone number"
-                        className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-4 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* Email Input */}
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Login Role Selector */}
+            {authType === 'login' && (
               <div className="space-y-1">
-                <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary ml-1">
-                  Email Address
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                  Select Role
                 </label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
-                    <Mail size={16} />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#C59363]">
+                    {selectedRole === 'USER' && <UserIcon size={18} />}
+                    {selectedRole === 'RESTAURANT' && <Store size={18} />}
+                    {selectedRole === 'ADMIN' && <ShieldAlert size={18} />}
+                  </div>
+                  <select
+                    value={selectedRole}
+                    onChange={(e) => {
+                      setSelectedRole(e.target.value as any);
+                      setErrorMessage(null);
+                    }}
+                    className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 hover:border-[#C59363] focus:border-[#C59363] rounded-xl py-3 pl-11 pr-10 text-sm text-stone-900 dark:text-white font-semibold focus:outline-none transition-all cursor-pointer appearance-none shadow-sm"
+                  >
+                    <option value="USER">User / Customer Portal</option>
+                    <option value="RESTAURANT">Merchant / Restaurant Partner</option>
+                    <option value="ADMIN">System Administrator</option>
+                  </select>
+                  <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-stone-400">
+                    <ChevronDown size={18} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Full Name for Register */}
+            {authType === 'register' && (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                  Full Name
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+                    <UserIcon size={17} />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email address"
-                    className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-4 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Enter your full name"
+                    className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 focus:border-[#C59363] rounded-xl py-3 pl-10 pr-4 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
                   />
                 </div>
               </div>
+            )}
 
-              {/* Password Input */}
+            {/* Mobile Number for Register */}
+            {authType === 'register' && (
               <div className="space-y-1">
-                <div className="flex items-center justify-between ml-1">
-                  <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary">
-                    Password
-                  </label>
-                  {authType === 'login' && (
-                    <button
-                      type="button"
-                      onClick={() => setShowForgotPasswordModal(true)}
-                      className="text-[11px] sm:text-xs font-bold text-primary hover:text-primary-dark transition-colors"
-                    >
-                      Forgot Password?
-                    </button>
-                  )}
-                </div>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-text-muted group-focus-within:text-primary transition-colors">
-                    <Lock size={16} />
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                  Mobile Number
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+                    <Phone size={17} />
                   </div>
                   <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter your password"
-                    className="w-full bg-glass-subtle border border-glass hover:border-glass-hover focus:border-primary/60 rounded-xl py-2.5 sm:py-3 pl-10 pr-11 text-[15px] sm:text-sm text-text-primary placeholder:text-text-muted focus:outline-none transition-all shadow-inner font-medium"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. 98765 43210"
+                    className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 focus:border-[#C59363] rounded-xl py-3 pl-10 pr-4 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Email Input */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                {authType === 'login' ? 'Mobile Number or Email' : 'Email Address'}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+                  <Mail size={17} />
+                </div>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={authType === 'login' ? 'e.g. 98765 43210 or email' : 'Enter your email address'}
+                  className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 focus:border-[#C59363] rounded-xl py-3 pl-10 pr-4 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Password Input */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                  Password
+                </label>
+                {authType === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPasswordModal(true)}
+                    className="text-xs font-bold text-[#C59363] hover:underline transition-colors"
+                  >
+                    Forgot Password?
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+                  <Lock size={17} />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={authType === 'login' ? 'Enter your password' : 'Create a password'}
+                  className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 focus:border-[#C59363] rounded-xl py-3 pl-10 pr-11 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password for Register */}
+            {authType === 'register' && (
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+                    <Lock size={17} />
+                  </div>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 focus:border-[#C59363] rounded-xl py-3 pl-10 pr-11 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-text-muted hover:text-text-primary transition-colors p-1"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 transition-colors"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
               </div>
+            )}
 
-              {/* Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full py-3.5 rounded-2xl btn-primary text-black font-black text-xs uppercase tracking-widest flex items-center justify-center space-x-2 shadow-luxury hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer mt-2"
-              >
-                {isLoading ? (
-                  <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <span>{authType === 'login' ? 'Sign In' : 'Create Account'}</span>
-                    <ArrowRight size={16} className="stroke-[2.5] group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Role Info Footnote */}
-            <div className="mt-6 pt-5 border-t border-glass text-center text-[11px] text-text-muted space-y-2">
-              <p className="font-medium">Supports Admin, Merchant & Customer accounts.</p>
-              <div>
-                <Link
-                  to="/"
-                  className="inline-flex items-center gap-1.5 font-bold text-primary hover:underline transition-all"
-                >
-                  <ArrowLeft size={12} />
-                  <span>Return to Home Page</span>
-                </Link>
-              </div>
+            {/* Terms Checkbox */}
+            <div className="pt-1">
+              <label className="flex items-start gap-2.5 cursor-pointer text-xs text-stone-600 dark:text-stone-400 leading-snug">
+                <input
+                  type="checkbox"
+                  checked={agreedTerms}
+                  onChange={(e) => setAgreedTerms(e.target.checked)}
+                  className="mt-0.5 rounded border-stone-300 text-[#C59363] focus:ring-[#C59363] accent-[#C59363] w-4 h-4"
+                />
+                <span>
+                  By signing up I agree to the{' '}
+                  <span className="text-[#C59363] font-bold hover:underline">Terms of use</span> and{' '}
+                  <span className="text-[#C59363] font-bold hover:underline">Privacy Policy</span>.
+                </span>
+              </label>
             </div>
+
+            {/* Primary Action CTA Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3.5 rounded-xl bg-[#C59363] hover:bg-[#b58353] active:scale-[0.99] text-white font-extrabold text-sm tracking-wider uppercase shadow-md transition-all cursor-pointer mt-3 flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span>{authType === 'login' ? 'Sign In' : 'Sign Up'}</span>
+                  <ArrowRight size={18} />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Bottom Switcher Link */}
+          <div className="mt-5 text-center text-xs text-stone-500 dark:text-stone-400">
+            {authType === 'login' ? (
+              <>
+                Don’t have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    setAuthType('register');
+                  }}
+                  className="font-bold text-[#C59363] hover:underline"
+                >
+                  Register
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    setAuthType('login');
+                  }}
+                  className="font-bold text-[#C59363] hover:underline"
+                >
+                  Sign In
+                </button>
+              </>
+            )}
           </div>
         </motion.div>
       </main>
 
-      {/* Forgot Password Modal */}
+      {/* Access Alert Modal Popup */}
       <AnimatePresence>
-        {showForgotPasswordModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+        {errorMessage && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="bg-bg-dark border border-glass rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl relative"
+              className="bg-white dark:bg-[#181C25] border border-stone-200 dark:border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 relative"
             >
-              <h3 className="text-xl font-bold text-text-primary mb-2 font-display">
+              <div className="w-14 h-14 rounded-full bg-rose-500/10 text-rose-500 mx-auto flex items-center justify-center">
+                <AlertCircle size={30} />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-bold text-[#1A1A1A] dark:text-white tracking-tight font-display">
+                  Notice
+                </h3>
+                <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed font-medium">
+                  {errorMessage}
+                </p>
+              </div>
+              <button
+                onClick={() => setErrorMessage(null)}
+                className="w-full py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
+              >
+                Close
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Forgot Password Modal */}
+      <AnimatePresence>
+        {showForgotPasswordModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white dark:bg-[#181C25] border border-stone-200 dark:border-white/10 rounded-2xl p-6 sm:p-8 max-w-sm w-full shadow-2xl relative"
+            >
+              <h3 className="text-xl font-bold text-[#1A1A1A] dark:text-white mb-2 font-display">
                 Reset Password
               </h3>
-              <p className="text-xs text-text-muted mb-6">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mb-6">
                 Enter your registered email address and we'll send password reset instructions.
               </p>
 
               {forgotSubmitted ? (
-                <div className="bg-success/10 border border-success/20 rounded-2xl p-4 flex items-center space-x-3 text-success text-xs font-semibold">
+                <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 flex items-center space-x-3 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
                   <CheckCircle2 size={20} className="shrink-0" />
                   <span>Reset instructions have been sent if an account exists.</span>
                 </div>
               ) : (
                 <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
                   <div>
-                    <label className="text-xs font-bold text-text-secondary uppercase">
+                    <label className="text-xs font-bold text-stone-700 dark:text-stone-300 uppercase">
                       Email Address
                     </label>
                     <input
@@ -380,20 +535,20 @@ export const Login: React.FC = () => {
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
                       placeholder="name@company.com"
-                      className="w-full mt-1.5 bg-glass-subtle border border-glass rounded-xl py-3 px-4 text-sm text-text-primary focus:outline-none focus:border-primary"
+                      className="w-full mt-1.5 bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 rounded-xl py-3 px-4 text-sm text-stone-900 dark:text-white focus:outline-none focus:border-[#C59363]"
                     />
                   </div>
                   <div className="flex items-center space-x-3 pt-2">
                     <button
                       type="button"
                       onClick={() => setShowForgotPasswordModal(false)}
-                      className="flex-1 btn-ghost py-2.5 text-xs font-bold uppercase rounded-xl"
+                      className="flex-1 py-2.5 text-xs font-bold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 rounded-xl uppercase transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 btn-primary py-2.5 text-xs font-bold uppercase rounded-xl"
+                      className="flex-1 bg-[#C59363] hover:bg-[#b58353] text-white py-2.5 text-xs font-bold uppercase rounded-xl shadow-md transition-colors"
                     >
                       Send Link
                     </button>
@@ -404,11 +559,6 @@ export const Login: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
-
-      {/* Page Footer */}
-      <footer className="py-4 text-center text-[10px] text-text-muted uppercase tracking-widest z-10">
-        MK Delivery Services &copy; {new Date().getFullYear()} &bull; Secure Authentication System
-      </footer>
     </div>
   );
 };

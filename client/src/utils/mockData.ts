@@ -30,6 +30,8 @@ export interface DishItem {
   description: string;
   isAvailable?: boolean;
   status?: string;
+  restaurantId?: string;
+  restaurantName?: string;
 }
 
 export interface TestimonialItem {
@@ -300,42 +302,70 @@ export const FAQS: FAQItem[] = [
   },
 ];
 
+export interface TimelineStep {
+  id: number;
+  title: string;
+  description: string;
+  timeEstimate: string;
+  iconName: string;
+  iconColor: string;
+  iconBg: string;
+}
+
 export const TIMELINE_STEPS: TimelineStep[] = [
   {
     id: 1,
     title: 'Fresh & Quality Food',
     description: 'We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care.',
     timeEstimate: 'FRESH',
+    iconName: 'Utensils',
+    iconColor: 'text-orange-500',
+    iconBg: 'bg-orange-500/15 border-orange-500/30'
   },
   {
     id: 2,
     title: 'Fast Delivery',
     description: 'Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting.',
     timeEstimate: '20–30 MINS',
+    iconName: 'Zap',
+    iconColor: 'text-amber-400',
+    iconBg: 'bg-amber-400/15 border-amber-400/30'
   },
   {
     id: 3,
     title: 'Live Order Tracking',
     description: 'Track your order in real time from restaurant confirmation until it reaches your doorstep.',
     timeEstimate: 'LIVE',
+    iconName: 'MapPin',
+    iconColor: 'text-emerald-400',
+    iconBg: 'bg-emerald-500/15 border-emerald-500/30'
   },
   {
     id: 4,
     title: 'Safe & Reliable Delivery',
     description: 'Every order is packed carefully and delivered safely by trusted delivery partners because your trust is our responsibility.',
     timeEstimate: 'SAFE',
+    iconName: 'ShieldCheck',
+    iconColor: 'text-indigo-400',
+    iconBg: 'bg-indigo-500/15 border-indigo-500/30'
   },
   {
     id: 5,
     title: 'Local Service You Can Trust',
     description: 'Proudly serving families across Konaseema with reliable delivery and friendly customer support every day.',
     timeEstimate: 'TRUSTED',
+    iconName: 'HeartHandshake',
+    iconColor: 'text-rose-400',
+    iconBg: 'bg-rose-500/15 border-rose-500/30'
   },
   {
     id: 6,
     title: 'Customer Happiness',
     description: 'Your smile after every delivery is what motivates us to serve you better every day.',
     timeEstimate: 'HAPPY',
+    iconName: 'Smile',
+    iconColor: 'text-purple-400',
+    iconBg: 'bg-purple-500/15 border-purple-500/30'
   },
 ];
 
