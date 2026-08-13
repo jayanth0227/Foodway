@@ -52,10 +52,13 @@ export const tableName = process.env.AWS_DYNAMODB_TABLE_NAME || 'mk-delivery-ser
 
 // Clean Architecture Production Table Names
 export const usersTableName = process.env.AWS_DYNAMODB_USERS_TABLE_NAME || 'foodway-users';
-export const restaurantsTableName = process.env.AWS_DYNAMODB_RESTAURANTS_TABLE_NAME || 'foodway-restaurants';
-export const menuItemsTableName = process.env.AWS_DYNAMODB_MENU_ITEMS_TABLE_NAME || 'foodway-menu-items';
+export const shopsTableName = process.env.AWS_DYNAMODB_SHOPS_TABLE_NAME || 'foodway-shops';
+export const restaurantsTableName = shopsTableName; // Backward compatibility alias
+export const itemsTableName = process.env.AWS_DYNAMODB_ITEMS_TABLE_NAME || 'foodway-items';
+export const menuItemsTableName = itemsTableName; // Backward compatibility alias
 export const ordersTableName = process.env.AWS_DYNAMODB_ORDERS_TABLE_NAME || 'foodway-orders';
 export const orderItemsTableName = process.env.AWS_DYNAMODB_ORDER_ITEMS_TABLE_NAME || 'foodway-order-items';
 export const deliveryTableName = process.env.AWS_DYNAMODB_DELIVERY_TABLE_NAME || 'foodway-delivery';
 export const deliveryLocationsTableName = process.env.AWS_DYNAMODB_DELIVERY_LOCATIONS_TABLE_NAME || 'foodway-delivery-locations';
+
 

@@ -47,10 +47,14 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+import shopRouter from './routes/shop.routes';
+
 // Unified Authentication & Notification API Routes
 app.use('/api/auth', authRouter);
 app.use('/api/notifications', notificationRouter);
 app.use('/api', deliveryLocationRouter);
+app.use('/api/shops', shopRouter);
+app.use('/api/restaurants', shopRouter);
 
 
 // Health Check API
@@ -158,10 +162,13 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
     );
 
     if (targetRes) {
-      await restaurantService.updateProfile(targetRes.restaurantId, {
-        isOpen,
-        status: nextStatus
-      });
+      const targetId = targetRes.shopId || targetRes.restaurantId || '';
+      if (targetId) {
+        await restaurantService.updateProfile(targetId, {
+          isOpen,
+          status: nextStatus
+        });
+      }
     }
 
     // 2. Also update in main table if present
@@ -534,6 +541,40 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: `Order [${orderId}] not found.` });
     }
 
+    // ⚡ Real-Time Socket Emissions for Admin, Vendors, Riders & Customers
+    try {
+      if (socketService) {
+        // Emit general order status update to customer, order, and restaurant rooms
+        socketService.emitOrderStatusUpdated(updated);
+        socketService.emitRiderStatusUpdated(updated);
+        socketService.getIO().emit('order_status_updated', updated);
+        socketService.getIO().emit('rider_status_updated', updated);
+
+        const st = String(updated.status || status).toLowerCase();
+        console.log(`📡 [Real-Time Socket Event Triggered] Order #${orderId} Status Changed to: ${st}`);
+
+        // Broadcast READY or ASSIGNED order events to all riders
+        if (st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
+          console.log(`📡 [Real-Time Socket] Emitting order_ready_pickup & order_assigned for Order #${orderId}`);
+          socketService.emitOrderReadyForPickup(updated);
+          socketService.getIO().emit('order_ready_pickup', updated);
+          socketService.getIO().emit('order_assigned', updated);
+          socketService.getIO().to('delivery_riders').emit('order_assigned', updated);
+        }
+
+        // Broadcast DELIVERED order event to Admin & Vendor shops for real-time count updates
+        if (st === 'delivered' || st === 'completed') {
+          console.log(`📡 [Real-Time Socket] Emitting order_delivered for Order #${orderId} to Admin & Vendor Shops`);
+          socketService.getIO().emit('order_delivered', updated);
+          if (updated.restaurantId) {
+            socketService.getIO().to(`restaurant_${updated.restaurantId}`).emit('order_delivered', updated);
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn('⚠️ Socket emission warning on order status update:', e?.message);
+    }
+
     return res.json({
       success: true,
       message: `Order status updated to ${upperStatus}.`,
@@ -549,6 +590,8 @@ app.patch('/api/orders/:orderId/status', handleOrderStatusUpdate);
 app.put('/api/orders/:orderId/status', handleOrderStatusUpdate);
 app.patch('/api/restaurant/orders/:orderId/status', handleOrderStatusUpdate);
 app.put('/api/restaurant/orders/:orderId/status', handleOrderStatusUpdate);
+app.patch('/api/delivery-partner/orders/:orderId/status', handleOrderStatusUpdate);
+app.put('/api/delivery-partner/orders/:orderId/status', handleOrderStatusUpdate);
 
 // Fetch Orders for a specific Customer (Consolidates multi-vendor sub-orders under a single Parent Order for Customer view)
 app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) => {
@@ -585,7 +628,7 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
               price: Number(di.price || 0),
               image: di.foodImage || '',
               restaurantId: di.restaurantId || o.restaurantId,
-              restaurantName: di.restaurantName || o.restaurantName || resMap[di.restaurantId] || resMap[o.restaurantId]
+              restaurantName: di.restaurantName || o.restaurantName || (di.restaurantId ? resMap[di.restaurantId] : '') || (o.restaurantId ? resMap[o.restaurantId] : '')
             }));
           }
         } catch (e) { }
@@ -595,30 +638,32 @@ app.get('/api/customer/orders/:customerId', async (req: Request, res: Response) 
       const enrichedItems = itemsList.map((i: any) => ({
         ...i,
         restaurantId: i.restaurantId || o.restaurantId,
-        restaurantName: i.restaurantName || o.restaurantName || resMap[i.restaurantId] || resMap[o.restaurantId] || 'Gourmet Kitchen'
+        restaurantName: i.restaurantName || o.restaurantName || (i.restaurantId ? resMap[i.restaurantId] : '') || (o.restaurantId ? resMap[o.restaurantId] : '') || 'Gourmet Kitchen'
       }));
 
       if (!parentGroupMap[parentId]) {
+        const resName = o.restaurantName || (o.restaurantId ? resMap[o.restaurantId] : '') || 'Multi-Vendor Order';
         parentGroupMap[parentId] = {
           ...o,
           orderId: parentId,
           id: parentId,
-          restaurantName: o.restaurantName || resMap[o.restaurantId] || 'Multi-Vendor Order',
+          restaurantName: resName,
           items: [...enrichedItems],
           subtotal: Number(o.subtotal || 0),
           deliveryCharge: Number(o.deliveryCharge || 0),
           tax: Number(o.tax || 0),
           totalAmount: Number(o.totalAmount || 0),
-          vendorNames: new Set([o.restaurantName || resMap[o.restaurantId] || 'Vendor'])
+          vendorNames: new Set([resName])
         };
       } else {
         const existing = parentGroupMap[parentId];
+        const resName = o.restaurantName || (o.restaurantId ? resMap[o.restaurantId] : '') || 'Vendor';
         existing.items = [...existing.items, ...enrichedItems];
         existing.subtotal += Number(o.subtotal || 0);
         existing.deliveryCharge += Number(o.deliveryCharge || 0);
         existing.tax += Number(o.tax || 0);
         existing.totalAmount += Number(o.totalAmount || 0);
-        existing.vendorNames.add(o.restaurantName || resMap[o.restaurantId] || 'Vendor');
+        existing.vendorNames.add(resName);
       }
     }
 
@@ -842,7 +887,7 @@ app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
       bannerImage: data.image || data.bannerImage || ''
     });
 
-    const saved = result.restaurant;
+    const saved = result.shop || (result as any).restaurant;
 
     return res.json({
       success: true,
@@ -1154,25 +1199,29 @@ app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
       menuItemId: menuItemData.id || menuItemData.menuItemId,
       restaurantId,
       foodName: name,
+      name,
       description: menuItemData.description,
       category: menuItemData.category,
       price: menuItemData.price,
       preparationTime: menuItemData.prepTime || menuItemData.preparationTime,
       isVeg: menuItemData.isVeg,
       foodImage: menuItemData.image || menuItemData.foodImage,
-      isAvailable: menuItemData.isAvailable
+      image: menuItemData.image || menuItemData.foodImage,
+      isAvailable: menuItemData.isAvailable,
+      variants: Array.isArray(menuItemData.variants) ? menuItemData.variants : []
     });
 
     res.json({
       success: true,
       message: 'Menu item saved successfully.',
-      item: {
+      item: saved ? {
         ...saved,
-        id: saved.menuItemId,
-        name: saved.foodName,
-        image: saved.foodImage,
-        prepTime: saved.preparationTime
-      }
+        id: saved.itemId || saved.menuItemId,
+        name: saved.name || saved.foodName,
+        image: saved.image || saved.foodImage,
+        prepTime: saved.preparationTime,
+        variants: saved.variants || menuItemData.variants || []
+      } : null
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to save menu item.', details: error.message });
@@ -1440,7 +1489,7 @@ app.post('/api/admin/delivery-partners', async (req: Request, res: Response) => 
   }
 });
 
-// Get All Registered Delivery Partners for Admin
+// Get All Registered Delivery Partners for Admin (includes real-time duty status)
 app.get('/api/admin/delivery-partners', async (req: Request, res: Response) => {
   try {
     let partners: any[] = [];
@@ -1460,6 +1509,7 @@ app.get('/api/admin/delivery-partners', async (req: Request, res: Response) => {
           vehicleType: p.vehicleType || 'Bike',
           vehicleNumber: p.vehicleNumber || 'N/A',
           status: p.status || 'ACTIVE',
+          dutyStatus: p.dutyStatus || 'ON_DUTY',
           role: 'DELIVERY_PARTNER'
         }));
     }
@@ -1468,6 +1518,55 @@ app.get('/api/admin/delivery-partners', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching delivery partners:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch delivery partners.' });
+  }
+});
+
+// Update Delivery Partner Duty Status (ON_DUTY / OFF_DUTY)
+app.put('/api/delivery-partner/duty-status', async (req: Request, res: Response) => {
+  try {
+    const { userId, name, email, isOnDuty } = req.body;
+    const dutyStatus = isOnDuty ? 'ON_DUTY' : 'OFF_DUTY';
+
+    if (usersTableName) {
+      try {
+        const scanCmd = new ScanCommand({ TableName: usersTableName });
+        const scanResp = await dynamoDocClient.send(scanCmd);
+        const items = scanResp.Items || [];
+        const partners = items.filter((u: any) => u.role === 'DELIVERY_PARTNER' || u.role === 'DELIVERY' || (u.userId && u.userId.startsWith('DEL-')));
+
+        const targetUser = partners.find((u: any) => 
+          (userId && (u.userId === userId || u.id === userId)) ||
+          (email && u.email?.toLowerCase() === email.toLowerCase()) ||
+          (name && u.name?.toLowerCase() === name.toLowerCase())
+        ) || (partners.length === 1 ? partners[0] : null);
+
+        if (targetUser) {
+          const updatedUser = {
+            ...targetUser,
+            dutyStatus,
+            updatedAt: new Date().toISOString()
+          };
+          await dynamoDocClient.send(new PutCommand({ TableName: usersTableName, Item: updatedUser }));
+        }
+      } catch (dbErr) {
+        console.warn('⚠️ Error updating user duty status in DynamoDB:', dbErr);
+      }
+    }
+
+    // Broadcast Real-Time Duty Status Update via Socket to ALL connected clients (Admin + Rider)
+    try {
+      if (socketService && socketService.getIO()) {
+        console.log('📢 Emitting partner_duty_updated via WebSocket:', { userId, name, email, isOnDuty, dutyStatus });
+        socketService.getIO().emit('partner_duty_updated', { userId, name, email, isOnDuty, dutyStatus });
+      }
+    } catch (socErr) {
+      console.warn('⚠️ Error broadcasting duty status socket event:', socErr);
+    }
+
+    return res.json({ success: true, message: `Duty status updated to ${dutyStatus}.`, isOnDuty, dutyStatus });
+  } catch (error: any) {
+    console.error('Error updating duty status:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update duty status.' });
   }
 });
 

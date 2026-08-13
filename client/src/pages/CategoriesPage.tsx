@@ -207,10 +207,10 @@ export const CategoriesPage: React.FC = () => {
                   {/* Left: Clean Icon-Only Back Button + Quick Switch Cuisine Label */}
                   <div className="flex items-center gap-3 shrink-0">
                     <button
-                      onClick={handleClearCategory}
+                      onClick={() => navigate('/')}
                       className="p-2.5 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95 hover:bg-glass-subtle"
-                      aria-label="Back to All Categories"
-                      title="Back to All Categories"
+                      aria-label="Back to Home Screen"
+                      title="Back to Home Screen"
                     >
                       <ArrowLeft size={20} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
                     </button>

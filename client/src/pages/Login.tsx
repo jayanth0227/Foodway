@@ -13,9 +13,6 @@ import {
   CheckCircle2,
   User as UserIcon,
   Phone,
-  Store,
-  ShieldAlert,
-  ChevronDown,
   Home as HomeIcon
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
@@ -31,7 +28,6 @@ export const Login: React.FC = () => {
     return 'login';
   });
 
-  const [selectedRole, setSelectedRole] = useState<'USER' | 'RESTAURANT' | 'ADMIN'>('USER');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -73,11 +69,12 @@ export const Login: React.FC = () => {
   React.useEffect(() => {
     if (isAuthenticated && role) {
       const userRole = role.toUpperCase();
+      const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole);
       if (userRole === 'ADMIN') {
         navigate('/admin/dashboard', { replace: true });
-      } else if (userRole === 'RESTAURANT') {
-        navigate('/restaurant/dashboard', { replace: true });
-      } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY') {
+      } else if (isShopVendor) {
+        navigate('/shop/dashboard', { replace: true });
+      } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY' || userRole === 'RIDER') {
         navigate('/delivery/dashboard', { replace: true });
       } else {
         navigate('/', { replace: true });
@@ -100,15 +97,16 @@ export const Login: React.FC = () => {
         return;
       }
 
-      const result = await login(email, password, selectedRole);
+      const result = await login(email, password);
 
       if (result.success && result.role) {
         const userRole = result.role.toUpperCase();
+        const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole);
         if (userRole === 'ADMIN') {
           navigate('/admin/dashboard', { replace: true });
-        } else if (userRole === 'RESTAURANT') {
-          navigate('/restaurant/dashboard', { replace: true });
-        } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY') {
+        } else if (isShopVendor) {
+          navigate('/shop/dashboard', { replace: true });
+        } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY' || userRole === 'RIDER') {
           navigate('/delivery/dashboard', { replace: true });
         } else {
           const from = (location.state as any)?.from?.pathname || '/';
@@ -240,36 +238,7 @@ export const Login: React.FC = () => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             
-            {/* Login Role Selector */}
-            {authType === 'login' && (
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                  Select Role
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#C59363]">
-                    {selectedRole === 'USER' && <UserIcon size={18} />}
-                    {selectedRole === 'RESTAURANT' && <Store size={18} />}
-                    {selectedRole === 'ADMIN' && <ShieldAlert size={18} />}
-                  </div>
-                  <select
-                    value={selectedRole}
-                    onChange={(e) => {
-                      setSelectedRole(e.target.value as any);
-                      setErrorMessage(null);
-                    }}
-                    className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 hover:border-[#C59363] focus:border-[#C59363] rounded-xl py-3 pl-11 pr-10 text-sm text-stone-900 dark:text-white font-semibold focus:outline-none transition-all cursor-pointer appearance-none shadow-sm"
-                  >
-                    <option value="USER">User / Customer Portal</option>
-                    <option value="RESTAURANT">Merchant / Restaurant Partner</option>
-                    <option value="ADMIN">System Administrator</option>
-                  </select>
-                  <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-stone-400">
-                    <ChevronDown size={18} />
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             {/* Full Name for Register */}
             {authType === 'register' && (

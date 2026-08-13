@@ -117,6 +117,14 @@ class ClientSocketService {
     };
   }
 
+  onOrderAssigned(callback: (order: any) => void): () => void {
+    const socket = this.connect();
+    socket.on('order_assigned', callback);
+    return () => {
+      socket.off('order_assigned', callback);
+    };
+  }
+
   onRiderStatusUpdated(callback: (order: any) => void): () => void {
     const socket = this.connect();
     socket.on('rider_status_updated', callback);

@@ -13,7 +13,9 @@ import { CartSidebar } from './components/common/CartSidebar';
 import { AuthModals } from './components/common/AuthModals';
 import { Home } from './pages/Home';
 import { RestaurantsPage } from './pages/RestaurantsPage';
+import { ShopsPage } from './pages/ShopsPage';
 import { RestaurantDetailsPage } from './pages/RestaurantDetailsPage';
+import { ShopDetailsPage } from './pages/ShopDetailsPage';
 import { CartPage } from './pages/CartPage';
 import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
 import { ItemAddedToast } from './components/common/ItemAddedToast';
@@ -23,6 +25,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminOrderDetailsPage } from './pages/AdminOrderDetailsPage';
 import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartnerPage';
 import { RestaurantDashboard } from './pages/RestaurantDashboard';
+import { ShopDashboard } from './pages/ShopDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { DishesPage } from './pages/DishesPage';
@@ -36,9 +39,15 @@ import { setupForegroundMessageListener } from "./utils/onForegroundMessage";
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const lenisRef = React.useRef<Lenis | null>(null);
 
-  // Lenis Smooth Scroll Initialization
+  // Lenis Smooth Scroll Initialization & Browser Scroll Restoration Config
   useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+
     const lenis = new Lenis({
       duration: 1.2,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
@@ -46,6 +55,8 @@ const AppContent: React.FC = () => {
       gestureOrientation: 'vertical',
       smoothWheel: true,
     });
+
+    lenisRef.current = lenis;
 
     function raf(time: number) {
       lenis.raf(time);
@@ -56,6 +67,7 @@ const AppContent: React.FC = () => {
 
     return () => {
       lenis.destroy();
+      lenisRef.current = null;
     };
   }, []);
 
@@ -68,18 +80,19 @@ const AppContent: React.FC = () => {
     setupForegroundMessageListener();
   }, []);
 
-  const location = useLocation();
-
-  // Scroll window to top on every screen/route transition
+  // Scroll window to top (Start to End) on every page/route transition
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    }
+    window.scrollTo(0, 0);
     document.body.scrollTop = 0;
     document.documentElement.scrollTop = 0;
   }, [location.pathname, location.search]);
 
   const isPortalRoute = location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/restaurant/') ||
-    location.pathname === '/restaurant' ||
+    location.pathname.startsWith('/shop/dashboard') ||
+    location.pathname.startsWith('/restaurant/dashboard') ||
     location.pathname.startsWith('/delivery') ||
     location.pathname === '/login' ||
     location.pathname === '/register';
@@ -99,8 +112,11 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
           <Route path="/categories" element={<CategoriesPage />} />
           <Route path="/dishes" element={<DishesPage />} />
-          <Route path="/restaurants" element={<RestaurantsPage />} />
-          <Route path="/restaurants/:id" element={<RestaurantDetailsPage />} />
+          <Route path="/items" element={<DishesPage />} />
+          <Route path="/restaurants" element={<ShopsPage />} />
+          <Route path="/shops" element={<ShopsPage />} />
+          <Route path="/restaurants/:id" element={<ShopDetailsPage />} />
+          <Route path="/shops/:id" element={<ShopDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/orders" element={<CustomerOrdersPage />} />
@@ -157,13 +173,23 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
+          <Route path="/shop" element={<Login />} />
+          <Route path="/shop/login" element={<Login />} />
           <Route path="/restaurant" element={<Login />} />
           <Route path="/restaurant/login" element={<Login />} />
           <Route
+            path="/shop/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT', 'ADMIN']}>
+                <ShopDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/restaurant/dashboard"
             element={
-              <ProtectedRoute allowedRoles={['RESTAURANT']}>
-                <RestaurantDashboard />
+              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT', 'ADMIN']}>
+                <ShopDashboard />
               </ProtectedRoute>
             }
           />

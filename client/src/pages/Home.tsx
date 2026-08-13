@@ -2,7 +2,7 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import Hero from '../components/home/Hero';
 import Categories from '../components/home/Categories';
-import FeaturedRestaurants from '../components/home/FeaturedRestaurants';
+import FeaturedShops from '../components/home/FeaturedShops';
 import PopularDishes from '../components/home/PopularDishes';
 import DeliveryLocations from '../components/home/DeliveryLocations';
 import DeliveryProcess from '../components/home/DeliveryProcess';
@@ -18,12 +18,12 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
   return (
     <>
       <Helmet>
-        <title>MK Delivery Services | Premium Food Ordering & Luxury Delivery</title>
+        <title>MK Delivery Services | Quick-Commerce & Multi-Category Local Marketplace</title>
         <meta
           name="description"
-          content="Experience the finest culinary masterpieces delivered to your estate with white-glove courier service. Savor woodfired truffle pizzas, gold-leaf lobster biryanis, and michelin-recommended dishes."
+          content="Instant delivery of sweets, vegetables, fruits, groceries, dairy, and food items from local merchant shops delivered straight to your doorstep."
         />
-        <meta name="keywords" content="premium food delivery, luxury dining, michelin food delivery, gold leaf biryani, truffle pizza delivery" />
+        <meta name="keywords" content="quick commerce delivery, local marketplace, sweets delivery, grocery delivery, fresh vegetables" />
       </Helmet>
 
       <div className="relative">
@@ -33,7 +33,7 @@ export const Home: React.FC<HomeProps> = ({ onOpenAuth }) => {
         <DeliveryLocations />
 
         <Categories />
-        <FeaturedRestaurants />
+        <FeaturedShops />
         <PopularDishes />
         <DeliveryProcess />
         <Testimonials />

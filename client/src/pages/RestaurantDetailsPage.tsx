@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check } from 'lucide-react';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
@@ -25,6 +25,8 @@ export const RestaurantDetailsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDietary, setSelectedDietary] = useState<'All' | 'Veg' | 'Non-Veg'>('All');
+  const [selectedVariantsMap, setSelectedVariantsMap] = useState<Record<string, any>>({});
+  const [activePickerDish, setActivePickerDish] = useState<any | null>(null);
   const [isCategoryFabOpen, setIsCategoryFabOpen] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -153,7 +155,7 @@ export const RestaurantDetailsPage: React.FC = () => {
               {/* Top Bar: Back Button (Left) & Rating Badge (Right) */}
               <div className="flex items-center justify-between gap-2 border-b border-glass/60 pb-3">
                 <button
-                  onClick={() => navigate('/restaurants')}
+                  onClick={() => navigate('/')}
                   className="px-4 py-1.5 rounded-full bg-glass border border-glass text-text-primary font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
                 >
                   <ArrowLeft size={14} className="text-primary" />
@@ -341,7 +343,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
                 <input
                   type="text"
-                  placeholder={`Search in ${restaurant?.name || 'this restaurant'}...`}
+                  placeholder={`Search in ${restaurant?.name || 'this store'}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-11 pr-4 py-2.5 text-xs sm:text-sm font-semibold rounded-xl bg-bg-dark/80 border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/60 outline-none transition-all"
@@ -416,14 +418,24 @@ export const RestaurantDetailsPage: React.FC = () => {
                 const dishId = item.menuItemId || item.id;
                 const isRestaurantClosed = restaurant && (restaurant.isOpen === false || restaurant.status === 'closed');
                 const isOutOfStock = isRestaurantClosed || item.isAvailable === false || item.status === 'UNAVAILABLE' || item.status === 'disabled';
-                const qtyInCart = getItemQuantity(dishId);
+
+                const itemVariants = Array.isArray(item.variants) && item.variants.length > 0
+                  ? item.variants
+                  : [];
+                const hasMultipleVariants = itemVariants.length > 1;
+
+                const activeVariant = selectedVariantsMap[dishId] || (hasMultipleVariants ? itemVariants[0] : null);
+                const effectivePrice = activeVariant ? Number(activeVariant.price) : Number(item.price);
+                const activeVariantId = activeVariant?.id || activeVariant?.variantId;
+                const itemKey = activeVariantId ? `${dishId}-${activeVariantId}` : dishId;
+                const qtyInCart = getItemQuantity(dishId, activeVariantId);
 
                 const dishObj = {
                   id: dishId,
                   name: removeEmojis(item.foodName || item.name || ''),
                   description: removeEmojis(item.description || ''),
-                  price: Number(item.price),
-                  category: removeEmojis(item.category || item.foodCategory || 'Main Course'),
+                  price: effectivePrice,
+                  category: removeEmojis(item.category || item.foodCategory || 'General'),
                   image: item.foodImage || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
                   type: (item.isVeg !== false ? 'veg' : 'non-veg') as 'veg' | 'non-veg',
                   isVeg: item.isVeg !== false,
@@ -431,7 +443,8 @@ export const RestaurantDetailsPage: React.FC = () => {
                   restaurantIsOpen: !isRestaurantClosed,
                   rating: 4.8,
                   restaurantId: restaurant?.id || id || item.restaurantId,
-                  restaurantName: removeEmojis(restaurant?.name || 'Partner Restaurant')
+                  restaurantName: removeEmojis(restaurant?.name || 'Partner Shop'),
+                  variants: itemVariants
                 };
 
                 return (
@@ -439,7 +452,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                     key={dishId}
                     initial={false}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`glass-panel border rounded-2xl p-3.5 sm:p-5 flex items-start justify-between gap-3 sm:gap-6 shadow-luxury transition-all w-full relative overflow-visible ${isOutOfStock
+                    className={`glass-panel border rounded-2xl p-3 sm:p-4 flex items-start justify-between gap-3 sm:gap-5 shadow-luxury transition-all w-full relative overflow-visible ${isOutOfStock
                       ? 'opacity-70 border-rose-500/20 bg-bg-dark/40'
                       : 'border-glass hover:border-primary/40 bg-bg-cardSec'
                       }`}
@@ -449,15 +462,15 @@ export const RestaurantDetailsPage: React.FC = () => {
                       {/* Veg / Non-Veg Indicator & Category */}
                       <div className="flex items-center gap-2">
                         <div
-                          className={`w-4 h-4 rounded-sm border-2 p-0.5 flex items-center justify-center shrink-0 ${dishObj.isVeg ? 'border-emerald-600' : 'border-rose-600'
+                          className={`w-3.5 h-3.5 rounded-sm border-2 p-0.5 flex items-center justify-center shrink-0 ${dishObj.isVeg ? 'border-emerald-600' : 'border-rose-600'
                             }`}
                         >
                           <div
-                            className={`w-1.5 h-1.5 rounded-full ${dishObj.isVeg ? 'bg-emerald-600' : 'bg-rose-600'
+                            className={`w-1 h-1 rounded-full ${dishObj.isVeg ? 'bg-emerald-600' : 'bg-rose-600'
                               }`}
                           />
                         </div>
-                        <span className="text-[10px] font-extrabold text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                        <span className="text-[9.5px] font-black text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
                           {dishObj.category}
                         </span>
                       </div>
@@ -467,9 +480,58 @@ export const RestaurantDetailsPage: React.FC = () => {
                         {dishObj.name}
                       </h3>
 
-                      {/* Dish Price */}
-                      <div className="font-black text-base sm:text-lg text-text-primary font-display">
-                        ₹{dishObj.price.toFixed(2)}
+                      {/* Classic iOS Segmented Control for Variant Selection (Option 2) */}
+                      {hasMultipleVariants && (
+                        <div className="pt-1.5 pb-1 max-w-full">
+                          <div
+                            className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-200/80 dark:bg-bg-dark/90 border border-slate-300/80 dark:border-glass/80 overflow-x-auto max-w-full scroll-smooth shadow-inner [&::-webkit-scrollbar]:hidden"
+                            style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+                          >
+                            {itemVariants.map((v: any, idx: number) => {
+                              const isSelected = (activeVariant?.id || activeVariant?.variantId) === (v.id || v.variantId);
+                              const rawLabel = v.label || `${v.quantity} ${v.unit}`;
+                              const shortLabel = rawLabel
+                                .replace(/gms/gi, 'g')
+                                .replace(/grams/gi, 'g')
+                                .replace(/kilograms/gi, 'kg')
+                                .replace(/\s+/g, '');
+
+                              return (
+                                <button
+                                  key={v.id || idx}
+                                  type="button"
+                                  onClick={() => setSelectedVariantsMap(prev => ({ ...prev, [dishId]: v }))}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer shrink-0 ${isSelected
+                                    ? 'bg-white dark:bg-primary text-slate-900 dark:text-black shadow-md scale-[1.02]'
+                                    : 'text-slate-600 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                >
+                                  <span>{shortLabel}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Dish Price & Discount Badge */}
+                      <div className="font-black text-base sm:text-lg text-text-primary font-display flex items-center gap-2 pt-0.5 flex-wrap">
+                        <span>₹{Number.isInteger(effectivePrice) ? effectivePrice : effectivePrice.toFixed(2)}</span>
+                        {activeVariant?.compareAtPrice && Number(activeVariant.compareAtPrice) > effectivePrice && (
+                          <>
+                            <span className="text-xs text-text-muted line-through font-normal">
+                              ₹{Number.isInteger(Number(activeVariant.compareAtPrice)) ? Number(activeVariant.compareAtPrice) : Number(activeVariant.compareAtPrice).toFixed(2)}
+                            </span>
+                            {(() => {
+                              const disc = Math.round(((Number(activeVariant.compareAtPrice) - effectivePrice) / Number(activeVariant.compareAtPrice)) * 100);
+                              return disc > 0 ? (
+                                <span className="bg-emerald-500/15 text-emerald-400 text-[9.5px] font-black px-1.5 py-0.5 rounded-md border border-emerald-500/25">
+                                  {disc}% OFF
+                                </span>
+                              ) : null;
+                            })()}
+                          </>
+                        )}
                       </div>
 
                       {/* Description */}
@@ -482,7 +544,7 @@ export const RestaurantDetailsPage: React.FC = () => {
 
                     {/* Right Side: Dish Image & Swiggy/Zomato Floating ADD Button */}
                     <div className="relative shrink-0 flex flex-col items-center">
-                      <div className="relative w-28 h-28 sm:w-36 sm:h-28 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0">
+                      <div className="relative w-24 h-24 sm:w-32 sm:h-28 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0">
                         <img
                           src={dishObj.image}
                           alt={dishObj.name}
@@ -499,7 +561,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                       </div>
 
                       {/* Floating ADD / Stepper Button matching Swiggy */}
-                      <div className="relative -mt-4 z-10">
+                      <div className="relative -mt-3.5 z-10">
                         {isRestaurantClosed ? (
                           <button
                             disabled
@@ -518,7 +580,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                           <div className="flex items-center bg-bg-cardSec text-primary rounded-xl px-2 py-1 shadow-md border-2 border-primary">
                             <button
                               type="button"
-                              onClick={() => reduceQuantity(dishId)}
+                              onClick={() => reduceQuantity(itemKey)}
                               className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                               title="Decrease quantity"
                             >
@@ -529,7 +591,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                             </span>
                             <button
                               type="button"
-                              onClick={() => addToCart(dishObj)}
+                              onClick={() => addToCart(dishObj, activeVariant)}
                               className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                               title="Increase quantity"
                             >
@@ -539,8 +601,8 @@ export const RestaurantDetailsPage: React.FC = () => {
                         ) : (
                           <button
                             type="button"
-                            onClick={() => addToCart(dishObj)}
-                            className="px-5 py-1.5 rounded-xl bg-bg-cardSec text-primary border-2 border-primary/80 hover:border-primary font-black text-xs uppercase tracking-wider shadow-md hover:bg-primary hover:text-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
+                            onClick={() => addToCart(dishObj, activeVariant)}
+                            className="px-4 py-1.5 rounded-xl bg-bg-cardSec text-primary border-2 border-primary/80 hover:border-primary font-black text-xs uppercase tracking-wider shadow-md hover:bg-primary hover:text-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
                           >
                             <span>ADD</span>
                             <Plus size={12} className="stroke-[3]" />
@@ -556,6 +618,106 @@ export const RestaurantDetailsPage: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Variant Picker Pop-up Bottom Sheet Modal (Option 3) */}
+      <AnimatePresence>
+        {activePickerDish && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+            <motion.div
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-full max-w-md bg-bg-cardSec border-t sm:border border-glass rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between border-b border-glass pb-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={activePickerDish.image}
+                    alt={activePickerDish.name}
+                    className="w-12 h-12 rounded-xl object-cover border border-glass"
+                  />
+                  <div>
+                    <h3 className="font-extrabold text-base text-text-primary line-clamp-1">
+                      {activePickerDish.name}
+                    </h3>
+                    <p className="text-xs text-text-muted">Select weight / quantity pack</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActivePickerDish(null)}
+                  className="w-8 h-8 rounded-full bg-glass hover:bg-glass-subtle flex items-center justify-center text-text-muted hover:text-text-primary transition-all cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Options List */}
+              <div className="space-y-2.5 py-1">
+                {activePickerDish.variants.map((v: any, idx: number) => {
+                  const currentActive = selectedVariantsMap[activePickerDish.id] || activePickerDish.variants[0];
+                  const isSelected = (currentActive?.id || currentActive?.variantId) === (v.id || v.variantId);
+                  const vLabel = v.label || `${v.quantity} ${v.unit}`;
+                  const priceNum = Number(v.price);
+                  const formattedPrice = Number.isInteger(priceNum) ? priceNum : priceNum.toFixed(2);
+
+                  return (
+                    <button
+                      key={v.id || idx}
+                      type="button"
+                      onClick={() => setSelectedVariantsMap(prev => ({ ...prev, [activePickerDish.id]: v }))}
+                      className={`w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${isSelected
+                        ? 'bg-primary/15 border-primary text-primary font-black shadow-md ring-1 ring-primary/30'
+                        : 'bg-bg-dark/60 border-glass text-text-secondary hover:border-primary/40 hover:bg-bg-dark'
+                        }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary text-black' : 'border-text-muted/40'}`}>
+                          {isSelected && <Check size={12} className="stroke-[3]" />}
+                        </div>
+                        <span className="text-sm font-extrabold text-text-primary">{vLabel}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {v.compareAtPrice && Number(v.compareAtPrice) > priceNum && (
+                          <span className="text-xs text-text-muted line-through">
+                            ₹{Number.isInteger(Number(v.compareAtPrice)) ? Number(v.compareAtPrice) : Number(v.compareAtPrice).toFixed(2)}
+                          </span>
+                        )}
+                        <span className="text-sm font-black text-primary">₹{formattedPrice}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Add Item Button */}
+              {(() => {
+                const activeV = selectedVariantsMap[activePickerDish.id] || activePickerDish.variants[0];
+                const priceNum = Number(activeV?.price || activePickerDish.price);
+                const formattedPrice = Number.isInteger(priceNum) ? priceNum : priceNum.toFixed(2);
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addToCart(activePickerDish, activeV);
+                      setActivePickerDish(null);
+                    }}
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-amber-400 text-black font-black text-sm shadow-luxury hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-between px-5 cursor-pointer"
+                  >
+                    <span>ADD ITEM TO CART</span>
+                    <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs font-black">
+                      ₹{formattedPrice}
+                    </span>
+                  </button>
+                );
+              })()}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 };

@@ -14,6 +14,15 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-export const messaging = typeof window !== "undefined" && "Notification" in window ? getMessaging(app) : null;
+// Safely initialize Firebase Messaging without crashing on unsupported browsers/HTTP IP addresses
+export const messaging = (() => {
+  if (typeof window === "undefined" || !("Notification" in window)) return null;
+  try {
+    return getMessaging(app);
+  } catch (error) {
+    console.warn("⚠️ Firebase Messaging skipped (unsupported browser context or non-HTTPS IP):", error);
+    return null;
+  }
+})();
 
 export default app;

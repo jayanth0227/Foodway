@@ -2,11 +2,14 @@ import { CreateTableCommand, DescribeTableCommand } from '@aws-sdk/client-dynamo
 import {
   dynamoDocClient,
   usersTableName,
+  shopsTableName,
+  itemsTableName,
   restaurantsTableName,
   menuItemsTableName,
   ordersTableName,
   orderItemsTableName,
-  deliveryTableName
+  deliveryTableName,
+  deliveryLocationsTableName
 } from '../config/aws';
 
 async function verifyOrCreateTable(tableName: string, keySchema: any[], attributeDefinitions: any[], globalSecondaryIndexes?: any[]) {
@@ -66,12 +69,12 @@ export async function ensureAllTablesExist() {
     ]
   );
 
-  // 2. foodway-restaurants (PK: restaurantId)
+  // 2. foodway-shops (PK: shopId, GSI: ownerUserId-index)
   await verifyOrCreateTable(
-    restaurantsTableName,
-    [{ AttributeName: 'restaurantId', KeyType: 'HASH' }],
+    shopsTableName,
+    [{ AttributeName: 'shopId', KeyType: 'HASH' }],
     [
-      { AttributeName: 'restaurantId', AttributeType: 'S' },
+      { AttributeName: 'shopId', AttributeType: 'S' },
       { AttributeName: 'ownerUserId', AttributeType: 'S' }
     ],
     [
@@ -83,18 +86,18 @@ export async function ensureAllTablesExist() {
     ]
   );
 
-  // 3. foodway-menu-items (PK: menuItemId, GSI: restaurantId-index)
+  // 3. foodway-items (PK: itemId, GSIs: shopId-index, restaurantId-index)
   await verifyOrCreateTable(
-    menuItemsTableName,
-    [{ AttributeName: 'menuItemId', KeyType: 'HASH' }],
+    itemsTableName,
+    [{ AttributeName: 'itemId', KeyType: 'HASH' }],
     [
-      { AttributeName: 'menuItemId', AttributeType: 'S' },
-      { AttributeName: 'restaurantId', AttributeType: 'S' }
+      { AttributeName: 'itemId', AttributeType: 'S' },
+      { AttributeName: 'shopId', AttributeType: 'S' }
     ],
     [
       {
-        IndexName: 'restaurantId-index',
-        KeySchema: [{ AttributeName: 'restaurantId', KeyType: 'HASH' }],
+        IndexName: 'shopId-index',
+        KeySchema: [{ AttributeName: 'shopId', KeyType: 'HASH' }],
         Projection: { ProjectionType: 'ALL' }
       }
     ]
@@ -164,6 +167,23 @@ export async function ensureAllTablesExist() {
       {
         IndexName: 'orderId-index',
         KeySchema: [{ AttributeName: 'orderId', KeyType: 'HASH' }],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ]
+  );
+
+  // 7. foodway-delivery-locations (PK: locationId, GSI: status-index)
+  await verifyOrCreateTable(
+    deliveryLocationsTableName,
+    [{ AttributeName: 'locationId', KeyType: 'HASH' }],
+    [
+      { AttributeName: 'locationId', AttributeType: 'S' },
+      { AttributeName: 'status', AttributeType: 'S' }
+    ],
+    [
+      {
+        IndexName: 'status-index',
+        KeySchema: [{ AttributeName: 'status', KeyType: 'HASH' }],
         Projection: { ProjectionType: 'ALL' }
       }
     ]

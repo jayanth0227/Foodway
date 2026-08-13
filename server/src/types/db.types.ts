@@ -1,4 +1,4 @@
-import { UserRole, UserStatus, RestaurantStatus, MenuStatus, OrderStatus, PaymentStatus } from './enums';
+import { UserRole, UserStatus, ShopStatus, ShopType, ItemStatus, UnitType, OrderStatus, PaymentStatus } from './enums';
 
 export interface IUser {
   userId: string;
@@ -15,10 +15,13 @@ export interface IUser {
   updatedAt: string;
 }
 
-export interface IRestaurant {
-  restaurantId: string;
+export interface IShop {
+  shopId: string;
+  restaurantId?: string; // Backward compatibility alias
   ownerUserId: string; // References foodway-users.userId
-  restaurantName: string;
+  shopName: string;
+  restaurantName?: string; // Backward compatibility alias
+  shopType: ShopType;
   description?: string;
   phone?: string;
   email: string;
@@ -26,11 +29,13 @@ export interface IRestaurant {
   city?: string;
   state?: string;
   pincode?: string;
+  latitude?: number;
+  longitude?: number;
   openingTime?: string;
   closingTime?: string;
   logo?: string;
   bannerImage?: string;
-  status: RestaurantStatus;
+  status: ShopStatus;
   rating?: number;
   isOpen?: boolean;
   cuisine?: string;
@@ -40,31 +45,54 @@ export interface IRestaurant {
   updatedAt: string;
 }
 
-export interface IMenuItem {
-  menuItemId: string;
-  restaurantId: string; // References foodway-restaurants.restaurantId
-  foodName: string;
-  description?: string;
-  category: string;
+export interface IRestaurant extends IShop { } // Backward compatibility type alias
+
+export interface IItemVariant {
+  variantId: string;
+  id?: string;
+  quantity: number | string;
+  unit: UnitType | string;
   price: number;
+  compareAtPrice?: number;
+  isAvailable?: boolean;
+  label?: string; // e.g. "250 g", "1 kg", "6 pcs"
+}
+
+export interface IItem {
+  itemId: string;
+  menuItemId?: string; // Backward compatibility alias
+  shopId: string; // References foodway-shops.shopId
+  restaurantId?: string; // Backward compatibility alias
+  name: string;
+  foodName?: string; // Backward compatibility alias
+  description?: string;
+  categoryId?: string;
+  category: string;
+  image?: string;
+  foodImage?: string; // Backward compatibility alias
+  price?: number; // Base or default price fallback
   discountPrice?: number;
-  foodImage?: string;
-  isVeg: boolean;
+  isVeg?: boolean;
   isAvailable: boolean;
-  status: MenuStatus;
+  status: ItemStatus;
+  variants: IItemVariant[];
   preparationTime?: string;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface IMenuItem extends IItem { } // Backward compatibility type alias
 
 export interface IOrder {
   orderId: string;
   parentOrderId?: string;
   customerId: string; // References foodway-users.userId
   customerEmail: string;
-  restaurantId: string; // References foodway-restaurants.restaurantId
-  restaurantName?: string;
-  items?: any[];
+  shopId: string; // References foodway-shops.shopId
+  restaurantId?: string; // Backward compatibility alias
+  shopName?: string;
+  restaurantName?: string; // Backward compatibility alias
+  items?: IOrderItemDetail[];
   rawItems?: any[];
   deliveryUserId?: string; // References foodway-users.userId
   paymentMethod: string;
@@ -87,11 +115,27 @@ export interface IOrder {
   updatedAt: string;
 }
 
+export interface IOrderItemDetail {
+  itemId: string;
+  itemName: string;
+  variantId?: string;
+  variantLabel?: string;
+  unit?: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
 export interface IOrderItem {
   orderItemId: string;
-  orderId: string; // References foodway-orders.orderId
-  menuItemId: string; // References foodway-menu-items.menuItemId
-  foodName: string;
+  orderId: string;
+  itemId: string;
+  menuItemId?: string;
+  itemName: string;
+  foodName?: string;
+  variantId?: string;
+  variantLabel?: string;
+  unit?: string;
   quantity: number;
   price: number;
   total: number;
@@ -99,8 +143,8 @@ export interface IOrderItem {
 
 export interface IDelivery {
   deliveryId: string;
-  orderId: string; // References foodway-orders.orderId
-  deliveryUserId: string; // References foodway-users.userId
+  orderId: string;
+  deliveryUserId: string;
   pickupTime?: string;
   deliveryTime?: string;
   deliveryStatus: OrderStatus;
@@ -110,3 +154,4 @@ export interface IDelivery {
   createdAt: string;
   updatedAt: string;
 }
+

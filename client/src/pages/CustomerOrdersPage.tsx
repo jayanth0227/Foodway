@@ -68,29 +68,43 @@ export const CustomerOrdersPage: React.FC = () => {
     }
   };
 
+  const formatPaymentMethod = (pm: string) => {
+    if (!pm) return 'Cash on Delivery (COD)';
+    const upper = pm.toUpperCase().replace(/\s+/g, '_');
+    if (upper === 'CASH_ON_DELIVERY' || upper === 'COD') return 'Cash on Delivery (COD)';
+    if (upper === 'ONLINE' || upper === 'RAZORPAY' || upper === 'UPI' || upper === 'ONLINE_PAYMENT') return 'Online Payment';
+    return pm.replace(/_/g, ' ');
+  };
+
   const getStatusBadge = (status: string) => {
     const s = (status || 'PENDING').toUpperCase();
     switch (s) {
       case 'PENDING':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Clock size={14} /> Order Placed & Pending</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-amber-500/20 text-amber-500 dark:text-amber-400 border border-amber-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm"><Clock size={15} /> Order Placed</span>;
       case 'ACCEPTED':
       case 'CONFIRMED':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><CheckCircle2 size={14} /> Order Accepted</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm"><CheckCircle2 size={15} /> Order Accepted</span>;
       case 'PREPARING':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Utensils size={14} /> Kitchen Preparing</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm"><Utensils size={15} /> Preparing</span>;
       case 'READY':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Package size={14} /> Food Ready for Pickup</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm"><Package size={15} /> Food Ready</span>;
       case 'OUT_FOR_DELIVERY':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><Package size={14} /> Out for Delivery</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm"><Package size={15} /> Out for Delivery</span>;
       case 'REJECTED':
       case 'REJECT':
       case 'CANCELLED':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><AlertCircle size={14} /> Order Rejected</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm"><AlertCircle size={15} /> Cancelled</span>;
       case 'DELIVERED':
       case 'COMPLETED':
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1.5 whitespace-nowrap w-full"><CheckCircle2 size={14} /> Delivered & Completed</span>;
+        return (
+          <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1.5 shrink-0 shadow-sm">
+            <CheckCircle2 size={15} />
+            <span className="sm:hidden">Delivered</span>
+            <span className="hidden sm:inline">Delivered & Completed</span>
+          </span>
+        );
       default:
-        return <span className="h-10 px-3.5 rounded-2xl text-xs font-black bg-glass text-text-muted border border-glass flex items-center justify-center whitespace-nowrap w-full">{status}</span>;
+        return <span className="px-3.5 py-2 rounded-2xl text-xs sm:text-sm font-black bg-glass text-text-muted border border-glass inline-flex items-center gap-1.5 shrink-0 shadow-sm">{status}</span>;
     }
   };
 
@@ -220,40 +234,38 @@ export const CustomerOrdersPage: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center gap-3">
             {/* User Friendly Search Input */}
             <div className="relative flex-1 w-full">
-              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+              <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search orders by Order ID, Dish name, or Restaurant..."
-                className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-glass border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted text-xs font-semibold focus:outline-none transition-all"
+                placeholder="Search orders, dishes, or stores..."
+                className="w-full pl-10 pr-9 py-2.5 sm:py-3 rounded-2xl bg-glass border border-glass/80 focus:border-primary focus:ring-2 focus:ring-primary/20 text-text-primary placeholder:text-text-muted text-xs sm:text-sm font-semibold focus:outline-none transition-all shadow-sm"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-0.5 rounded-full transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-1 rounded-full transition-colors cursor-pointer bg-glass hover:bg-glass-subtle"
+                  title="Clear search query"
+                  aria-label="Clear search query"
                 >
                   <X size={14} />
                 </button>
               )}
             </div>
 
-            {/* Date/Day Wise Sort Selector */}
-            <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-              <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-glass border border-glass text-text-secondary text-xs font-bold w-full sm:w-auto justify-between sm:justify-start">
-                <span className="flex items-center gap-1.5 text-text-muted">
-                  <Calendar size={14} className="text-primary" />
-                  <span>Sort by:</span>
-                </span>
-                <button
-                  onClick={() => setSortOrder(prev => prev === 'NEWEST' ? 'OLDEST' : 'NEWEST')}
-                  className="flex items-center gap-1 text-primary font-black cursor-pointer hover:underline"
-                >
-                  <span>{sortOrder === 'NEWEST' ? 'Newest Date First' : 'Oldest Date First'}</span>
-                  <ArrowUpDown size={13} />
-                </button>
-              </div>
-            </div>
+            {/* Date/Day Wise Sort Selector Button */}
+            <button
+              type="button"
+              onClick={() => setSortOrder(prev => prev === 'NEWEST' ? 'OLDEST' : 'NEWEST')}
+              className="px-4 py-2.5 sm:py-3 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary text-xs font-black flex items-center justify-center gap-2 w-full sm:w-auto cursor-pointer transition-all shadow-sm active:scale-95 group shrink-0"
+              title="Click to toggle order sorting"
+            >
+              <Calendar size={15} className="text-primary group-hover:scale-110 transition-transform shrink-0" />
+              <span className="text-text-muted font-bold">Sort:</span>
+              <span className="text-primary font-black">{sortOrder === 'NEWEST' ? 'Newest First' : 'Oldest First'}</span>
+              <ArrowUpDown size={13} className="text-primary shrink-0 group-hover:rotate-180 transition-transform duration-300 ml-0.5" />
+            </button>
           </div>
 
           {/* Active vs Past Order Tabs */}
@@ -326,39 +338,39 @@ export const CustomerOrdersPage: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     className="glass-panel border border-glass hover:border-primary/40 rounded-3xl p-6 space-y-5 shadow-luxury transition-all"
                   >
-                    {/* Card Top Header & Status */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-4">
-                      <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
+                    {/* Card Top Header & Status Row */}
+                    <div className="space-y-2 border-b border-glass pb-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
                           <span className="font-mono text-sm font-black text-primary">{orderId}</span>
                           <span className="text-xs text-text-muted font-medium">• {formattedDate}</span>
-
-                          {/* Restaurant Name Badge */}
-                          <div className="flex items-center gap-1.5 text-xs font-black text-primary bg-primary/10 px-3 py-1 rounded-lg border border-primary/25">
-                            <Store size={13} className="shrink-0" />
-                            <span>{restaurantDisplayName}</span>
-                          </div>
                         </div>
 
-                        {order.deliveryAddress && (
-                          <p className="text-xs text-text-secondary flex items-center gap-1.5">
-                            <MapPin size={13} className="text-primary shrink-0" />
-                            <span className="font-medium">{order.deliveryAddress}</span>
-                          </p>
-                        )}
+                        {/* Restaurant Name Badge */}
+                        <div className="inline-flex items-center gap-1.5 text-xs font-black text-primary bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/25">
+                          <Store size={13} className="shrink-0" />
+                          <span className="truncate max-w-[140px] sm:max-w-none">{restaurantDisplayName}</span>
+                        </div>
                       </div>
 
-                      {/* DESKTOP VIEW: Full Width Status Badge */}
-                      <div className="hidden sm:block shrink-0">{getStatusBadge(order.status)}</div>
+                      {order.deliveryAddress && (
+                        <p className="text-xs text-text-secondary flex items-start gap-1.5 pt-0.5">
+                          <MapPin size={13} className="text-primary shrink-0 mt-0.5" />
+                          <span className="font-medium line-clamp-2">{order.deliveryAddress}</span>
+                        </p>
+                      )}
 
-                      {/* MOBILE VIEW: Status Badge & Reorder Side-by-Side with Equal Height */}
-                      <div className="sm:hidden flex items-center justify-between gap-2.5 w-full">
-                        <div className="flex-1 min-w-0 flex items-center h-10">{getStatusBadge(order.status)}</div>
+                      {/* Status Badge & REORDER Button Side-by-Side */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-glass/40 w-full">
+                        <div className="flex items-center min-w-0 shrink">
+                          {getStatusBadge(order.status)}
+                        </div>
+
                         <button
                           onClick={() => handleReorder(order)}
-                          className="h-10 px-4 rounded-2xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 shrink-0 focus:outline-none focus:ring-0 active:bg-primary-dark"
+                          className="px-4 py-2 rounded-2xl bg-primary text-black hover:bg-primary/90 font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0"
                         >
-                          <RefreshCw size={13} />
+                          <RefreshCw size={15} />
                           <span>REORDER</span>
                         </button>
                       </div>
@@ -389,41 +401,32 @@ export const CustomerOrdersPage: React.FC = () => {
                             return (
                               <div
                                 key={idx}
-                                className="p-3 rounded-2xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/30 transition-all shadow-sm relative overflow-hidden"
+                                className="p-3 rounded-2xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/30 transition-all shadow-sm"
                               >
-                                <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                   <img
                                     src={itemImage}
                                     alt={itemName}
                                     className="w-12 h-12 rounded-xl object-cover border border-glass shrink-0 bg-bg-dark"
                                   />
-                                  <div className="min-w-0 space-y-0.5">
+                                  <div className="min-w-0 space-y-0.5 flex-1">
                                     <h4 className="text-xs font-extrabold text-text-primary truncate">
                                       {itemName}
                                     </h4>
-                                    {/* Item level exact vendor name badge */}
-                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold text-amber-600 dark:text-primary bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/25 my-0.5">
-                                      <Store size={10} className="shrink-0" />
-                                      <span>
-                                        {item.restaurantName && item.restaurantName !== 'Partner Restaurant'
-                                          ? item.restaurantName
-                                          : restaurantDisplayName}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-[11px]">
-                                      <span className="px-2 py-0.5 rounded-md bg-primary/15 text-primary font-black">
+                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                      <span className="px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-black text-[10px]">
                                         x{itemQty}
                                       </span>
-                                      <span className="text-text-muted font-medium">
-                                        ₹{itemPrice.toFixed(2)} each
+                                      <span className="text-text-muted font-medium text-[11px]">
+                                        ₹{Number.isInteger(itemPrice) ? itemPrice : itemPrice.toFixed(2)} each
                                       </span>
                                     </div>
                                   </div>
                                 </div>
 
                                 <div className="text-right shrink-0">
-                                  <span className="text-xs font-black text-text-primary font-display block">
-                                    ₹{itemTotal.toFixed(2)}
+                                  <span className="text-xs sm:text-sm font-black text-text-primary font-display block">
+                                    ₹{Number.isInteger(itemTotal) ? itemTotal : itemTotal.toFixed(2)}
                                   </span>
                                 </div>
                               </div>
@@ -443,24 +446,15 @@ export const CustomerOrdersPage: React.FC = () => {
                           </span>
                         </div>
 
-                        <div className="h-8 w-px bg-glass hidden sm:block" />
+                        <div className="h-8 w-px bg-glass" />
 
-                        <div className="text-right sm:text-left">
+                        <div>
                           <span className="text-text-muted block text-[10px] uppercase font-bold tracking-wider">Payment Mode</span>
-                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] inline-block mt-0.5 uppercase">
-                            {order.paymentMethod || 'Cash on Delivery (COD)'}
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-extrabold text-[11px] inline-block mt-0.5 font-sans">
+                            {formatPaymentMethod(order.paymentMethod)}
                           </span>
                         </div>
                       </div>
-
-                      {/* DESKTOP ONLY: Reorder All Items Button */}
-                      <button
-                        onClick={() => handleReorder(order)}
-                        className="hidden sm:flex px-5 py-2.5 rounded-xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all items-center justify-center gap-2 cursor-pointer shadow-md hover:scale-105 focus:outline-none focus:ring-0"
-                      >
-                        <RefreshCw size={14} />
-                        <span>Reorder All Items</span>
-                      </button>
                     </div>
                   </motion.div>
                 );

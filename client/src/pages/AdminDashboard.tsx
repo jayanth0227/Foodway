@@ -48,6 +48,7 @@ import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import { getCurrentUser, clearSession } from '../utils/auth.utils';
 import { useAuth } from '../hooks/useAuth';
+import { socketService } from '../services/socket.service';
 import { AdminDeliveryLocations } from '../components/admin/AdminDeliveryLocations';
 
 interface DBItem {
@@ -97,6 +98,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const [devToolsOpen, setDevToolsOpen] = useState(false);
   const [resViewMode, setResViewMode] = useState<'grid' | 'table'>('grid');
   const [selectedResProfile, setSelectedResProfile] = useState<any | null>(null);
+
+  // Expandable variants state for single item card display in admin dashboard
+  const [expandedAdminItemIds, setExpandedAdminItemIds] = useState<Record<string, boolean>>({});
+  const toggleAdminExpandVariants = (itemId: string) => {
+    setExpandedAdminItemIds(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+  };
 
   // Authentication
   const [adminEmail, setAdminEmail] = useState('');
@@ -321,7 +328,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       fetchAdminOrders();
       fetchDeliveryPartners();
     }, 5000);
-    return () => clearInterval(interval);
+
+    // Real-Time Socket Subscriptions for Admin Dashboard
+    const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
+      const targetId = updatedOrder.orderId || updatedOrder.id;
+      const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
+      
+      setOrders(prev => prev.map(o => {
+        if (o.id === targetId || (o as any).orderId === targetId) {
+          return { ...o, orderStatus: nextStatus, status: nextStatus };
+        }
+        return o;
+      }));
+    });
+
+    const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
+      const targetId = updatedOrder.orderId || updatedOrder.id;
+      const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
+      
+      setOrders(prev => prev.map(o => {
+        if (o.id === targetId || (o as any).orderId === targetId) {
+          return { ...o, orderStatus: nextStatus, status: nextStatus };
+        }
+        return o;
+      }));
+    });
+
+    // Real-Time Delivery Partner Duty Status Listener (ON_DUTY vs OFF_DUTY / OFFLINE)
+    const socket = socketService.connect();
+    const handleDutyUpdate = (data: any) => {
+      console.log('⚡ [Socket Event: PARTNER_DUTY_UPDATED]:', data);
+      const targetDuty = data.dutyStatus || (data.isOnDuty ? 'ON_DUTY' : 'OFF_DUTY');
+
+      setDbDeliveryPartners(prev => {
+        const updated = prev.map(p => {
+          const pEmail = (p.email || '').toLowerCase().trim();
+          const dEmail = (data.email || '').toLowerCase().trim();
+          const pName = (p.name || '').toLowerCase().trim();
+          const dName = (data.name || data.userId || '').toLowerCase().trim();
+          const pId = (p.id || p.userId || '').toLowerCase().trim();
+          const dId = (data.userId || data.id || '').toLowerCase().trim();
+
+          const matches = (dEmail && pEmail === dEmail) || 
+                          (dId && (pId === dId || pId.includes(dId) || dId.includes(pId))) ||
+                          (dName && (pName === dName || pName.includes(dName))) ||
+                          (prev.length === 1); // Fallback if single partner registered
+
+          if (matches) {
+            return { ...p, dutyStatus: targetDuty };
+          }
+          return p;
+        });
+        return updated;
+      });
+    };
+    socket.on('partner_duty_updated', handleDutyUpdate);
+
+    return () => {
+      clearInterval(interval);
+      unsubscribeStatus();
+      unsubscribeRider();
+      socket.off('partner_duty_updated', handleDutyUpdate);
+    };
   }, []);
 
   const fetchAdminRestaurants = async () => {
@@ -761,11 +829,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
   // Analytics helper calculations
   const totalRestaurants = restaurants.length;
-  const activeRestaurants = restaurants.filter(r => r.status === 'active').length;
+  const activeRestaurants = restaurants.filter(r => (r.status || '').toLowerCase() === 'active' || (r.status || '').toLowerCase() === 'open' || r.isOpen === true).length;
   const totalOrdersToday = orders.length;
-  const pendingOrders = orders.filter(o => o.orderStatus === 'pending').length;
-  const ordersInDelivery = orders.filter(o => o.orderStatus === 'assigned' || o.orderStatus === 'picked up').length;
-  const completedOrders = orders.filter(o => o.orderStatus === 'delivered').length;
+  const pendingOrders = orders.filter(o => (o.orderStatus || o.status || '').toLowerCase() === 'pending').length;
+  const ordersInDelivery = orders.filter(o => ['assigned', 'out for delivery', 'in transit', 'picked up'].includes((o.orderStatus || o.status || '').toLowerCase())).length;
+  const completedOrders = orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length;
 
   // Filter Restaurants
   const filteredRestaurants = restaurants.filter(r => {
@@ -862,7 +930,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               }`}
             >
               <Store size={16} />
-              <span>Restaurants</span>
+              <span>Shops & Stores</span>
             </button>
 
             <button
@@ -1353,6 +1421,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                                   <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
                                     {dish.description || 'Vendor Menu Product'}
                                   </p>
+                                  
+                                  {/* Variant expand button if item has variants */}
+                                  {dish.variants && dish.variants.length > 0 && (
+                                    <div className="mt-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAdminExpandVariants(dish.id)}
+                                        className="w-full flex items-center justify-between px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-bold transition-all cursor-pointer"
+                                      >
+                                        <span>{dish.variants.length} Variants Available</span>
+                                        <span>{expandedAdminItemIds[dish.id] ? '▲' : '▼'}</span>
+                                      </button>
+
+                                      {expandedAdminItemIds[dish.id] && (
+                                        <div className="mt-1.5 p-2 rounded-lg bg-bg-dark/90 border border-glass space-y-1">
+                                          {dish.variants.map((v: any, vIdx: number) => (
+                                            <div key={v.id || vIdx} className="flex items-center justify-between text-[10px] text-text-secondary border-b border-glass/30 last:border-0 py-0.5">
+                                              <span>{v.label || `${v.quantity} ${v.unit}`}</span>
+                                              <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex justify-between items-center mt-2.5">
@@ -1437,11 +1530,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 {/* Header section with title on left and Back button on right */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6 mb-8">
                   <div>
-                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Establishment Onboarding</span>
+                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Shop Onboarding</span>
                     <h2 className="text-2xl md:text-3xl font-black font-display text-primary tracking-tight">
-                      {editingRes ? 'Edit Establishment Profile' : 'Add New Restaurant Partner'}
+                      {editingRes ? 'Edit Shop / Store Profile' : 'Add New Merchant Shop / Store'}
                     </h2>
-                    <p className="text-xs text-text-muted mt-1">Provide the required establishment credentials and information below.</p>
+                    <p className="text-xs text-text-muted mt-1">Provide the required shop credentials and store details below.</p>
                   </div>
                   <button
                     type="button"
@@ -1449,7 +1542,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                     className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all duration-300"
                   >
                     <ArrowLeft size={14} />
-                    <span>Back to Establishments</span>
+                    <span>Back to Shops & Stores</span>
                   </button>
                 </div>
 
@@ -1461,10 +1554,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 )}
 
                 <form onSubmit={saveRestaurant} className="space-y-6 text-xs font-semibold text-text-secondary w-full">
-                  {/* Auto-Generated Unique Restaurant ID Banner */}
+                  {/* Auto-Generated Unique Shop ID Banner */}
                   <div className="p-4 rounded-xl bg-glass-subtle/50 border border-glass flex items-center justify-between gap-4">
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-text-muted block">Restaurant ID (Auto-Generated)</span>
+                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-text-muted block">Shop ID (Auto-Generated)</span>
                       <span className="text-sm font-mono font-black text-primary tracking-wider mt-0.5 block">
                         {editingRes ? editingRes.id : generateUniqueResId(restaurants)}
                       </span>
@@ -1476,13 +1569,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Restaurant Name *</label>
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Shop / Store Name *</label>
                       <input
                         type="text"
                         required
                         value={resForm.name}
                         onChange={(e) => setResForm({ ...resForm, name: e.target.value })}
-                        placeholder="e.g. The Gilded Fork"
+                        placeholder="e.g. Vijaya Durga Sweets & Bakery"
                         className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
                       />
                     </div>
@@ -1633,25 +1726,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             <div className="space-y-8 animate-fadeIn">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Michelin Partners</span>
-                  <h1 className="text-3xl font-black font-display text-primary tracking-tight">Manage Establishments</h1>
+                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Merchant Partners & Stores</span>
+                  <h1 className="text-3xl font-black font-display text-primary tracking-tight">Manage Merchant Shops & Stores</h1>
                 </div>
                 <button
                   onClick={() => { clearResForm(); setEditingRes(null); setIsResFormOpen(true); }}
                   className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
                 >
                   <PlusCircle size={16} />
-                  <span>Add Restaurant</span>
+                  <span>Add Shop / Store</span>
                 </button>
               </div>
 
-              {/* Filter Controls Bar (Requirement 2: Search Restaurant only) */}
+              {/* Filter Controls Bar */}
               <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
                 <div className="relative w-full sm:w-72 md:w-96 shrink-0">
                   <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
                   <input
                     type="text"
-                    placeholder="Search restaurants or owner..."
+                    placeholder="Search shops, stores, or owner..."
                     value={resSearch}
                     onChange={(e) => setResSearch(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none transition-all focus:ring-1 focus:ring-primary/20"
@@ -1953,20 +2046,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               <div className="hidden xl:block w-px h-6 bg-glass" />
 
               {/* Status Tabs Subnavigation */}
-              <div className="flex items-center gap-1.5 overflow-x-auto w-full xl:w-auto pb-1 xl:pb-0 scrollbar-none">
-                {['All', 'Pending', 'Accepted', 'Preparing', 'Ready', 'Assigned', 'Picked Up', 'Delivered', 'Cancelled'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setOrderStatusFilter(status)}
-                    className={`px-3 py-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider border shrink-0 transition-all duration-300 ${
-                      orderStatusFilter === status
-                        ? 'bg-primary text-black border-primary shadow-sm shadow-primary/10'
-                        : 'bg-glass-subtle border-glass text-text-muted hover:text-text-primary hover:bg-glass'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
+              <div className="w-full xl:w-auto overflow-x-auto scrollbar-none [ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="flex items-center gap-1 min-w-max p-1 bg-[#F4EDE4] dark:bg-[#1C1815] border border-[#E4D7C6] dark:border-[#382E25] rounded-xl shadow-inner">
+                  {['All', 'Pending', 'Accepted', 'Preparing', 'Ready', 'Assigned', 'Picked Up', 'Delivered', 'Cancelled'].map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setOrderStatusFilter(status)}
+                      className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all duration-200 cursor-pointer ${
+                        orderStatusFilter === status
+                          ? 'bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black shadow-sm'
+                          : 'text-[#665B52] dark:text-[#A89C90] hover:text-[#1C1815] dark:hover:text-white hover:bg-white/60 dark:hover:bg-[#2C241D]'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -2190,14 +2286,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
           <div className="space-y-8 animate-fadeIn">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-glass pb-4">
               <div>
-                <span className="text-amber-600 dark:text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
+                <span className="text-[#B87C44] dark:text-[#D9A36C] font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
                 <h1 className="text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight">Delivery Fleet & Live Assignments</h1>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsAddPartnerDrawerOpen(true)}
-                className="px-5 py-3 rounded-xl bg-amber-500 dark:bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/20 dark:hover:shadow-primary/20 hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                className="px-5 py-3 rounded-2xl bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer shrink-0"
               >
                 <Bike size={16} />
                 <span>+ Create Delivery Partner</span>
@@ -2205,18 +2301,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             </div>
 
             {/* Registered Delivery Partners stored in DB */}
-            <div className="p-6 rounded-3xl bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass space-y-4 shadow-xl">
-              <div className="flex items-center justify-between">
+            <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <UserCheck size={18} className="text-amber-600 dark:text-primary" />
+                    <UserCheck size={18} className="text-[#B87C44] dark:text-[#D9A36C]" />
                     <span>Registered Delivery Partners (Stored in Database)</span>
                   </h3>
                   <p className="text-xs text-slate-600 dark:text-text-muted mt-0.5 font-medium">
-                    Delivery partners can log in at the central <code className="text-amber-600 dark:text-primary font-mono font-bold">/login</code> page using their credentials.
+                    Delivery partners can log in at the central <code className="text-[#B87C44] dark:text-[#D9A36C] font-mono font-bold">/login</code> page using their credentials.
                   </p>
                 </div>
-                <span className="px-3 py-1 rounded-full text-xs font-black uppercase bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-primary">
+                <span className="self-start sm:self-auto px-3.5 py-1 rounded-full text-xs font-black uppercase bg-[#B87C44]/15 border border-[#B87C44]/30 text-[#B87C44] dark:text-[#D9A36C] shrink-0">
                   {dbDeliveryPartners.length} Partners Registered
                 </span>
               </div>
@@ -2226,40 +2322,82 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                   No custom delivery partners created yet. Click "+ Create Delivery Partner" above to add a new delivery role in the database.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {dbDeliveryPartners.map((partner) => (
-                    <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-slate-50 dark:bg-bg-dark/70 border border-slate-200 dark:border-glass/40 flex flex-col justify-between gap-3 relative hover:border-amber-500/40 dark:hover:border-primary/30 transition-all">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 dark:text-white text-sm">{partner.name}</span>
-                            <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
-                              Active Partner
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-600 dark:text-text-muted">{partner.email}</p>
-                          <p className="text-[11px] text-slate-500 dark:text-text-muted font-mono">{partner.phone || 'No phone'}</p>
-                        </div>
-                        <button
-                          onClick={() => deleteDeliveryPartner(partner.id || partner.userId)}
-                          className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
-                          title="Remove Partner"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
+                  {dbDeliveryPartners.map((partner) => {
+                    const partnerName = (partner.name || '').toLowerCase();
+                    const partnerEmail = (partner.email || '').toLowerCase();
+                    const partnerId = (partner.id || partner.userId || '').toLowerCase();
 
-                      <div className="pt-2 border-t border-slate-200 dark:border-glass/30 flex items-center justify-between text-[10px] text-slate-600 dark:text-text-muted font-medium">
-                        <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-text-secondary">
-                          <Bike size={12} className="text-amber-600 dark:text-primary" />
-                          {partner.vehicleType} • {partner.vehicleNumber}
-                        </span>
-                        <span className="font-mono text-amber-700 dark:text-primary font-bold">
-                          ID: {partner.userId}
-                        </span>
+                    // Find if rider currently has an active order in transit
+                    const activeTransitOrder = orders.find((o) => {
+                      const assigned = (o.assignedRider || '').toLowerCase();
+                      const st = (o.orderStatus || o.status || '').toLowerCase();
+                      const isAssignedToRider = assigned && (assigned === partnerName || assigned.includes(partnerName) || partnerName.includes(assigned) || assigned === partnerEmail || assigned === partnerId);
+                      const isActiveState = ['assigned', 'out for delivery', 'in transit', 'picked up', 'ready'].includes(st);
+                      return isAssignedToRider && isActiveState;
+                    });
+
+                    const isOffline = partner.dutyStatus === 'OFF_DUTY';
+                    const isBusyOnRide = !isOffline && Boolean(activeTransitOrder);
+
+                    return (
+                      <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-slate-50 dark:bg-bg-dark/80 border border-slate-200 dark:border-glass/60 flex flex-col justify-between gap-3 relative hover:border-amber-500/40 dark:hover:border-primary/40 transition-all shadow-sm">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="space-y-0.5 min-w-0 flex-grow">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{partner.name}</span>
+                              
+                              {/* 3-State Status Pill: OFF DUTY vs BUSY ON RIDE vs ONLINE */}
+                              {isOffline ? (
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 shrink-0 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  <span>OFFLINE</span>
+                                </span>
+                              ) : isBusyOnRide ? (
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-blue-500/15 border border-blue-500/40 text-blue-700 dark:text-sky-400 shrink-0 flex items-center gap-1 animate-pulse">
+                                  <Bike size={10} className="text-blue-500 dark:text-sky-400" />
+                                  <span>BUSY • ON RIDE</span>
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shrink-0 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span>ONLINE • AVAILABLE</span>
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-600 dark:text-text-muted truncate" title={partner.email}>{partner.email}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-text-muted font-mono">{partner.phone || 'No phone'}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => deleteDeliveryPartner(partner.id || partner.userId)}
+                            className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
+                            title="Remove Partner"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+
+                        {/* Active order chip if on ride */}
+                        {activeTransitOrder && !isOffline && (
+                          <div className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-between text-[10px]">
+                            <span className="text-slate-600 dark:text-text-muted font-semibold">Carrying Order:</span>
+                            <span className="font-mono font-bold text-blue-600 dark:text-sky-400">#{activeTransitOrder.id || activeTransitOrder.orderId}</span>
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-slate-200 dark:border-glass/30 flex items-center justify-between text-[10px] text-slate-600 dark:text-text-muted font-medium">
+                          <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-text-secondary truncate">
+                            <Bike size={12} className="text-amber-600 dark:text-primary shrink-0" />
+                            <span>{partner.vehicleType || 'Bike'} {partner.vehicleNumber ? `• ${partner.vehicleNumber}` : ''}</span>
+                          </span>
+                          <span className="font-mono text-amber-700 dark:text-primary font-bold shrink-0">
+                            ID: {partner.userId}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -2268,39 +2406,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               
               {/* Column 1: Waiting for Rider */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2">
+              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-text-secondary">Waiting for Rider</h2>
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Waiting for Rider</h2>
                   </div>
-                  <span className="text-[10px] font-bold bg-slate-200/60 dark:bg-glass-subtle px-2 py-0.5 rounded-full text-slate-700 dark:text-text-muted border border-slate-300 dark:border-glass">
-                    {orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length}
+                  <span className="text-[11px] font-black bg-amber-500/15 text-amber-700 dark:text-warning px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                    {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
                   </span>
                 </div>
 
-                <div className="space-y-4">
-                  {orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 dark:text-text-muted text-[11px] font-medium border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
+                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
+                  {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
                       No orders waiting for riders.
                     </div>
                   ) : (
-                    orders.filter(o => !o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-amber-500/30 dark:hover:border-primary/20 transition-all">
+                    orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
+                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-amber-500/40 dark:hover:border-primary/40 transition-all">
                         <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
                           <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-amber-600 dark:text-warning">{order.orderStatus}</span>
+                          <span className="uppercase font-extrabold text-amber-600 dark:text-warning">{order.orderStatus || order.status}</span>
                         </div>
-                        <div className="space-y-2 text-[10px] leading-relaxed">
+                        <div className="space-y-1.5 text-[10px] leading-relaxed">
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
                         </div>
-                        <div className="pt-3 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
+                        <div className="pt-2.5 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
                           <select
                             value={selectedRiders[order.id] || ''}
                             onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
+                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-darkSec border border-slate-300 dark:border-glass rounded-lg text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
                           >
                             <option value="">Select Rider...</option>
                             {allDeliveryRiders.map(r => (
@@ -2310,7 +2448,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                           <button
                             onClick={() => handleAssignRider(order.id)}
                             disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded bg-amber-500 dark:bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
+                            className="py-1.5 px-3 rounded-lg bg-amber-500 dark:bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
                           >
                             Assign
                           </button>
@@ -2322,41 +2460,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               </div>
 
               {/* Column 2: Assigned Orders */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2">
+              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-text-secondary">Assigned Orders</h2>
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Assigned Orders</h2>
                   </div>
-                  <span className="text-[10px] font-bold bg-slate-200/60 dark:bg-glass-subtle px-2 py-0.5 rounded-full text-slate-700 dark:text-text-muted border border-slate-300 dark:border-glass">
-                    {orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length}
+                  <span className="text-[11px] font-black bg-blue-500/15 text-blue-700 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                    {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
                   </span>
                 </div>
 
-                <div className="space-y-4">
-                  {orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 dark:text-text-muted text-[11px] font-medium border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
+                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-blue-500/30">
+                  {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
                       No active courier transits.
                     </div>
                   ) : (
-                    orders.filter(o => o.assignedRider && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled').map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-amber-500/30 dark:hover:border-primary/20 transition-all">
+                    orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
+                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-blue-500/40 dark:hover:border-primary/40 transition-all">
                         <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
                           <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-blue-600 dark:text-primary">{order.orderStatus}</span>
+                          <span className="uppercase font-extrabold text-blue-600 dark:text-primary">{order.orderStatus || order.status}</span>
                         </div>
-                        <div className="space-y-2 text-[10px] leading-relaxed">
+                        <div className="space-y-1.5 text-[10px] leading-relaxed">
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-amber-700 dark:text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-slate-700 dark:text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
                         </div>
-                        <div className="pt-3 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
+                        <div className="pt-2.5 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
                           <select
                             value={selectedRiders[order.id] || ''}
                             onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
+                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-darkSec border border-slate-300 dark:border-glass rounded-lg text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
                           >
                             <option value="">Reassign Rider...</option>
                             {allDeliveryRiders.filter(r => r !== order.assignedRider).map(r => (
@@ -2366,7 +2504,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                           <button
                             onClick={() => handleAssignRider(order.id)}
                             disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded bg-slate-100 dark:bg-glass border border-slate-300 dark:border-glass hover:border-amber-500 dark:hover:border-primary/40 text-slate-700 dark:text-text-secondary hover:text-amber-700 dark:hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
+                            className="py-1.5 px-3 rounded-lg bg-slate-100 dark:bg-glass border border-slate-300 dark:border-glass hover:border-amber-500 dark:hover:border-primary/40 text-slate-700 dark:text-text-secondary hover:text-amber-700 dark:hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
                           >
                             Reassign
                           </button>
@@ -2378,34 +2516,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               </div>
 
               {/* Column 3: Delivered Orders */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2">
+              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-text-secondary">Delivered Orders</h2>
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Delivered Orders</h2>
                   </div>
-                  <span className="text-[10px] font-bold bg-slate-200/60 dark:bg-glass-subtle px-2 py-0.5 rounded-full text-slate-700 dark:text-text-muted border border-slate-300 dark:border-glass">
-                    {orders.filter(o => o.orderStatus === 'delivered').length}
+                  <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
                   </span>
                 </div>
 
-                <div className="space-y-4">
-                  {orders.filter(o => o.orderStatus === 'delivered').length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 dark:text-text-muted text-[11px] font-medium border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
+                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-emerald-500/30">
+                  {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
                       No orders successfully delivered yet.
                     </div>
                   ) : (
-                    orders.filter(o => o.orderStatus === 'delivered').map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-xl p-4 space-y-4 shadow-sm hover:border-emerald-500/20 transition-all opacity-85 hover:opacity-100">
+                    orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
+                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-emerald-500/40 transition-all opacity-90 hover:opacity-100">
                         <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
                           <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-emerald-600 dark:text-success flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
+                          <span className="uppercase font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
                         </div>
-                        <div className="space-y-2 text-[10px] leading-relaxed">
+                        <div className="space-y-1.5 text-[10px] leading-relaxed">
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
                           <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-success font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
+                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
                         </div>
                       </div>
                     ))
@@ -2878,12 +3016,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             >
               {/* Drawer Top Header */}
               <div className="p-6 border-b border-slate-200 dark:border-glass/50 flex items-center justify-between bg-slate-50/80 dark:bg-bg-dark/50 backdrop-blur-md">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-primary shrink-0 shadow-inner">
-                    <Bike size={20} />
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-[#B87C44]/15 border border-[#B87C44]/30 flex items-center justify-center text-[#B87C44] dark:text-[#D9A36C]">
+                    <Bike size={22} />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">
                       Create Delivery Partner
                     </h2>
                     <p className="text-xs text-slate-600 dark:text-text-muted font-medium">
@@ -2913,7 +3051,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <form id="create-partner-drawer-form" onSubmit={handleSaveDeliveryPartner} className="space-y-5 text-xs font-semibold">
                   <div className="space-y-2">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
-                      <User size={14} className="text-amber-600 dark:text-primary" />
+                      <User size={14} className="text-[#B87C44] dark:text-[#D9A36C]" />
                       <span>Full Name *</span>
                     </label>
                     <input
@@ -2921,14 +3059,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                       required
                       value={partnerForm.name}
                       onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
-                      placeholder="e.g. Ramesh Kumar"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                      placeholder="e.g. Manikanta Singadala"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-[#B87C44] dark:focus:border-[#D9A36C] transition-all shadow-sm"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
-                      <Mail size={14} className="text-amber-600 dark:text-primary" />
+                      <Mail size={14} className="text-[#B87C44] dark:text-[#D9A36C]" />
                       <span>Email Address *</span>
                     </label>
                     <input
@@ -2937,13 +3075,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                       value={partnerForm.email}
                       onChange={(e) => setPartnerForm({ ...partnerForm, email: e.target.value })}
                       placeholder="rider@mkdelivery.com"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-[#B87C44] dark:focus:border-[#D9A36C] transition-all shadow-sm"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
-                      <Phone size={14} className="text-amber-600 dark:text-primary" />
+                      <Phone size={14} className="text-[#B87C44] dark:text-[#D9A36C]" />
                       <span>Phone Number *</span>
                     </label>
                     <input
@@ -2951,14 +3089,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                       required
                       value={partnerForm.phone}
                       onChange={(e) => setPartnerForm({ ...partnerForm, phone: e.target.value })}
-                      placeholder="+91 9876543210"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                      placeholder="+91 9573041191"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-[#B87C44] dark:focus:border-[#D9A36C] transition-all shadow-sm"
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
-                      <Lock size={14} className="text-amber-600 dark:text-primary" />
+                      <Lock size={14} className="text-[#B87C44] dark:text-[#D9A36C]" />
                       <span>Password *</span>
                     </label>
                     <input
@@ -2966,21 +3104,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                       required
                       value={partnerForm.password}
                       onChange={(e) => setPartnerForm({ ...partnerForm, password: e.target.value })}
-                      placeholder="••••••••"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                      placeholder="Enter strong password (e.g. Rider@2026)"
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-[#B87C44] dark:focus:border-[#D9A36C] transition-all shadow-sm"
                     />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 dark:text-text-muted flex items-center gap-1.5">
-                        <Bike size={14} className="text-amber-600 dark:text-primary" />
+                        <Bike size={14} className="text-[#B87C44] dark:text-[#D9A36C]" />
                         <span>Vehicle Type</span>
                       </label>
                       <select
                         value={partnerForm.vehicleType}
                         onChange={(e) => setPartnerForm({ ...partnerForm, vehicleType: e.target.value })}
-                        className="w-full px-3.5 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm cursor-pointer"
+                        className="w-full px-3.5 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-[#B87C44] dark:focus:border-[#D9A36C] transition-all shadow-sm cursor-pointer"
                       >
                         <option value="Bike">Motorcycle / Bike</option>
                         <option value="Scooter">Scooter</option>
@@ -2997,8 +3135,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                         type="text"
                         value={partnerForm.vehicleNumber}
                         onChange={(e) => setPartnerForm({ ...partnerForm, vehicleNumber: e.target.value })}
-                        placeholder="TS-09-AB-1234"
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-amber-500 dark:focus:border-primary transition-all shadow-sm"
+                        placeholder="e.g. AP-39-MK-1234"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-bg-dark border border-slate-300 dark:border-glass rounded-xl text-xs font-bold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-text-muted/40 outline-none focus:border-[#B87C44] dark:focus:border-[#D9A36C] transition-all shadow-sm"
                       />
                     </div>
                   </div>
@@ -3010,7 +3148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <button
                   type="button"
                   onClick={() => setIsAddPartnerDrawerOpen(false)}
-                  className="w-1/3 py-3 px-4 rounded-xl border border-slate-300 dark:border-glass bg-slate-100 dark:bg-glass hover:bg-slate-200 dark:hover:bg-glass-subtle text-slate-700 dark:text-text-muted font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
+                  className="w-1/3 py-3.5 px-4 rounded-2xl border border-slate-300 dark:border-glass bg-slate-100 dark:bg-glass hover:bg-slate-200 dark:hover:bg-glass-subtle text-slate-700 dark:text-text-muted font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer text-center"
                 >
                   Cancel
                 </button>
@@ -3018,14 +3156,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                   type="submit"
                   form="create-partner-drawer-form"
                   disabled={isSavingPartner}
-                  className="w-2/3 py-3 px-4 rounded-xl bg-amber-500 dark:bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/20 dark:hover:shadow-primary/20 hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-2/3 py-3.5 px-4 rounded-2xl bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingPartner ? (
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <>
                       <ShieldCheck size={16} />
-                      <span>Save Partner</span>
+                      <span>SAVE PARTNER</span>
                     </>
                   )}
                 </button>
