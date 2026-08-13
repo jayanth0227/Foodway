@@ -9,13 +9,13 @@ export interface CategoryItem {
 }
 
 export const DEFAULT_CULINARY_CATEGORIES: CategoryItem[] = [
- 
- 
- 
 
- 
- 
- 
+
+
+
+
+
+
 ];
 
 export const cleanCategoryName = (name: string = ''): string => {

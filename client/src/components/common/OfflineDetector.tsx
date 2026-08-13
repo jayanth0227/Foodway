@@ -71,7 +71,7 @@ export const OfflineDetector: React.FC = () => {
 
           {/* Center Mascot & Message Container matching Screenshot */}
           <div className="max-w-sm w-full mx-auto my-auto flex flex-col items-center text-center space-y-8 py-4 z-10">
-            
+
             {/* Animated Floating HD Ghost Character in Circular 3D Glass Disc */}
             <div className="relative flex flex-col items-center justify-center w-full py-2">
               <motion.div

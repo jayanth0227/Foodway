@@ -258,11 +258,10 @@ export const CategoriesPage: React.FC = () => {
                           className="flex flex-col items-center gap-1.5 shrink-0 cursor-pointer group active:scale-95 transition-all relative"
                         >
                           {/* Pure Borderless Dish Image Container matching Swiggy */}
-                          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 transition-all duration-300 shadow-md ${
-                            active
+                          <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full overflow-hidden shrink-0 transition-all duration-300 shadow-md ${active
                               ? "scale-105 shadow-luxury ring-2 ring-primary ring-offset-2 ring-offset-bg-dark -translate-y-0.5"
                               : "opacity-90 hover:opacity-100 hover:scale-105 hover:-translate-y-0.5 shadow-sm"
-                          }`}>
+                            }`}>
                             <img
                               src={cat.image}
                               alt={cat.name}
@@ -271,11 +270,10 @@ export const CategoriesPage: React.FC = () => {
                           </div>
 
                           {/* Swiggy Style Clean Typography */}
-                          <span className={`text-xs sm:text-sm font-extrabold tracking-tight text-center truncate max-w-[82px] sm:max-w-[105px] transition-all ${
-                            active
+                          <span className={`text-xs sm:text-sm font-extrabold tracking-tight text-center truncate max-w-[82px] sm:max-w-[105px] transition-all ${active
                               ? "text-primary font-black scale-105"
                               : "text-text-primary group-hover:text-primary"
-                          }`}>
+                            }`}>
                             {getTranslatedCategoryName(cat.name, t)}
                           </span>
                         </button>
@@ -287,159 +285,154 @@ export const CategoriesPage: React.FC = () => {
 
               {/* Matching Shops & Restaurants Grid */}
               <div className="space-y-4 sm:space-y-5">
-                  <div className="flex items-center justify-between gap-2 border-b border-glass pb-3">
-                    <h2 className="text-base sm:text-xl font-black font-display text-text-primary flex items-center gap-2 truncate">
-                      <span className="text-gradient-gold truncate">{selectedCategory} Shops</span>
-                    </h2>
-                    <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 shrink-0 whitespace-nowrap">
-                      {matchingShops.length} Found
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between gap-2 border-b border-glass pb-3">
+                  <h2 className="text-base sm:text-xl font-black font-display text-text-primary flex items-center gap-2 truncate">
+                    <span className="text-gradient-gold truncate">{selectedCategory} Shops</span>
+                  </h2>
+                  <span className="text-[11px] sm:text-xs font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20 shrink-0 whitespace-nowrap">
+                    {matchingShops.length} Found
+                  </span>
+                </div>
 
-                  {loading || isCategorySwitching ? (
-                    <MobileShopCardSkeleton count={6} />
-                  ) : matchingShops.length === 0 ? (
-                    <div className="py-12 sm:py-16 text-center glass-panel border border-glass rounded-3xl p-6 sm:p-8 max-w-md mx-auto space-y-4 shadow-sm">
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
-                        <UtensilsCrossed size={24} />
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="text-base sm:text-lg font-bold text-text-primary">
-                          No Shops Found in {selectedCategory}
-                        </h3>
-                        <p className="text-xs text-text-muted">
-                          No partner kitchens match this category right now. Browse other cuisines.
-                        </p>
-                      </div>
-                      <button
-                        onClick={handleClearCategory}
-                        className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-black font-extrabold text-xs shadow-md hover:scale-105 transition-all cursor-pointer"
-                      >
-                        Browse All Categories
-                      </button>
+                {loading || isCategorySwitching ? (
+                  <MobileShopCardSkeleton count={6} />
+                ) : matchingShops.length === 0 ? (
+                  <div className="py-12 sm:py-16 text-center glass-panel border border-glass rounded-3xl p-6 sm:p-8 max-w-md mx-auto space-y-4 shadow-sm">
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
+                      <UtensilsCrossed size={24} />
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                      {matchingShops.map((shop) => {
-                        const shopId = shop.id || shop.restaurantId || 'res-1';
-                        const shopName = shop.name || shop.restaurantName || 'Gourmet Food Hub';
-                        const shopImage = shop.image || shop.logo || shop.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800';
-                        const shopRating = shop.rating || 4.8;
-                        const shopTime = shop.deliveryTime || '20-30 min';
-                        const shopCuisine = shop.cuisine || selectedCategory || '';
+                    <div className="space-y-1">
+                      <h3 className="text-base sm:text-lg font-bold text-text-primary">
+                        No Shops Found in {selectedCategory}
+                      </h3>
+                      <p className="text-xs text-text-muted">
+                        No partner kitchens match this category right now. Browse other cuisines.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleClearCategory}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-secondary text-black font-extrabold text-xs shadow-md hover:scale-105 transition-all cursor-pointer"
+                    >
+                      Browse All Categories
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {matchingShops.map((shop) => {
+                      const shopId = shop.id || shop.restaurantId || 'res-1';
+                      const shopName = shop.name || shop.restaurantName || 'Gourmet Food Hub';
+                      const shopImage = shop.image || shop.logo || shop.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=800';
+                      const shopRating = shop.rating || 4.8;
+                      const shopTime = shop.deliveryTime || '20-30 min';
+                      const shopCuisine = shop.cuisine || selectedCategory || '';
 
-                        const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive' || shop.status === 'INACTIVE' || shop.status === 'OFFLINE' || shop.status === 'offline' || shop.status === 'CLOSED';
-                        const isOpen = !isClosed;
+                      const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive' || shop.status === 'INACTIVE' || shop.status === 'OFFLINE' || shop.status === 'offline' || shop.status === 'CLOSED';
+                      const isOpen = !isClosed;
 
-                        return (
-                          <motion.div
-                            key={shopId}
-                            initial={false}
-                            animate={{ opacity: 1, y: 0 }}
-                            onClick={() => navigate(`/restaurants/${shopId}`)}
-                            className={`bg-bg-cardSec border border-glass sm:hover:border-primary/50 rounded-2xl sm:rounded-3xl overflow-hidden shadow-luxury sm:hover:shadow-luxury-hover sm:hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer relative ${
-                              !isOpen ? 'opacity-90' : ''
+                      return (
+                        <motion.div
+                          key={shopId}
+                          initial={false}
+                          animate={{ opacity: 1, y: 0 }}
+                          onClick={() => navigate(`/restaurants/${shopId}`)}
+                          className={`bg-bg-cardSec border border-glass sm:hover:border-primary/50 rounded-2xl sm:rounded-3xl overflow-hidden shadow-luxury sm:hover:shadow-luxury-hover sm:hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer relative ${!isOpen ? 'opacity-90' : ''
                             }`}
-                          >
-                            <div>
-                              {/* Shop Cover Image Container */}
-                              <div className="relative aspect-[16/9] w-full overflow-hidden bg-black">
-                                <img
-                                  src={shopImage}
-                                  alt={shopName}
-                                  className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${
-                                    !isOpen ? 'filter grayscale opacity-75' : ''
+                        >
+                          <div>
+                            {/* Shop Cover Image Container */}
+                            <div className="relative aspect-[16/9] w-full overflow-hidden bg-black">
+                              <img
+                                src={shopImage}
+                                alt={shopName}
+                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${!isOpen ? 'filter grayscale opacity-75' : ''
                                   }`}
-                                />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 opacity-80 pointer-events-none" />
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 opacity-80 pointer-events-none" />
 
-                                {/* Dynamic Cuisine Badge */}
-                                {shopCuisine && (
-                                  <div className="absolute top-2.5 left-2.5 z-10">
-                                    <span className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md text-[10px] font-black text-primary border border-primary/30 uppercase tracking-wider flex items-center gap-1 shadow-md">
-                                      <Sparkles size={11} />
-                                      <span className="truncate max-w-[110px]">{shopCuisine}</span>
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* Open/Closed Status Badge on Top Right */}
-                                <div className="absolute top-2.5 right-2.5 z-10">
-                                  <span className={`px-2.5 py-1 rounded-full backdrop-blur-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md border ${
-                                    isOpen
-                                      ? 'bg-emerald-600/90 text-white border-emerald-400/40'
-                                      : 'bg-rose-600/95 text-white border-rose-400/40'
-                                  }`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-300 animate-pulse' : 'bg-white'}`} />
-                                    <span>{isOpen ? 'OPEN NOW' : 'CLOSED'}</span>
+                              {/* Dynamic Cuisine Badge */}
+                              {shopCuisine && (
+                                <div className="absolute top-2.5 left-2.5 z-10">
+                                  <span className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md text-[10px] font-black text-primary border border-primary/30 uppercase tracking-wider flex items-center gap-1 shadow-md">
+                                    <Sparkles size={11} />
+                                    <span className="truncate max-w-[110px]">{shopCuisine}</span>
                                   </span>
                                 </div>
+                              )}
 
-                                {/* Dynamic Delivery Time & Rating Badge on Bottom */}
-                                <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                                  {shopTime && (
-                                    <span className="text-[10px] font-extrabold text-white bg-black/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/40 flex items-center gap-1.5 shadow-sm">
-                                      <Clock size={11} className="text-primary" />
-                                      <span>{shopTime}</span>
-                                    </span>
-                                  )}
-
-                                  {shopRating && (
-                                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center gap-1 shadow-md">
-                                      <Star size={10} className="fill-white text-white" />
-                                      <span>{shopRating}</span>
-                                    </span>
-                                  )}
-                                </div>
+                              {/* Open/Closed Status Badge on Top Right */}
+                              <div className="absolute top-2.5 right-2.5 z-10">
+                                <span className={`px-2.5 py-1 rounded-full backdrop-blur-md text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md border ${isOpen
+                                    ? 'bg-emerald-600/90 text-white border-emerald-400/40'
+                                    : 'bg-rose-600/95 text-white border-rose-400/40'
+                                  }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-300 animate-pulse' : 'bg-white'}`} />
+                                  <span>{isOpen ? 'OPEN NOW' : 'CLOSED'}</span>
+                                </span>
                               </div>
 
-                              {/* Shop Info Content */}
-                              <div className="p-3.5 sm:p-4 space-y-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <h3 className="text-sm sm:text-base font-black font-display text-text-primary group-hover:text-primary transition-colors line-clamp-1">
-                                    {shopName}
-                                  </h3>
-                                </div>
+                              {/* Dynamic Delivery Time & Rating Badge on Bottom */}
+                              <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                                {shopTime && (
+                                  <span className="text-[10px] font-extrabold text-white bg-black/85 backdrop-blur-md px-2.5 py-1 rounded-full border border-black/40 flex items-center gap-1.5 shadow-sm">
+                                    <Clock size={11} className="text-primary" />
+                                    <span>{shopTime}</span>
+                                  </span>
+                                )}
 
-                                {shop.address && (
-                                  <p className="text-[11px] text-text-muted flex items-center gap-1 font-medium truncate">
-                                    <MapPin size={12} className="text-primary shrink-0" />
-                                    <span className="truncate">{shop.address}</span>
-                                  </p>
+                                {shopRating && (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center gap-1 shadow-md">
+                                    <Star size={10} className="fill-white text-white" />
+                                    <span>{shopRating}</span>
+                                  </span>
                                 )}
                               </div>
                             </div>
 
-                            {/* CTA Action Button */}
-                            <div className="p-3.5 sm:p-4 pt-0.5 flex items-center justify-between border-t border-glass/40 mt-2">
-                              <span className={`text-[10px] font-extrabold uppercase flex items-center gap-1 ${
-                                isOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                              }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
-                                <span>{isOpen ? 'Accepting Orders' : 'Currently Closed'}</span>
-                              </span>
+                            {/* Shop Info Content */}
+                            <div className="p-3.5 sm:p-4 space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <h3 className="text-sm sm:text-base font-black font-display text-text-primary group-hover:text-primary transition-colors line-clamp-1">
+                                  {shopName}
+                                </h3>
+                              </div>
 
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/restaurants/${shopId}`);
-                                }}
-                                className={`px-3.5 py-1.5 rounded-lg font-black text-[11px] uppercase tracking-wider shadow-xs active:scale-[0.96] transition-all flex items-center justify-center cursor-pointer ${
-                                  isOpen
-                                    ? 'bg-primary text-black hover:brightness-105'
-                                    : 'bg-glass border border-glass text-text-muted hover:text-text-primary'
-                                }`}
-                              >
-                                <span>{t('view_menu')}</span>
-                              </button>
+                              {shop.address && (
+                                <p className="text-[11px] text-text-muted flex items-center gap-1 font-medium truncate">
+                                  <MapPin size={12} className="text-primary shrink-0" />
+                                  <span className="truncate">{shop.address}</span>
+                                </p>
+                              )}
                             </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          </div>
+
+                          {/* CTA Action Button */}
+                          <div className="p-3.5 sm:p-4 pt-0.5 flex items-center justify-between border-t border-glass/40 mt-2">
+                            <span className={`text-[10px] font-extrabold uppercase flex items-center gap-1 ${isOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                              }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                              <span>{isOpen ? 'Accepting Orders' : 'Currently Closed'}</span>
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/restaurants/${shopId}`);
+                              }}
+                              className={`px-3.5 py-1.5 rounded-lg font-black text-[11px] uppercase tracking-wider shadow-xs active:scale-[0.96] transition-all flex items-center justify-center cursor-pointer ${isOpen
+                                  ? 'bg-primary text-black hover:brightness-105'
+                                  : 'bg-glass border border-glass text-text-muted hover:text-text-primary'
+                                }`}
+                            >
+                              <span>{t('view_menu')}</span>
+                            </button>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </motion.div>
           ) : (
             /* ========================================================
@@ -492,43 +485,43 @@ export const CategoriesPage: React.FC = () => {
                   <MobileGridSkeleton count={8} />
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                  {filteredCategories.map((category) => (
-                    <motion.div
-                      key={category.id}
-                      initial={false}
-                      animate={{ opacity: 1, y: 0 }}
-                      onClick={() => handleSelectCategory(category.name)}
-                      className="group cursor-pointer glass-panel border border-glass sm:hover:border-primary/60 rounded-2xl sm:rounded-3xl overflow-hidden p-3 sm:p-4 transition-all duration-300 sm:hover:shadow-luxury sm:hover:-translate-y-1.5 active:scale-[0.98] flex flex-col justify-between relative"
-                    >
-                      <div>
-                        {/* Image Thumbnail */}
-                        <div className="relative aspect-[16/10] rounded-xl sm:rounded-2xl overflow-hidden mb-2.5 sm:mb-4 bg-black/40">
-                          <img
-                            src={category.image}
-                            alt={category.name}
-                            className="w-full h-full object-cover sm:group-hover:scale-110 transition-transform duration-500"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
+                    {filteredCategories.map((category) => (
+                      <motion.div
+                        key={category.id}
+                        initial={false}
+                        animate={{ opacity: 1, y: 0 }}
+                        onClick={() => handleSelectCategory(category.name)}
+                        className="group cursor-pointer glass-panel border border-glass sm:hover:border-primary/60 rounded-2xl sm:rounded-3xl overflow-hidden p-3 sm:p-4 transition-all duration-300 sm:hover:shadow-luxury sm:hover:-translate-y-1.5 active:scale-[0.98] flex flex-col justify-between relative"
+                      >
+                        <div>
+                          {/* Image Thumbnail */}
+                          <div className="relative aspect-[16/10] rounded-xl sm:rounded-2xl overflow-hidden mb-2.5 sm:mb-4 bg-black/40">
+                            <img
+                              src={category.image}
+                              alt={category.name}
+                              className="w-full h-full object-cover sm:group-hover:scale-110 transition-transform duration-500"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
+                          </div>
+
+                          {/* Content */}
+                          <div className="space-y-0.5 sm:space-y-1 px-0.5">
+                            <h3 className="text-xs sm:text-base font-black font-display text-text-primary group-hover:text-primary transition-colors flex items-center justify-between">
+                              <span className="truncate">{getTranslatedCategoryName(category.name, t)}</span>
+                            </h3>
+                            <p className="text-[10px] sm:text-xs text-text-muted line-clamp-1 sm:line-clamp-2 leading-tight sm:leading-relaxed">
+                              {category.description}
+                            </p>
+                          </div>
                         </div>
 
-                        {/* Content */}
-                        <div className="space-y-0.5 sm:space-y-1 px-0.5">
-                          <h3 className="text-xs sm:text-base font-black font-display text-text-primary group-hover:text-primary transition-colors flex items-center justify-between">
-                            <span className="truncate">{getTranslatedCategoryName(category.name, t)}</span>
-                          </h3>
-                          <p className="text-[10px] sm:text-xs text-text-muted line-clamp-1 sm:line-clamp-2 leading-tight sm:leading-relaxed">
-                            {category.description}
-                          </p>
+                        <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-glass flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-primary">
+                          <span className="truncate">Explore Shops</span>
+                          <ArrowLeft size={13} className="rotate-180 group-hover:translate-x-1 transition-transform shrink-0" />
                         </div>
-                      </div>
-
-                      <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-glass flex items-center justify-between text-[10px] sm:text-[11px] font-bold text-primary">
-                        <span className="truncate">Explore Shops</span>
-                        <ArrowLeft size={13} className="rotate-180 group-hover:translate-x-1 transition-transform shrink-0" />
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                      </motion.div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
