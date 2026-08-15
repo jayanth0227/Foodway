@@ -1,7 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ShoppingBag, ArrowLeft, Trash2, Plus, Minus, Check, MapPin, Phone, User, CreditCard, ShieldCheck, Utensils, Lock, Sparkles, ChefHat, ArrowRight, Clock } from 'lucide-react';
+import {
+  ShoppingBag,
+  ArrowLeft,
+  Trash2,
+  Plus,
+  Minus,
+  Check,
+  MapPin,
+  Phone,
+  User,
+  CreditCard,
+  ShieldCheck,
+  Utensils,
+  Lock,
+  Sparkles,
+  ChefHat,
+  ArrowRight,
+  Clock,
+  Home,
+  Briefcase,
+  Navigation,
+  Tag,
+  CheckCircle2,
+  AlertCircle,
+  Truck,
+  Receipt,
+  Ticket,
+  ChevronRight,
+  Info
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
@@ -9,39 +38,205 @@ import { useAuth } from '../hooks/useAuth';
 import { useLanguage } from '../context/LanguageContext';
 import { API_BASE_URL } from '../utils/api';
 import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
+import type { Address } from '../types/auth.types';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
-  const { cartItems, addToCart, reduceQuantity, removeFromCart, clearCart, totalAmount, totalItemsCount } = useCart();
+  const { cartItems, addToCart, incrementQuantity, reduceQuantity, removeFromCart, clearCart, totalAmount, totalItemsCount } = useCart();
   const { user, isAuthenticated } = useAuth();
   const { t } = useLanguage();
 
   const [isLoading, setIsLoading] = useState(true);
   const [mobileStep, setMobileStep] = useState<1 | 2>(1);
-  const [customerName, setCustomerName] = useState(user?.name || '');
-  const [customerPhone, setCustomerPhone] = useState((user as any)?.phone || '');
-  const [deliveryAddress, setDeliveryAddress] = useState((user as any)?.address || '');
+
+  // Delivery & Contact State
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [selectedLat, setSelectedLat] = useState<number | undefined>(undefined);
+  const [selectedLng, setSelectedLng] = useState<number | undefined>(undefined);
+  const [isCustomAddress, setIsCustomAddress] = useState(false);
   const [instructions, setInstructions] = useState('');
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  // Payment Method State
+  const [paymentMethod, setPaymentMethod] = useState<'CASH_ON_DELIVERY' | 'UPI' | 'ONLINE'>('CASH_ON_DELIVERY');
+
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
 
+  // 1. Always scroll to top when CartPage mounts
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 350);
-    return () => clearTimeout(timer);
+    window.scrollTo(0, 0);
   }, []);
 
+  // 2. Pre-fill Customer details and default saved address from profile
   useEffect(() => {
     if (user) {
-      if (!customerName && user.name) setCustomerName(user.name);
-      if (!customerPhone && (user as any).phone) setCustomerPhone((user as any).phone);
-      if (!deliveryAddress && (user as any).address) setDeliveryAddress((user as any).address);
+      setCustomerName(user.name || '');
+      setCustomerPhone(user.phone || '');
+
+      const userAddresses: Address[] = user.addresses || [];
+      if (userAddresses.length > 0) {
+        const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
+        setSelectedAddressId(defaultAddr.id);
+        applyAddress(defaultAddr);
+      } else if ((user as any).address) {
+        setDeliveryAddress((user as any).address);
+      }
     }
   }, [user]);
 
-  const deliveryFee = totalAmount > 300 || totalItemsCount === 0 ? 0 : 30;
-  const taxes = Math.round(totalAmount * 0.05);
-  const grandTotal = totalAmount + deliveryFee + taxes;
+  // 3. Synchronize loading timer with user & address resolution to prevent layout shift
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [user]);
 
+  const applyAddress = (addr: Address) => {
+    const parts = [
+      addr.street,
+      addr.area,
+      addr.city,
+      addr.state ? `${addr.state}` : '',
+      addr.pincode ? `- ${addr.pincode}` : '',
+      addr.landmark ? `(Landmark: ${addr.landmark})` : ''
+    ].filter(Boolean);
+    setDeliveryAddress(parts.join(', '));
+
+    if (addr.fullName) setCustomerName(addr.fullName);
+    if (addr.phone) setCustomerPhone(addr.phone);
+    setSelectedLat(addr.latitude);
+    setSelectedLng(addr.longitude);
+  };
+
+  const handleSelectAddressCard = (addr: Address) => {
+    setSelectedAddressId(addr.id);
+    setIsCustomAddress(false);
+    applyAddress(addr);
+  };
+
+  // Coupon Handler
+  const handleApplyCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponError(null);
+    const cleanCode = couponCode.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    if (cleanCode === 'FOODWAY10' || cleanCode === 'MKFOOD10') {
+      const discount = Math.round(totalAmount * 0.10);
+      setAppliedCoupon({ code: cleanCode, discount });
+    } else if (cleanCode === 'FREEDEL') {
+      setAppliedCoupon({ code: cleanCode, discount: 30 });
+    } else {
+      setCouponError('Invalid coupon code. Try FOODWAY10 for 10% OFF.');
+    }
+  };
+
+  // Platform Delivery Fee Rate State (from Admin Settings)
+  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState<number>(15);
+  const [baseDeliveryFee, setBaseDeliveryFee] = useState<number>(25);
+  const [storeLat, setStoreLat] = useState<number | undefined>(undefined);
+  const [storeLng, setStoreLng] = useState<number | undefined>(undefined);
+  const [calculatedDistanceKm, setCalculatedDistanceKm] = useState<number | null>(null);
+
+  // Fetch Delivery Rates Config from Admin Settings API
+  useEffect(() => {
+    const fetchDeliveryConfig = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/settings/delivery`);
+        if (res.data && typeof res.data.deliveryFeePerKm === 'number') {
+          setDeliveryFeePerKm(res.data.deliveryFeePerKm);
+        }
+        if (res.data && typeof res.data.baseDeliveryFee === 'number') {
+          setBaseDeliveryFee(res.data.baseDeliveryFee);
+        }
+      } catch (e) {
+        console.warn('Could not fetch delivery rate config:', e);
+      }
+    };
+    fetchDeliveryConfig();
+  }, []);
+
+  // Fetch Store / Restaurant Coordinates
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      const targetResId = (cartItems[0]?.dish as any)?.restaurantId;
+      if (targetResId) {
+        axios.get(`${API_BASE_URL}/shops/${targetResId}`)
+          .then(res => {
+            const shop = res.data?.shop || res.data?.restaurant;
+            if (shop?.latitude && shop?.longitude) {
+              setStoreLat(shop.latitude);
+              setStoreLng(shop.longitude);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [cartItems]);
+
+  // Compute 100% Real Road Driving Distance via OSRM OpenStreetMap Routing API
+  useEffect(() => {
+    if (storeLat && storeLng && selectedLat && selectedLng) {
+      let isCancelled = false;
+      const fetchDrivingDistance = async () => {
+        try {
+          // OSRM routing format: lon1,lat1;lon2,lat2
+          const url = `https://router.project-osrm.org/route/v1/driving/${storeLng},${storeLat};${selectedLng},${selectedLat}?overview=false`;
+          const resp = await fetch(url);
+          const data = await resp.json();
+          if (!isCancelled && data && data.routes && data.routes.length > 0) {
+            const distanceMeters = data.routes[0].distance; // Real road driving distance in meters
+            const km = Math.round((distanceMeters / 1000) * 10) / 10;
+            setCalculatedDistanceKm(km > 0.1 ? km : 1.0);
+            return;
+          }
+        } catch (e) {
+          console.warn('OSRM road routing fallback:', e);
+        }
+
+        // Fallback: Haversine Geodesic Distance * 1.25 (Road curve factor)
+        if (!isCancelled) {
+          const R = 6371; // Earth radius in KM
+          const dLat = (selectedLat - storeLat) * (Math.PI / 180);
+          const dLon = (selectedLng - storeLng) * (Math.PI / 180);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(storeLat * (Math.PI / 180)) * Math.cos(selectedLat * (Math.PI / 180)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const directKm = R * c;
+          const roadKm = Math.round((directKm * 1.25) * 10) / 10;
+          setCalculatedDistanceKm(roadKm > 0.1 ? roadKm : 1.5);
+        }
+      };
+
+      fetchDrivingDistance();
+      return () => {
+        isCancelled = true;
+      };
+    } else {
+      setCalculatedDistanceKm(null);
+    }
+  }, [storeLat, storeLng, selectedLat, selectedLng]);
+
+  // Calculation Breakdown (Distance-based Delivery Fee per KM - No taxes or hidden charges)
+  const freeDeliveryThreshold = 500;
+  const effectiveDistance = calculatedDistanceKm ?? 2.0;
+  const rawCalculatedFee = Math.max(baseDeliveryFee, Math.round(effectiveDistance * deliveryFeePerKm));
+  const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
+  const deliveryFee = appliedCoupon?.code === 'FREEDEL' ? 0 : rawCalculatedFee;
+  const grandTotal = Math.max(0, totalAmount + deliveryFee - couponDiscount);
+
+  // Handle Order Submission
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAuthenticated || !user) {
@@ -50,23 +245,24 @@ export const CartPage: React.FC = () => {
       return;
     }
 
-    if (!customerName || !customerPhone || !deliveryAddress) {
-      alert('Please fill in your name, phone number, and delivery address.');
+    if (!customerName.trim() || !customerPhone.trim() || !deliveryAddress.trim()) {
+      alert('Please select or fill in your delivery name, phone number, and address.');
       return;
     }
 
     setIsPlacingOrder(true);
     try {
-      // Find target restaurant ID & Name from cart items
       const targetRestaurantId = (cartItems[0]?.dish as any)?.restaurantId || 'RES_DEFAULT';
       const targetRestaurantName = (cartItems[0]?.dish as any)?.restaurantName || 'Partner Restaurant';
 
       const orderPayload = {
         customerId: user.id || user.email,
-        customerName,
-        customerPhone,
-        deliveryAddress,
-        instructions,
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        deliveryAddress: deliveryAddress.trim(),
+        latitude: selectedLat,
+        longitude: selectedLng,
+        instructions: instructions.trim(),
         restaurantId: targetRestaurantId,
         restaurantName: targetRestaurantName,
         items: cartItems.map(item => ({
@@ -81,10 +277,12 @@ export const CartPage: React.FC = () => {
           restaurantName: (item.dish as any).restaurantName || targetRestaurantName
         })),
         subtotal: totalAmount,
+        discount: couponDiscount,
         deliveryFee,
-        taxes,
+        taxes: 0,
+        distanceKm: effectiveDistance,
         totalAmount: grandTotal,
-        paymentMethod: 'CASH_ON_DELIVERY',
+        paymentMethod,
         createdAt: new Date().toISOString()
       };
 
@@ -97,137 +295,39 @@ export const CartPage: React.FC = () => {
         alert('Failed to place order: ' + (response.data.error || 'Server error'));
       }
     } catch (error: any) {
-      console.error('Error placing order in DynamoDB:', error);
-      alert('Failed to save order to database. Please check your network or try again.');
+      console.error('Error placing order:', error);
+      alert('Error connecting to backend database. Please try again.');
     } finally {
       setIsPlacingOrder(false);
     }
   };
 
-  if (orderSuccess) {
-    const confettiParticles = [
-      { x: -55, y: -45, color: 'bg-amber-400', size: 'w-2 h-2 rounded-full' },
-      { x: 55, y: -40, color: 'bg-rose-500', size: 'w-2.5 h-1 rounded-sm' },
-      { x: -65, y: 15, color: 'bg-blue-400', size: 'w-2 h-2 rounded-full' },
-      { x: 65, y: 20, color: 'bg-emerald-400', size: 'w-3 h-1 rounded-sm' },
-      { x: -35, y: -65, color: 'bg-purple-400', size: 'w-2 h-2 rounded-full' },
-      { x: 35, y: -60, color: 'bg-yellow-300', size: 'w-2.5 h-1 rounded-sm' },
-      { x: -25, y: 55, color: 'bg-emerald-500', size: 'w-2 h-2 rounded-full' },
-      { x: 30, y: 55, color: 'bg-pink-400', size: 'w-3 h-1 rounded-sm' },
-    ];
-
-    return (
-      <div className="min-h-screen bg-bg-dark/95 backdrop-blur-md pt-20 pb-20 px-4 flex items-center justify-center relative overflow-hidden z-50">
-        {/* Soft Background Emerald Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-emerald-500/20 rounded-full blur-[100px] pointer-events-none" />
-
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: 'spring', damping: 20, stiffness: 280 }}
-          className="w-full max-w-sm mx-auto bg-white dark:bg-bg-cardSec rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.4)] border border-emerald-500/30 text-slate-900 dark:text-white space-y-4 relative z-10 text-center"
-        >
-          {/* Green Tick Circle with Bursting Celebration Confetti */}
-          <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-            {/* Confetti Explosion Particles */}
-            {confettiParticles.map((p, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ x: 0, y: 0, opacity: 1, scale: 0 }}
-                animate={{ x: p.x, y: p.y, opacity: [1, 1, 0], scale: [0, 1.2, 0.8] }}
-                transition={{ duration: 0.9, delay: 0.15 + idx * 0.03, ease: 'easeOut' }}
-                className={`absolute ${p.color} ${p.size} shadow-sm`}
-              />
-            ))}
-
-            {/* Glowing Green Tick Circle */}
-            <motion.div
-              initial={{ scale: 0, rotate: -60 }}
-              animate={{ scale: [0, 1.2, 1], rotate: 0 }}
-              transition={{ type: 'spring', damping: 14, stiffness: 240 }}
-              className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white flex items-center justify-center shadow-[0_10px_25px_rgba(16,185,129,0.5)] border-2 border-emerald-300 relative z-10"
-            >
-              <Check size={36} className="stroke-[3]" />
-            </motion.div>
-          </div>
-
-          {/* Direct Title & Order ID */}
-          <div className="space-y-1">
-            <h2 className="text-xl font-black font-display tracking-tight text-slate-900 dark:text-white flex items-center justify-center gap-1.5">
-              <span>Order Placed!</span>
-              <span className="text-lg">🎉</span>
-            </h2>
-            <div className="inline-flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold text-emerald-700 dark:text-emerald-300">
-              <span>Order ID:</span>
-              <span className="font-mono font-extrabold">{orderSuccess}</span>
-            </div>
-          </div>
-
-          {/* Delivery Address Preview */}
-          <div className="bg-slate-50 dark:bg-bg-darkSec/60 border border-slate-200/80 dark:border-glass rounded-2xl p-3 text-left flex items-start gap-2.5 text-xs text-slate-600 dark:text-text-muted">
-            <MapPin size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-            <div className="min-w-0">
-              <span className="font-bold text-slate-900 dark:text-text-primary block">Delivering to</span>
-              <span className="truncate block font-medium">{deliveryAddress}</span>
-            </div>
-          </div>
-
-          {/* Compact Primary Actions */}
-          <div className="space-y-2 pt-1">
-            <button
-              onClick={() => navigate('/orders')}
-              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>Track Order Live</span>
-              <ArrowRight size={16} className="stroke-[3]" />
-            </button>
-
-            <button
-              onClick={() => navigate('/restaurants')}
-              className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-glass dark:hover:bg-glass-subtle text-slate-700 dark:text-text-secondary font-bold text-xs transition-colors cursor-pointer"
-            >
-              Done
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
     <>
       <Helmet>
-        <title>Your Shopping Cart | MK Delivery Services</title>
+        <title>Your Shopping Cart | Foodway Quick-Commerce</title>
+        <meta name="description" content="Review your cart items, select saved delivery addresses, apply discount coupons, and checkout securely." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-24 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
-        {/* Ambient background decoration */}
-        <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
+      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-24 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+        <div className="max-w-7xl mx-auto space-y-8">
 
-        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 relative z-10">
-
-          {/* Clean Page Header (Only Back Icon & Clear Cart Button) */}
-          <div className="flex items-center justify-between gap-3 border-b border-glass pb-4">
-            <div className="flex items-center gap-3 min-w-0">
+          {/* Clean Page Header */}
+          <div className="flex items-center justify-between border-b border-border-color/60 pb-5">
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  if (mobileStep === 2 && window.innerWidth < 1024) {
-                    setMobileStep(1);
-                  } else {
-                    navigate(-1);
-                  }
-                }}
-                className="w-10 h-10 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95"
+                onClick={() => navigate(-1)}
+                className="w-10 h-10 rounded-2xl bg-card-bg border border-border-color text-text-secondary hover:text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm"
                 title="Go Back"
               >
-                <ArrowLeft size={19} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
+                <ArrowLeft className="w-5 h-5" />
               </button>
-              <div className="min-w-0">
-                <h1 className="text-xl sm:text-3xl font-black font-display text-text-primary tracking-tight truncate">
-                  {mobileStep === 2 ? 'Checkout & Delivery' : 'Your Cart'}
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-black font-display text-text-primary tracking-tight">
+                  {mobileStep === 2 ? 'Checkout & Delivery' : 'Shopping Cart'}
                 </h1>
-                <p className="text-xs text-text-muted font-medium truncate">
-                  {mobileStep === 2 ? 'Step 2 of 2: Enter Delivery Details' : `${totalItemsCount} ${totalItemsCount === 1 ? 'item selected' : 'items selected'}`}
+                <p className="text-xs text-text-muted mt-0.5">
+                  {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'} selected for fast delivery
                 </p>
               </div>
             </div>
@@ -235,261 +335,498 @@ export const CartPage: React.FC = () => {
             {cartItems.length > 0 && (
               <button
                 onClick={clearCart}
-                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95"
+                className="px-3.5 py-2 rounded-xl bg-error/10 hover:bg-error/20 border border-error/30 text-error text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
               >
-                <Trash2 size={14} />
-                <span>Clear Cart</span>
+                <Trash2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Clear Cart</span>
               </button>
             )}
           </div>
 
-          {/* Skeleton Loader View */}
-          {isLoading ? (
-            <CartPageSkeleton />
-          ) : cartItems.length === 0 ? (
-            <div className="py-20 text-center glass-panel border border-glass rounded-3xl p-12 max-w-md mx-auto space-y-6">
-              <div className="w-20 h-20 bg-glass rounded-full flex items-center justify-center mx-auto text-text-muted">
-                <ShoppingBag size={36} />
+          {/* ORDER SUCCESS SCREEN */}
+          {orderSuccess ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-lg mx-auto bg-card-bg border border-border-color rounded-3xl p-8 text-center space-y-6 shadow-2xl my-8 relative overflow-hidden"
+            >
+              <div className="w-20 h-20 bg-success/20 text-success rounded-full flex items-center justify-center mx-auto border-2 border-success/40 shadow-lg">
+                <CheckCircle2 className="w-10 h-10" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-2xl font-bold font-display text-text-primary">Your Cart is Empty</h3>
-                <p className="text-xs text-text-muted leading-relaxed">
-                  You haven't added any dishes to your cart yet. Explore partner restaurants and add your favorite meals!
+                <h2 className="text-2xl sm:text-3xl font-black font-display text-text-primary">
+                  Order Confirmed!
+                </h2>
+                <p className="text-sm text-text-secondary">
+                  Your order has been dispatched to the restaurant kitchen.
                 </p>
+                <div className="inline-block bg-primary/10 border border-primary/30 px-4 py-1.5 rounded-full text-xs font-extrabold text-primary font-mono mt-2">
+                  Order ID: {orderSuccess}
+                </div>
               </div>
 
+              <div className="pt-4 border-t border-border-color/60 flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => navigate('/orders')}
+                  className="px-6 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Clock className="w-4 h-4" />
+                  <span>Track Live Order</span>
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  className="px-6 py-3 rounded-xl border border-border-color text-xs font-bold text-text-secondary hover:bg-bg-dark transition-colors cursor-pointer"
+                >
+                  Continue Shopping
+                </button>
+              </div>
+            </motion.div>
+          ) : isLoading ? (
+            <CartPageSkeleton />
+          ) : cartItems.length === 0 ? (
+            /* EMPTY CART SCREEN */
+            <div className="text-center py-20 bg-card-bg border border-border-color rounded-3xl p-8 max-w-lg mx-auto space-y-6 shadow-xl">
+              <div className="w-24 h-24 rounded-full bg-primary/15 text-primary flex items-center justify-center mx-auto border border-primary/30 shadow-inner">
+                <ShoppingBag className="w-12 h-12" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black font-display text-text-primary">
+                  Your Cart is Empty
+                </h3>
+                <p className="text-xs sm:text-sm text-text-muted leading-relaxed max-w-sm mx-auto">
+                  You haven't added any delicious food or grocery items yet. Explore partner stores and add your favorites!
+                </p>
+              </div>
               <button
-                onClick={() => navigate('/restaurants')}
-                className="px-6 py-3 rounded-2xl bg-primary hover:bg-primary-dark text-black font-black text-xs uppercase tracking-wider shadow-md hover:scale-105 transition-all cursor-pointer"
+                onClick={() => navigate('/')}
+                className="px-8 py-3.5 rounded-2xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 inline-flex items-center gap-2 cursor-pointer"
               >
-                Explore Restaurants
+                <Utensils className="w-4 h-4" />
+                <span>Explore Nearby Restaurants</span>
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            /* MAIN CART & CHECKOUT GRID */
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-              {/* Items List (Left Side - 7 cols) - Mobile Step 1 / Desktop */}
-              <div className={`lg:col-span-7 space-y-4 ${mobileStep === 2 ? 'hidden lg:block' : 'block'}`}>
-                <h3 className="text-lg font-extrabold font-display text-text-primary flex items-center gap-2">
-                  <Utensils size={18} className="text-primary" />
-                  <span>Selected Items ({totalItemsCount})</span>
-                </h3>
+              {/* LEFT COLUMN: Cart Items List (7 cols) */}
+              <div className={`lg:col-span-7 space-y-6 ${mobileStep === 2 ? 'hidden lg:block' : 'block'}`}>
 
-                <div className="space-y-3">
+                {/* Free Delivery Progress Bar */}
+                <div className="bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="flex items-center gap-1.5 text-text-primary">
+                      <Truck className="w-4 h-4 text-primary" />
+                      <span>Free Delivery Status</span>
+                    </span>
+                    <span className={totalAmount >= freeDeliveryThreshold ? 'text-success' : 'text-primary'}>
+                      {totalAmount >= freeDeliveryThreshold
+                        ? '🎉 You unlocked FREE Delivery!'
+                        : `Add ₹${(freeDeliveryThreshold - totalAmount).toFixed(0)} more for FREE Delivery`}
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-bg-dark rounded-full overflow-hidden border border-border-color/50">
+                    <div
+                      className="h-full bg-primary transition-all duration-500 rounded-full"
+                      style={{ width: `${Math.min(100, (totalAmount / freeDeliveryThreshold) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Cart Items Cards */}
+                <div className="space-y-4">
                   {cartItems.map((item) => (
                     <motion.div
-                      key={item.dish.id}
+                      key={item.itemKey || item.dish.id}
                       layout
-                      className="glass-panel border border-glass hover:border-primary/30 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      className="bg-card-bg border border-border-color rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
+                      {/* Image & Title */}
+                      <div className="flex items-center gap-4 w-full sm:w-auto">
                         <img
-                          src={item.dish.image}
+                          src={item.dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
                           alt={item.dish.name}
-                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border border-glass shrink-0 shadow-sm"
+                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-border-color shrink-0 shadow-xs"
                         />
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-2 h-2 rounded-full ${item.dish.isVeg !== false ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                            <h4 className="font-extrabold text-sm sm:text-base text-text-primary truncate">{item.dish.name}</h4>
-                          </div>
-                          <span className="text-[11px] font-semibold text-text-muted block">
-                            {item.dish.category || 'Main Course'}
-                          </span>
-                          <span className="text-xs font-extrabold text-primary block font-display">
-                            ₹{item.dish.price.toFixed(2)} each
-                          </span>
+                        <div className="space-y-1">
+                          <h4 className="text-sm sm:text-base font-extrabold text-text-primary font-display leading-snug">
+                            {item.dish.name}
+                          </h4>
+                          {item.dish.category && (
+                            <span className="inline-block text-[11px] font-semibold text-text-muted bg-bg-dark px-2 py-0.5 rounded-md border border-border-color/50">
+                              {item.dish.category}
+                            </span>
+                          )}
+                          <p className="text-xs font-bold text-primary font-mono pt-0.5">
+                            ₹{(item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price)).toFixed(2)} each
+                          </p>
                         </div>
                       </div>
 
-                      {/* Quantity Stepper Controller & Subtotal */}
-                      <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-glass">
-                        {/* High-Contrast Stepper Box */}
-                        <div className="flex items-center bg-glass-subtle border-2 border-primary/70 rounded-xl p-1 shadow-sm">
+                      {/* Quantity Stepper & Subtotal */}
+                      <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-border-color/60">
+                        {/* Stepper */}
+                        <div className="flex items-center bg-bg-dark/80 border border-border-color rounded-xl p-1 shadow-inner">
                           <button
-                            onClick={() => reduceQuantity(item.dish.id)}
-                            className="w-7 h-7 rounded-lg bg-primary/20 hover:bg-primary text-primary hover:text-black font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
-                            title="Reduce Quantity"
+                            type="button"
+                            onClick={() => reduceQuantity(item.itemKey || item.dish.id)}
+                            className="w-7 h-7 rounded-lg bg-card-bg hover:bg-primary text-text-secondary hover:text-white font-bold flex items-center justify-center transition-all cursor-pointer"
                           >
-                            <Minus size={12} className="stroke-[3]" />
+                            <Minus className="w-3.5 h-3.5" />
                           </button>
-                          <span className="w-8 text-center font-black text-sm text-primary font-display">
+                          <span className="w-8 text-center font-extrabold text-sm text-text-primary font-mono">
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => addToCart(item.dish)}
-                            className="w-7 h-7 rounded-lg bg-primary/20 hover:bg-primary text-primary hover:text-black font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
-                            title="Increase Quantity"
+                            type="button"
+                            onClick={() => incrementQuantity(item.itemKey || item.dish.id)}
+                            className="w-7 h-7 rounded-lg bg-card-bg hover:bg-primary text-text-secondary hover:text-white font-bold flex items-center justify-center transition-all cursor-pointer"
                           >
-                            <Plus size={12} className="stroke-[3]" />
+                            <Plus className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
-                        {/* Item Subtotal */}
-                        <div className="text-right shrink-0 min-w-[75px]">
-                          <span className="text-[10px] font-extrabold text-text-muted block uppercase tracking-wider">Subtotal</span>
-                          <span className="text-sm sm:text-base font-black text-text-primary font-display">
-                            ₹{(item.dish.price * item.quantity).toFixed(2)}
+                        {/* Subtotal */}
+                        <div className="text-right shrink-0 min-w-[70px]">
+                          <span className="text-[10px] font-bold text-text-muted block uppercase tracking-wider">Subtotal</span>
+                          <span className="text-sm font-black text-text-primary font-mono">
+                            ₹{((item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price)) * item.quantity).toFixed(2)}
                           </span>
                         </div>
 
                         <button
-                          onClick={() => removeFromCart(item.dish.id)}
-                          className="p-2 rounded-xl hover:bg-rose-500/20 text-text-muted hover:text-rose-400 transition-colors cursor-pointer shrink-0"
+                          type="button"
+                          onClick={() => removeFromCart(item.itemKey || item.dish.id)}
+                          className="p-2 rounded-xl hover:bg-error/15 text-text-muted hover:text-error transition-colors cursor-pointer shrink-0"
                           title="Remove item"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 className="w-4.5 h-4.5" />
                         </button>
                       </div>
                     </motion.div>
                   ))}
                 </div>
 
-                {/* Mobile Proceed to Delivery Button (Step 1 -> Step 2) */}
+                {/* Coupon Code Section */}
+                <div className="bg-card-bg border border-border-color rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Ticket className="w-4 h-4 text-primary" />
+                    <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
+                      Apply Promo / Coupon Code
+                    </h4>
+                  </div>
+                  <form onSubmit={handleApplyCoupon} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      placeholder="Try FOODWAY10 or FREEDEL"
+                      className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-border-color text-xs text-text-primary uppercase font-mono tracking-wider focus:outline-none focus:border-primary"
+                    />
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-bold cursor-pointer transition-all shrink-0"
+                    >
+                      Apply
+                    </button>
+                  </form>
+                  {appliedCoupon && (
+                    <div className="text-xs text-success font-bold flex items-center gap-1.5 pt-1">
+                      <Check className="w-4 h-4" />
+                      <span>Coupon '{appliedCoupon.code}' applied! Saved ₹{appliedCoupon.discount}</span>
+                    </div>
+                  )}
+                  {couponError && (
+                    <p className="text-xs text-error font-semibold pt-1">{couponError}</p>
+                  )}
+                </div>
+
+                {/* Mobile Step 1 -> Step 2 Button */}
                 <div className="pt-4 lg:hidden">
                   <button
                     type="button"
                     onClick={() => setMobileStep(2)}
-                    className="w-full py-4 px-5 rounded-2xl bg-emerald-600 dark:bg-primary text-white dark:text-black font-extrabold shadow-luxury flex items-center justify-between cursor-pointer active:scale-95 transition-transform border border-emerald-400/30 dark:border-amber-300/40"
+                    className="w-full py-4 px-6 rounded-2xl bg-primary text-white font-black shadow-xl flex items-center justify-between cursor-pointer active:scale-95 transition-transform"
                   >
-                    <div className="text-left leading-tight">
-                      <span className="text-[10px] font-black uppercase tracking-wider block opacity-90">Item Subtotal</span>
-                      <span className="text-sm font-black font-display">₹{totalAmount.toFixed(2)}</span>
+                    <div className="text-left">
+                      <span className="text-[10px] uppercase tracking-wider block opacity-80">Subtotal</span>
+                      <span className="text-sm font-black font-mono">₹{totalAmount.toFixed(2)}</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider bg-black/20 dark:bg-black/15 px-3.5 py-2 rounded-xl">
-                      <span>Proceed to Delivery</span>
-                      <Plus size={15} className="rotate-45 hidden" />
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-wider">
+                      <span>Proceed to Checkout</span>
+                      <ArrowRight className="w-4 h-4" />
                     </div>
                   </button>
                 </div>
               </div>
 
-              {/* Checkout Form & Order Summary (Right Side - 5 cols) - Mobile Step 2 / Desktop */}
+              {/* RIGHT COLUMN: Checkout & Saved Address Selector (5 cols) */}
               <div className={`lg:col-span-5 space-y-6 ${mobileStep === 1 ? 'hidden lg:block' : 'block'}`}>
-                <form onSubmit={handlePlaceOrder} className="glass-panel border border-glass rounded-3xl p-6 space-y-6 shadow-luxury">
-                  <h3 className="text-lg font-extrabold font-display text-text-primary flex items-center gap-2 border-b border-glass pb-4">
-                    <MapPin size={18} className="text-primary" />
-                    <span>Delivery Details</span>
-                  </h3>
+                <form onSubmit={handlePlaceOrder} className="bg-card-bg border border-border-color rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+                  {/* Ambient Glow */}
+                  <div className="absolute top-0 right-0 w-60 h-60 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
 
-                  <div className="space-y-4 text-xs font-semibold">
-                    <div className="space-y-1.5">
-                      <label className="text-text-secondary flex items-center gap-1.5">
-                        <User size={13} className="text-primary" />
-                        <span>Full Name *</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Enter your full name"
-                        value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-text-secondary flex items-center gap-1.5">
-                        <Phone size={13} className="text-primary" />
-                        <span>Phone Number *</span>
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        placeholder="Enter your mobile number"
-                        value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-text-secondary flex items-center gap-1.5">
-                        <MapPin size={13} className="text-primary" />
-                        <span>Delivery Address *</span>
-                      </label>
-                      <textarea
-                        required
-                        rows={3}
-                        placeholder="House no, street name, landmark, village/town..."
-                        value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none resize-none"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-text-secondary">Special Delivery Instructions (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Leave at door, don't ring bell"
-                        value={instructions}
-                        onChange={(e) => setInstructions(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass focus:border-primary/50 text-text-primary placeholder:text-text-muted/50 outline-none"
-                      />
-                    </div>
+                  {/* Header Title */}
+                  <div className="flex items-center justify-between border-b border-border-color/60 pb-4 relative z-10">
+                    <h3 className="text-lg font-black font-display text-text-primary flex items-center gap-2">
+                      <MapPin className="w-5 h-5 text-primary" />
+                      <span>Delivery Details</span>
+                    </h3>
+                    {mobileStep === 2 && (
+                      <button
+                        type="button"
+                        onClick={() => setMobileStep(1)}
+                        className="lg:hidden text-xs font-bold text-primary hover:underline"
+                      >
+                        Edit Items
+                      </button>
+                    )}
                   </div>
 
-                  {/* Pricing Breakdown */}
-                  <div className="pt-4 border-t border-glass space-y-2.5 text-xs font-semibold">
-                    <div className="flex justify-between text-text-secondary">
-                      <span>Item Total</span>
-                      <span className="text-text-primary font-bold">₹{totalAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-text-secondary">
-                      <span>Delivery Fee</span>
-                      <span className={deliveryFee === 0 ? 'text-emerald-500 font-bold' : 'text-text-primary font-bold'}>
-                        {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-text-secondary">
-                      <span>Taxes & Charges (5%)</span>
-                      <span className="text-text-primary font-bold">₹{taxes.toFixed(2)}</span>
-                    </div>
+                  <div className="space-y-5 relative z-10">
 
-                    <div className="pt-3 border-t border-glass flex justify-between items-center text-base font-black">
-                      <span className="text-text-primary">Grand Total</span>
-                      <span className="text-primary text-xl font-display">₹{grandTotal.toFixed(2)}</span>
-                    </div>
-                  </div>
+                    {/* SAVED ADDRESSES SELECTOR */}
+                    {isAuthenticated && user && (user.addresses || []).length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-extrabold text-text-primary uppercase tracking-wider">
+                            Select Saved Delivery Address
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => navigate('/profile/address/new')}
+                            className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add New</span>
+                          </button>
+                        </div>
 
-                  {/* Authentication Banner & Order Action */}
-                  {!isAuthenticated || !user ? (
-                    <div className="space-y-3 pt-2">
-                      <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-300">
-                        <Lock size={16} className="shrink-0 text-amber-400 mt-0.5" />
-                        <div>
-                          <span className="font-bold block text-amber-400">Login Required to Order</span>
-                          <span>You must log in to your account before placing an order. Anonymous orders are not allowed.</span>
+                        <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                          {(user.addresses || []).map((addr: Address) => {
+                            const isSelected = selectedAddressId === addr.id && !isCustomAddress;
+                            return (
+                              <div
+                                key={addr.id}
+                                onClick={() => handleSelectAddressCard(addr)}
+                                className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                                  isSelected
+                                    ? 'bg-primary/15 border-primary ring-2 ring-primary/30 text-text-primary shadow-md'
+                                    : 'bg-bg-dark/50 border-border-color text-text-secondary hover:border-primary/40'
+                                }`}
+                              >
+                                <div className="space-y-1 text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-0.5 rounded-full bg-bg-dark border border-border-color text-[10px] font-bold text-text-primary uppercase tracking-wider flex items-center gap-1">
+                                      {addr.label === 'Home' && <Home className="w-3 h-3 text-primary" />}
+                                      {addr.label === 'Work' && <Briefcase className="w-3 h-3 text-primary" />}
+                                      {addr.label !== 'Home' && addr.label !== 'Work' && <Navigation className="w-3 h-3 text-primary" />}
+                                      <span>{addr.label || 'Address'}</span>
+                                    </span>
+                                    {addr.isDefault && (
+                                      <span className="text-[9px] font-black text-success uppercase">Default</span>
+                                    )}
+                                  </div>
+                                  <p className="font-bold text-text-primary">{addr.fullName || user.name}</p>
+                                  <p className="text-[11px] text-text-muted leading-tight">
+                                    {addr.street}, {addr.city} {addr.pincode}
+                                  </p>
+                                  {addr.latitude && addr.longitude && (
+                                    <p className="text-[10px] text-primary font-mono flex items-center gap-1 pt-0.5">
+                                      <MapPin className="w-3 h-3 text-primary" /> GPS Pinned
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="pt-1">
+                                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                                    isSelected ? 'bg-primary border-primary text-white' : 'border-border-color'
+                                  }`}>
+                                    {isSelected && <Check className="w-3 h-3" />}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Customer Contact & Address Override */}
+                    <div className="space-y-3.5 pt-2 border-t border-border-color/60">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                            Receiver Name *
+                          </label>
+                          <div className="relative">
+                            <User className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                            <input
+                              type="text"
+                              required
+                              value={customerName}
+                              onChange={(e) => setCustomerName(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary"
+                              placeholder="Full Name"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                            Phone Number *
+                          </label>
+                          <div className="relative">
+                            <Phone className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                            <input
+                              type="tel"
+                              required
+                              value={customerPhone}
+                              onChange={(e) => setCustomerPhone(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary"
+                              placeholder="Mobile Number"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => navigate('/login')}
-                        className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-400 text-black font-black text-sm uppercase tracking-wider shadow-lg transition-transform hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Lock size={16} />
-                        <span>Log In / Register to Place Order</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-2 text-[11px] font-bold text-primary">
-                        <ShieldCheck size={16} className="shrink-0" />
-                        <span>Cash on Delivery (COD) / Pay on Delivery</span>
+                      {/* Full Delivery Address Textarea */}
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                          Delivery Address Details *
+                        </label>
+                        <textarea
+                          required
+                          rows={2}
+                          value={deliveryAddress}
+                          onChange={(e) => {
+                            setDeliveryAddress(e.target.value);
+                            setIsCustomAddress(true);
+                          }}
+                          className="w-full p-3 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary resize-none"
+                          placeholder="House No, Street, Locality, City, Pincode"
+                        />
                       </div>
 
+                      {/* Special Delivery Instructions */}
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                          Special Instructions (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={instructions}
+                          onChange={(e) => setInstructions(e.target.value)}
+                          className="w-full px-3 py-2 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary"
+                          placeholder="e.g. Leave with security, don't ring doorbell"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Payment Method Selector */}
+                    <div className="space-y-2 pt-3 border-t border-border-color/60">
+                      <label className="block text-xs font-extrabold text-text-primary uppercase tracking-wider">
+                        Payment Method
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { id: 'CASH_ON_DELIVERY', label: 'Cash / Pay on Delivery', sub: 'COD' },
+                          { id: 'UPI', label: 'UPI / QR Code', sub: 'GPay, PhonePe, Paytm' }
+                        ].map(pm => (
+                          <button
+                            key={pm.id}
+                            type="button"
+                            onClick={() => setPaymentMethod(pm.id as any)}
+                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                              paymentMethod === pm.id
+                                ? 'bg-primary/15 border-primary text-primary font-bold shadow-sm'
+                                : 'bg-bg-dark/40 border-border-color text-text-secondary hover:border-primary/40'
+                            }`}
+                          >
+                            <span className="text-xs font-bold">{pm.label}</span>
+                            <span className="text-[10px] text-text-muted mt-0.5">{pm.sub}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Bill Breakdown Summary */}
+                    <div className="pt-4 border-t border-border-color/60 space-y-2.5 text-xs">
+                      <div className="flex justify-between text-text-secondary">
+                        <span>Items Subtotal</span>
+                        <span className="text-text-primary font-bold font-mono">₹{totalAmount.toFixed(2)}</span>
+                      </div>
+
+                      {couponDiscount > 0 && (
+                        <div className="flex justify-between text-success font-bold">
+                          <span>Promo Coupon Discount</span>
+                          <span className="font-mono">- ₹{couponDiscount.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between text-text-secondary">
+                        <span className="flex items-center gap-1">
+                          <span>Delivery Fee</span>
+                          {calculatedDistanceKm ? (
+                            <span className="text-[10px] text-primary font-mono font-semibold">
+                              ({calculatedDistanceKm} km @ ₹{deliveryFeePerKm}/km)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-text-muted font-mono">
+                              (Base rate @ ₹{deliveryFeePerKm}/km)
+                            </span>
+                          )}
+                        </span>
+                        <span className={deliveryFee === 0 ? 'text-success font-bold font-mono' : 'text-text-primary font-bold font-mono'}>
+                          {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}
+                        </span>
+                      </div>
+
+                      <div className="pt-3 border-t border-border-color/80 flex justify-between items-center">
+                        <div>
+                          <span className="text-sm font-black text-text-primary block font-display">To Pay</span>
+                          <span className="text-[10px] text-text-muted">No hidden charges</span>
+                        </div>
+                        <span className="text-2xl font-black text-primary font-mono">
+                          ₹{grandTotal.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Submit CTA Action Button */}
+                    {!isAuthenticated || !user ? (
+                      <div className="space-y-3 pt-2">
+                        <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/30 flex items-start gap-2.5 text-xs text-primary">
+                          <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold block">Login Required</span>
+                            <span>Log in to your account to place your delivery order.</span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => navigate('/login', { state: { from: '/cart' } })}
+                          className="w-full py-4 rounded-2xl bg-primary text-white font-black text-xs uppercase tracking-wider hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Lock className="w-4 h-4" />
+                          <span>Log In to Place Order</span>
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="submit"
                         disabled={isPlacingOrder}
-                        className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark text-black font-black text-sm uppercase tracking-wider shadow-lg transition-transform hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer"
+                        className="w-full py-4 rounded-2xl bg-primary text-white font-black text-xs uppercase tracking-wider hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                       >
-                        <CreditCard size={16} />
-                        <span>{isPlacingOrder ? 'Placing Order in Database...' : 'Place Order Now'}</span>
+                        <ShieldCheck className="w-5 h-5" />
+                        <span>{isPlacingOrder ? 'Dispatching Order...' : 'Place Order Now'}</span>
                       </button>
-                    </>
-                  )}
+                    )}
+
+                  </div>
                 </form>
               </div>
 

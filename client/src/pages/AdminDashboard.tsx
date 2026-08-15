@@ -224,6 +224,49 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordStatus, setPasswordStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Delivery Fee per KM Settings state
+  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState<number>(15);
+  const [baseDeliveryFee, setBaseDeliveryFee] = useState<number>(25);
+  const [isSavingDeliverySettings, setIsSavingDeliverySettings] = useState(false);
+  const [deliverySettingsStatus, setDeliverySettingsStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fetchDeliverySettings = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/admin/settings`);
+      if (res.data.success && res.data.settings) {
+        if (typeof res.data.settings.deliveryFeePerKm === 'number') {
+          setDeliveryFeePerKm(res.data.settings.deliveryFeePerKm);
+        }
+        if (typeof res.data.settings.baseDeliveryFee === 'number') {
+          setBaseDeliveryFee(res.data.settings.baseDeliveryFee);
+        }
+      }
+    } catch (err) {
+      console.warn('Error fetching admin delivery settings:', err);
+    }
+  };
+
+  const handleSaveDeliverySettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingDeliverySettings(true);
+    setDeliverySettingsStatus(null);
+    try {
+      const res = await axios.put(`${API_BASE_URL}/admin/settings`, {
+        deliveryFeePerKm: Number(deliveryFeePerKm),
+        baseDeliveryFee: Number(baseDeliveryFee)
+      });
+      if (res.data.success) {
+        setDeliverySettingsStatus({ type: 'success', message: 'Delivery charge per kilometer updated successfully!' });
+      } else {
+        setDeliverySettingsStatus({ type: 'error', message: res.data.error || 'Failed to update settings.' });
+      }
+    } catch (err: any) {
+      setDeliverySettingsStatus({ type: 'error', message: 'Error updating delivery settings.' });
+    } finally {
+      setIsSavingDeliverySettings(false);
+    }
+  };
+
   // Delivery Partner Database Management States
   const [dbDeliveryPartners, setDbDeliveryPartners] = useState<any[]>([]);
   const [isAddPartnerDrawerOpen, setIsAddPartnerDrawerOpen] = useState(false);
@@ -2597,6 +2640,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                       <span className="text-text-primary">Production Live</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Delivery Charge per Kilometer Settings Card */}
+                <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
+                  <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
+                    <Bike className="text-primary" size={18} />
+                    <div>
+                      <h2 className="text-base font-bold font-display">Delivery Fee Configuration (per KM)</h2>
+                      <p className="text-[10px] text-text-muted">Set distance-based pricing applied dynamically in customer cart.</p>
+                    </div>
+                  </div>
+
+                  {deliverySettingsStatus && (
+                    <div className={`p-3 rounded-xl text-[10px] font-bold mb-4 flex gap-2 ${
+                      deliverySettingsStatus.type === 'success' ? 'bg-success/10 border border-success/20 text-success' : 'bg-error/10 border border-error/20 text-error'
+                    }`}>
+                      {deliverySettingsStatus.type === 'success' ? <CheckCircle size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+                      <span>{deliverySettingsStatus.message}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSaveDeliverySettings} className="space-y-4 text-xs font-semibold text-text-secondary">
+                    <div>
+                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+                        Delivery Charge per Kilometer (₹ / km) *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-primary text-sm">₹</span>
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          step="1"
+                          value={deliveryFeePerKm}
+                          onChange={(e) => setDeliveryFeePerKm(Number(e.target.value))}
+                          placeholder="e.g. 15"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-8 pr-4 py-2.5 rounded-xl outline-none font-bold text-sm"
+                        />
+                      </div>
+                      <p className="text-[10px] text-text-muted mt-1">Example: ₹15 per km calculated dynamically from Store GPS to Delivery Address GPS.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+                        Minimum Base Delivery Fee (₹) *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-primary text-sm">₹</span>
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          step="1"
+                          value={baseDeliveryFee}
+                          onChange={(e) => setBaseDeliveryFee(Number(e.target.value))}
+                          placeholder="e.g. 25"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-8 pr-4 py-2.5 rounded-xl outline-none font-bold text-sm"
+                        />
+                      </div>
+                      <p className="text-[10px] text-text-muted mt-1">Minimum delivery fee applied when distance is under base radius.</p>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSavingDeliverySettings}
+                      className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-300 shadow-md cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingDeliverySettings ? 'Saving Settings...' : 'Save Delivery Rate Settings'}
+                    </button>
+                  </form>
                 </div>
 
                 {/* Theme Configuration */}

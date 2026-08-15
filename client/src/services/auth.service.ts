@@ -17,7 +17,7 @@ export const authService = {
     return response.data;
   },
 
-  updateProfile: async (userData: { name?: string; email?: string; phone?: string }): Promise<AuthResponse> => {
+  updateProfile: async (userData: { name?: string; email?: string; phone?: string; profileImage?: string; addresses?: any[] }): Promise<AuthResponse> => {
     const response = await api.put<AuthResponse>('/auth/profile', userData);
     return response.data;
   }

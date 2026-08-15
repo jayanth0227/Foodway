@@ -132,6 +132,14 @@ class ClientSocketService {
       socket.off('rider_status_updated', callback);
     };
   }
+
+  onCartUpdated(callback: (data: { userId: string; cartItems: any[] }) => void): () => void {
+    const socket = this.connect();
+    socket.on('cart_updated', callback);
+    return () => {
+      socket.off('cart_updated', callback);
+    };
+  }
 }
 
 export const socketService = new ClientSocketService();

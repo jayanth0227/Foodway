@@ -212,11 +212,14 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                       {/* Info Detail Trigger */}
                       <button
                         type="button"
-                        onClick={() => setShowDetailsModal(true)}
+                        onClick={() => {
+                          onClose();
+                          navigate('/profile');
+                        }}
                         className="w-9 h-9 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center transition-all cursor-pointer shrink-0 border border-primary/20"
-                        title={t('account_info')}
+                        title="View & Edit Profile"
                       >
-                        <Edit3 size={16} />
+                        <User size={16} />
                       </button>
                     </div>
                   </div>

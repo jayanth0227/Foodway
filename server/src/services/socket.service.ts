@@ -114,6 +114,14 @@ export class SocketService {
     console.log(`📡 [Socket Emit: RIDER_STATUS_UPDATED] -> Order #${order.orderId} Rider Status: ${order.status}`);
     this.io.to(userRoom).to(restRoom).to(orderRoom).emit('rider_status_updated', order);
   }
+
+  // Multi-device Real-Time Cart Synchronization
+  emitCartUpdated(userId: string, cartItems: any[]): void {
+    if (!this.io || !userId) return;
+    const userRoom = `user_${userId}`;
+    console.log(`📡 [Socket Emit: CART_UPDATED] -> Room [${userRoom}] Items Count: ${cartItems.length}`);
+    this.io.to(userRoom).emit('cart_updated', { userId, cartItems });
+  }
 }
 
 export const socketService = new SocketService();

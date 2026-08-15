@@ -94,6 +94,87 @@ app.get('/api/aws/status', (req: Request, res: Response) => {
 // Admin API Routes
 // -----------------
 
+// Platform System Settings State (Delivery Fee per KM & Base Rate)
+let platformSettings = {
+  deliveryFeePerKm: 15,
+  baseDeliveryFee: 25,
+  freeDeliveryThreshold: 0
+};
+
+// GET Admin System Settings
+app.get('/api/admin/settings', (req: Request, res: Response) => {
+  res.json({ success: true, settings: platformSettings });
+});
+
+// UPDATE Admin System Settings (Delivery Charge Per KM & Base Rate)
+app.put('/api/admin/settings', (req: Request, res: Response) => {
+  try {
+    const { deliveryFeePerKm, baseDeliveryFee, freeDeliveryThreshold } = req.body;
+    if (typeof deliveryFeePerKm === 'number' && !isNaN(deliveryFeePerKm) && deliveryFeePerKm >= 0) {
+      platformSettings.deliveryFeePerKm = Number(deliveryFeePerKm);
+    }
+    if (typeof baseDeliveryFee === 'number' && !isNaN(baseDeliveryFee) && baseDeliveryFee >= 0) {
+      platformSettings.baseDeliveryFee = Number(baseDeliveryFee);
+    }
+    if (typeof freeDeliveryThreshold === 'number' && !isNaN(freeDeliveryThreshold) && freeDeliveryThreshold >= 0) {
+      platformSettings.freeDeliveryThreshold = Number(freeDeliveryThreshold);
+    }
+    res.json({
+      success: true,
+      message: 'Delivery fee settings updated successfully.',
+      settings: platformSettings
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Failed to update settings.' });
+  }
+});
+
+// In-memory Multi-device Cart Store (persisted to DynamoDB user profile)
+const activeUserCarts = new Map<string, any[]>();
+
+// Fetch User Active Cart for Multi-Device Sync
+app.get('/api/cart/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    let items = activeUserCarts.get(userId);
+    if (!items && tableName) {
+      const dbUser = await userService.getUserById(userId);
+      if (dbUser && Array.isArray((dbUser as any).activeCart)) {
+        items = (dbUser as any).activeCart;
+        activeUserCarts.set(userId, items || []);
+      }
+    }
+    res.json({ success: true, cartItems: items || [] });
+  } catch (e) {
+    res.json({ success: true, cartItems: [] });
+  }
+});
+
+// Update & Broadcast User Active Cart across all logged-in devices
+app.put('/api/cart/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { cartItems } = req.body;
+    const items = Array.isArray(cartItems) ? cartItems : [];
+    activeUserCarts.set(userId, items);
+
+    // Save to DynamoDB user record asynchronously
+    userService.updateProfile(userId, { activeCart: items } as any).catch(() => {});
+
+    // Broadcast WebSocket event to user room
+    socketService.emitCartUpdated(userId, items);
+
+    res.json({ success: true, message: 'Cart synchronized across devices.', cartItems: items });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to sync cart.' });
+  }
+});
+
+// Public Endpoint to fetch Delivery Rates for Cart Calculation
+app.get('/api/settings/delivery', (req: Request, res: Response) => {
+  res.json({ success: true, ...platformSettings });
+});
+
 // Admin Login API
 app.post('/api/admin/login', (req: Request, res: Response) => {
   const { email, password } = req.body;

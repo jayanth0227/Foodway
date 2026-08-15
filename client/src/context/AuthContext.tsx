@@ -9,7 +9,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, password?: string) => Promise<{ success: boolean; role?: Role; error?: string }>;
   logout: () => void;
   register: (name: string, email: string, password?: string, phone?: string) => Promise<{ success: boolean; error?: string }>;
-  updateProfile: (data: { name?: string; email?: string; phone?: string }) => Promise<{ success: boolean; user?: User; error?: string }>;
+  updateProfile: (data: { name?: string; email?: string; phone?: string; profileImage?: string; addresses?: any[] }) => Promise<{ success: boolean; user?: User; error?: string }>;
   refreshAuth: () => Promise<void>;
 }
 
@@ -126,20 +126,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (res.success && res.user) {
         setUser(res.user);
         setRole(res.user.role);
+        saveSession(existingToken, res.user);
       }
     } catch (e) {
       handleLogout();
     }
   };
 
-  const handleUpdateProfile = async (data: { name?: string; email?: string; phone?: string }) => {
+  const handleUpdateProfile = async (data: { name?: string; email?: string; phone?: string; profileImage?: string; addresses?: any[] }) => {
     try {
       const res = await authService.updateProfile(data);
-      if (res.success && res.user && res.token) {
+      if (res.success && res.user) {
+        const activeToken = res.token || token || getToken() || '';
         setUser(res.user);
         setRole(res.user.role);
-        setToken(res.token);
-        saveSession(res.token, res.user);
+        if (res.token) {
+          setToken(res.token);
+        }
+        saveSession(activeToken, res.user);
         return { success: true, user: res.user };
       }
       return { success: false, error: res.error || 'Failed to update profile' };

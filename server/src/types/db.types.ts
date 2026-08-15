@@ -1,5 +1,21 @@
 import { UserRole, UserStatus, ShopStatus, ShopType, ItemStatus, UnitType, OrderStatus, PaymentStatus } from './enums';
 
+export interface IAddress {
+  id: string;
+  label?: string; // 'Home', 'Work', 'Other'
+  fullName?: string;
+  phone?: string;
+  street: string;
+  area?: string;
+  city: string;
+  state?: string;
+  pincode: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
+  isDefault?: boolean;
+}
+
 export interface IUser {
   userId: string;
   role: UserRole;
@@ -9,6 +25,7 @@ export interface IUser {
   password: string; // bcrypt hash
   status: UserStatus;
   profileImage?: string;
+  addresses?: IAddress[];
   fcmToken?: string;
   lastTokenUpdatedAt?: string;
   createdAt: string;

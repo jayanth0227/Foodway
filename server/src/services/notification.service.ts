@@ -36,7 +36,7 @@ export class NotificationService {
           await dynamoDocClient.send(
             new UpdateCommand({
               TableName: restaurantsTableName,
-              Key: { restaurantId: restId },
+              Key: { shopId: restId },
               UpdateExpression: 'SET fcmToken = :token, lastTokenUpdatedAt = :updatedAt, updatedAt = :updatedAt',
               ExpressionAttributeValues: {
                 ':token': fcmToken,

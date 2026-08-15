@@ -172,16 +172,51 @@ export const me = async (req: AuthenticatedRequest, res: Response) => {
     return res.status(401).json({ success: false, error: 'Not authenticated.' });
   }
 
-  return res.json({
-    success: true,
-    user: {
-      id: req.user.id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role,
-      restaurantId: req.user.restaurantId
+  try {
+    const dbUser = await userService.getUserById(req.user.id);
+    if (!dbUser) {
+      return res.json({
+        success: true,
+        user: {
+          id: req.user.id,
+          name: req.user.name,
+          email: req.user.email,
+          role: req.user.role,
+          restaurantId: req.user.restaurantId,
+          shopId: req.user.restaurantId
+        }
+      });
     }
-  });
+
+    return res.json({
+      success: true,
+      user: {
+        id: dbUser.userId,
+        name: dbUser.name,
+        email: dbUser.email,
+        phone: dbUser.phone || '',
+        role: dbUser.role,
+        restaurantId: req.user.restaurantId,
+        shopId: req.user.restaurantId,
+        profileImage: dbUser.profileImage || '',
+        addresses: dbUser.addresses || [],
+        createdAt: dbUser.createdAt,
+        status: dbUser.status
+      }
+    });
+  } catch (err: any) {
+    return res.json({
+      success: true,
+      user: {
+        id: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        restaurantId: req.user.restaurantId,
+        shopId: req.user.restaurantId
+      }
+    });
+  }
 };
 
 export const register = async (req: Request, res: Response) => {
@@ -238,7 +273,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
     }
 
     const userId = req.user.id;
-    const { name, email, phone } = req.body;
+    const { name, email, phone, profileImage, addresses } = req.body;
 
     const existingUser = await userService.getUserById(userId);
     if (!existingUser) {
@@ -248,6 +283,8 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
     const updates: any = {};
     if (name && name.trim()) updates.name = name.trim();
     if (phone !== undefined) updates.phone = phone.trim();
+    if (profileImage !== undefined) updates.profileImage = profileImage;
+    if (Array.isArray(addresses)) updates.addresses = addresses;
 
     if (email && email.trim().toLowerCase() !== existingUser.email.toLowerCase()) {
       const cleanEmail = email.trim().toLowerCase();
@@ -285,7 +322,12 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
         email: updatedUser.email,
         phone: updatedUser.phone || '',
         role: updatedUser.role,
-        restaurantId: req.user.restaurantId
+        restaurantId: req.user.restaurantId,
+        shopId: req.user.restaurantId,
+        profileImage: updatedUser.profileImage || '',
+        addresses: updatedUser.addresses || [],
+        createdAt: updatedUser.createdAt,
+        status: updatedUser.status
       }
     });
   } catch (error: any) {

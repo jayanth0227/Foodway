@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
@@ -8,13 +8,9 @@ import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { Navbar } from './components/common/Navbar';
 import Footer from "./components/common/Footer";
-import { CursorGlow } from './components/common/CursorGlow';
 import { CartSidebar } from './components/common/CartSidebar';
-import { AuthModals } from './components/common/AuthModals';
 import { Home } from './pages/Home';
-import { RestaurantsPage } from './pages/RestaurantsPage';
 import { ShopsPage } from './pages/ShopsPage';
-import { RestaurantDetailsPage } from './pages/RestaurantDetailsPage';
 import { ShopDetailsPage } from './pages/ShopDetailsPage';
 import { CartPage } from './pages/CartPage';
 import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
@@ -24,12 +20,13 @@ import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminOrderDetailsPage } from './pages/AdminOrderDetailsPage';
 import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartnerPage';
-import { RestaurantDashboard } from './pages/RestaurantDashboard';
 import { ShopDashboard } from './pages/ShopDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { DishesPage } from './pages/DishesPage';
 import { WishlistPage } from './pages/WishlistPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { AddressFormPage } from './pages/AddressFormPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { OfflineDetector } from './components/common/OfflineDetector';
 
@@ -120,6 +117,30 @@ const AppContent: React.FC = () => {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/orders" element={<CustomerOrdersPage />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile/address/new"
+            element={
+              <ProtectedRoute>
+                <AddressFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile/address/edit/:addressId"
+            element={
+              <ProtectedRoute>
+                <AddressFormPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Login />} />
           <Route path="/admin" element={<Login />} />

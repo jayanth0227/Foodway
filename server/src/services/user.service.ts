@@ -65,6 +65,9 @@ export class UserService {
     }
     return userRepository.update(userId, updates);
   }
+
+  // Alias for updateProfile
+  updateProfile = this.updateUserProfile;
 }
 
 export const userService = new UserService();

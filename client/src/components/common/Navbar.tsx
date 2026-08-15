@@ -302,7 +302,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       exit={{ scale: 0 }}
-                      className="absolute -top-1 -right-1 bg-primary text-black text-[9px] font-extrabold w-4.5 h-4.5 rounded-full flex items-center justify-center border border-bg-dark shadow-[0_0_10px_rgba(197,147,99,0.3)]"
+                      className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1 bg-primary text-black text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white dark:border-black shadow-md pointer-events-none z-10"
                     >
                       {totalItemsCount}
                     </motion.span>
@@ -341,35 +341,24 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                   </button>
 
                   {/* Profile Indicator */}
-                  <div className="flex items-center space-x-2 bg-glass-subtle border border-glass rounded-xl px-3 py-1.5">
-                    <UserIcon size={14} className="text-primary" />
-                    <span className="text-xs font-bold text-text-secondary">
+                  <button
+                    onClick={() => navigate('/profile')}
+                    className="flex items-center space-x-2 bg-glass-subtle hover:bg-glass border border-glass hover:border-primary/40 rounded-xl px-3 py-1.5 transition-all cursor-pointer group"
+                    title="View & Edit Profile"
+                  >
+                    <UserIcon size={14} className="text-primary group-hover:scale-110 transition-transform" />
+                    <span className="text-xs font-bold text-text-secondary group-hover:text-primary transition-colors">
                       Hi, {user.name.split(' ')[0]}
                     </span>
-                  </div>
-
-                  <button
-                    onClick={handleLogoutClick}
-                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300 text-error hover:bg-error/10"
-                  >
-                    Logout
                   </button>
                 </>
               ) : (
-                <>
-                  <Link
-                    to="/login"
-                    className="btn-ghost text-xs font-bold py-2 px-4 rounded-xl uppercase tracking-wider transition-all duration-300"
-                  >
-                    Login
-                  </Link>
-                  <button
-                    onClick={() => onOpenAuth('register')}
-                    className="btn-primary text-[10px] font-bold py-2.5 px-5 rounded-xl uppercase tracking-wider transition-all duration-300"
-                  >
-                    Register
-                  </button>
-                </>
+                <Link
+                  to="/login"
+                  className="btn-primary text-xs font-bold py-2 px-5 rounded-xl uppercase tracking-wider shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 cursor-pointer"
+                >
+                  Login
+                </Link>
               )}
             </div>
           </div>

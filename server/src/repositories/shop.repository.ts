@@ -20,21 +20,32 @@ export class ShopRepository {
   }
 
   async findByShopId(shopId: string): Promise<IShop | null> {
+    if (!shopId || shopId === 'default' || typeof shopId !== 'string' || !shopId.trim()) {
+      return null;
+    }
+    const cleanId = shopId.trim();
     try {
       const command = new GetCommand({
         TableName: shopsTableName,
-        Key: { shopId }
+        Key: { shopId: cleanId }
       });
       let response = await dynamoDocClient.send(command);
-      if (!response.Item) {
-        // Fallback try with restaurantId key
-        const resCommand = new GetCommand({
-          TableName: shopsTableName,
-          Key: { restaurantId: shopId }
-        });
-        response = await dynamoDocClient.send(resCommand);
+      if (response.Item) {
+        return this.normalizeShop(response.Item);
       }
-      return this.normalizeShop(response.Item);
+
+      // Fallback try scan if shopId is stored under different attribute
+      const scanCommand = new ScanCommand({
+        TableName: shopsTableName,
+        FilterExpression: 'shopId = :sId OR restaurantId = :sId',
+        ExpressionAttributeValues: { ':sId': cleanId }
+      });
+      const scanResp = await dynamoDocClient.send(scanCommand);
+      if (scanResp.Items && scanResp.Items.length > 0) {
+        return this.normalizeShop(scanResp.Items[0]);
+      }
+
+      return null;
     } catch (error) {
       console.error(`Error in ShopRepository.findByShopId(${shopId}):`, error);
       return null;
@@ -112,11 +123,17 @@ export class ShopRepository {
     const existing = await this.findByShopId(shopId);
     if (!existing) return null;
 
+    const shopName = (updates as any).name || updates.shopName || updates.restaurantName || existing.shopName;
+
     const updated: IShop = {
       ...existing,
       ...updates,
+      shopId: shopId,
       restaurantId: shopId,
-      restaurantName: updates.shopName || existing.shopName,
+      shopName: shopName,
+      restaurantName: shopName,
+      latitude: updates.latitude !== undefined ? updates.latitude : existing.latitude,
+      longitude: updates.longitude !== undefined ? updates.longitude : existing.longitude,
       updatedAt: new Date().toISOString()
     };
 

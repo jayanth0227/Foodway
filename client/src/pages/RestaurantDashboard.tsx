@@ -42,12 +42,74 @@ import {
   Sparkles,
   Store,
   ShoppingBag,
-  Layers
+  Layers,
+  Crosshair,
+  Loader2
 } from 'lucide-react';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { API_BASE_URL } from '../utils/api';
+
+// Leaflet Imports
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
+
+// Fix Leaflet default icon asset paths in bundled Vite environments
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+// Custom Map View Re-centering Component for Vendor
+const VendorMapChangeView: React.FC<{ center: [number, number] }> = ({ center }) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  return null;
+};
+
+// Custom Map Click & Drag Events Component for Vendor
+const VendorLocationMarker: React.FC<{
+  position: [number, number];
+  setPosition: (pos: [number, number]) => void;
+  onLocationSelect: (lat: number, lng: number) => void;
+}> = ({ position, setPosition, onLocationSelect }) => {
+  useMapEvents({
+    click(e) {
+      const newPos: [number, number] = [e.latlng.lat, e.latlng.lng];
+      setPosition(newPos);
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  const eventHandlers = React.useMemo(
+    () => ({
+      dragend(e: any) {
+        const marker = e.target;
+        if (marker != null) {
+          const latLng = marker.getLatLng();
+          const newPos: [number, number] = [latLng.lat, latLng.lng];
+          setPosition(newPos);
+          onLocationSelect(latLng.lat, latLng.lng);
+        }
+      },
+    }),
+    [setPosition, onLocationSelect]
+  );
+
+  return (
+    <Marker
+      position={position}
+      draggable={true}
+      eventHandlers={eventHandlers}
+    />
+  );
+};
 import { getCurrentUser, clearSession } from '../utils/auth.utils';
 import { useAuth } from '../hooks/useAuth';
 import socketService from '../services/socket.service';
@@ -244,6 +306,114 @@ export const RestaurantDashboard: React.FC = () => {
   const [isRestaurantOpen, setIsRestaurantOpen] = useState<boolean>(true);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<boolean>(false);
 
+  // Vendor Map & Location State
+  const [vendorLat, setVendorLat] = useState<number | null>(null);
+  const [vendorLng, setVendorLng] = useState<number | null>(null);
+  const [vendorMapPos, setVendorMapPos] = useState<[number, number]>([17.3850, 78.4867]);
+  const [isVendorGeocoding, setIsVendorGeocoding] = useState(false);
+
+  // Reverse Geocoding using OpenStreetMap Nominatim API for Vendor (English)
+  const reverseGeocodeVendor = async (latitude: number, longitude: number) => {
+    setIsVendorGeocoding(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=en`,
+        {
+          headers: {
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        }
+      );
+      const data = await response.json();
+      if (data && data.address) {
+        const addr = data.address;
+        const road = addr.road || addr.residential || addr.pedestrian || addr.street || '';
+        const houseNo = addr.house_number || addr.building || '';
+        const suburb = addr.suburb || addr.neighbourhood || addr.residential || '';
+        const city = addr.city || addr.town || addr.village || addr.county || '';
+        const state = addr.state || '';
+        const pincode = addr.postcode || '';
+
+        const fullAddrParts = [houseNo, road, suburb, city, state, pincode].filter(Boolean);
+        if (fullAddrParts.length > 0) {
+          setProfileForm(prev => ({ ...prev, address: fullAddrParts.join(', ') }));
+        }
+      }
+    } catch (err) {
+      console.warn('Vendor reverse geocoding failed:', err);
+    } finally {
+      setIsVendorGeocoding(false);
+    }
+  };
+
+  const handleVendorLocationSelect = (selectedLat: number, selectedLng: number) => {
+    setProfileError(null);
+    setVendorLat(selectedLat);
+    setVendorLng(selectedLng);
+    setVendorMapPos([selectedLat, selectedLng]);
+    reverseGeocodeVendor(selectedLat, selectedLng);
+  };
+
+  const handleVendorLocateMe = () => {
+    setIsVendorGeocoding(true);
+    setProfileError(null);
+
+    const useIPFallback = async () => {
+      try {
+        const ipRes = await fetch('https://ipapi.co/json/');
+        const ipData = await ipRes.json();
+        if (ipData && ipData.latitude && ipData.longitude) {
+          const lat = Number(ipData.latitude);
+          const lng = Number(ipData.longitude);
+          setVendorLat(lat);
+          setVendorLng(lng);
+          setVendorMapPos([lat, lng]);
+          reverseGeocodeVendor(lat, lng);
+          return;
+        }
+      } catch (err) { }
+
+      try {
+        const ipRes2 = await fetch('https://ipinfo.io/json');
+        const ipData2 = await ipRes2.json();
+        if (ipData2 && ipData2.loc) {
+          const [latStr, lngStr] = ipData2.loc.split(',');
+          const lat = Number(latStr);
+          const lng = Number(lngStr);
+          if (!isNaN(lat) && !isNaN(lng)) {
+            setVendorLat(lat);
+            setVendorLng(lng);
+            setVendorMapPos([lat, lng]);
+            reverseGeocodeVendor(lat, lng);
+            return;
+          }
+        }
+      } catch (err2) { }
+
+      setIsVendorGeocoding(false);
+      setProfileError('Could not auto-detect GPS location. Click anywhere on the Leaflet map below to pick your location.');
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const latitude = pos.coords.latitude;
+          const longitude = pos.coords.longitude;
+          setVendorLat(latitude);
+          setVendorLng(longitude);
+          setVendorMapPos([latitude, longitude]);
+          reverseGeocodeVendor(latitude, longitude);
+        },
+        () => {
+          useIPFallback();
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      useIPFallback();
+    }
+  };
+
   // 1. Initial Load & Auth check
   useEffect(() => {
     const user = getCurrentUser();
@@ -286,6 +456,12 @@ export const RestaurantDashboard: React.FC = () => {
       description: restProfile.description || '',
       cuisine: restProfile.cuisine || ''
     }));
+
+    if (restProfile.latitude && restProfile.longitude) {
+      setVendorLat(restProfile.latitude);
+      setVendorLng(restProfile.longitude);
+      setVendorMapPos([restProfile.latitude, restProfile.longitude]);
+    }
     if (typeof restProfile.isOpen === 'boolean') {
       setIsRestaurantOpen(restProfile.isOpen);
     }
@@ -294,6 +470,34 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Load Menu, Categories, Orders and Restaurant Status
   const loadRestaurantData = async (resId: string) => {
+    // Load Latest Shop Profile & Coordinates from DynamoDB
+    try {
+      const shopResp = await axios.get(`${API_BASE_URL}/shops/${resId}`);
+      if (shopResp.data && shopResp.data.success && (shopResp.data.shop || shopResp.data.restaurant)) {
+        const fetchedShop = shopResp.data.shop || shopResp.data.restaurant;
+        setRestaurant(fetchedShop);
+        setProfileForm(prev => ({
+          ...prev,
+          name: fetchedShop.shopName || fetchedShop.restaurantName || fetchedShop.name || prev.name,
+          ownerName: fetchedShop.ownerName || prev.ownerName,
+          phone: fetchedShop.phone || prev.phone,
+          address: fetchedShop.address || prev.address,
+          openingTime: fetchedShop.openingTime || prev.openingTime,
+          closingTime: fetchedShop.closingTime || prev.closingTime,
+          image: fetchedShop.logo || fetchedShop.bannerImage || fetchedShop.image || prev.image,
+          description: fetchedShop.description || prev.description,
+          cuisine: fetchedShop.cuisine || prev.cuisine
+        }));
+        if (fetchedShop.latitude && fetchedShop.longitude) {
+          setVendorLat(fetchedShop.latitude);
+          setVendorLng(fetchedShop.longitude);
+          setVendorMapPos([fetchedShop.latitude, fetchedShop.longitude]);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch shop profile from DB:', e);
+    }
+
     // Load Restaurant Status
     try {
       const statusResp = await axios.get(`${API_BASE_URL}/restaurant/status/${resId}`);
@@ -1105,6 +1309,9 @@ export const RestaurantDashboard: React.FC = () => {
 
     setIsProfileSaving(true);
 
+    const finalLat = vendorLat ?? restaurant?.latitude;
+    const finalLng = vendorLng ?? restaurant?.longitude;
+
     const updatedRes = {
       ...restaurant,
       name: profileForm.name.trim(),
@@ -1117,6 +1324,8 @@ export const RestaurantDashboard: React.FC = () => {
       image: profileForm.image,
       description: profileForm.description.trim(),
       cuisine: profileForm.cuisine.trim(),
+      latitude: finalLat ?? undefined,
+      longitude: finalLng ?? undefined,
       ...(profileForm.password ? { password: profileForm.password } : {})
     };
 
@@ -1156,7 +1365,11 @@ export const RestaurantDashboard: React.FC = () => {
     }
 
     try {
-      await axios.put(`${API_BASE_URL}/restaurant/profile/${updatedRes.id || updatedRes.restaurantId}`, updatedRes);
+      const targetShopId = updatedRes.id || updatedRes.restaurantId || updatedRes.shopId;
+      if (targetShopId) {
+        await axios.put(`${API_BASE_URL}/restaurant/profile/${targetShopId}`, updatedRes);
+        await axios.put(`${API_BASE_URL}/shops/${targetShopId}`, updatedRes);
+      }
     } catch (err) {
       console.warn('Profile sync warning:', err);
     }
@@ -2870,21 +3083,82 @@ export const RestaurantDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 5. Address Section */}
-                <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
-                    Physical Address <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. D.No 4-12, Main Road, Ravulapalem, Konaseema"
-                      value={profileForm.address}
-                      onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
-                      className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
-                    />
+                {/* 5. Address & Leaflet Interactive Location Map Section */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                      Physical Address <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. D.No 4-12, Main Road, Ravulapalem, Konaseema"
+                        value={profileForm.address}
+                        onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-10 pr-4 py-3 rounded-xl outline-none font-medium text-[15px] sm:text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Leaflet Interactive Map Picker */}
+                  <div className="space-y-2.5 pt-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Globe size={14} className="text-primary" />
+                        <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                          Pin Exact Shop Location on Leaflet Map
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleVendorLocateMe}
+                        className="px-3 py-1.5 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                      >
+                        <Crosshair size={13} />
+                        <span>Use My Current GPS</span>
+                      </button>
+                    </div>
+
+                    <div className="relative rounded-2xl overflow-hidden border border-glass h-64 sm:h-72 shadow-inner z-0">
+                      <MapContainer
+                        center={vendorMapPos}
+                        zoom={15}
+                        scrollWheelZoom={true}
+                        className="w-full h-full"
+                      >
+                        <VendorMapChangeView center={vendorMapPos} />
+                        <TileLayer
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        <VendorLocationMarker
+                          position={vendorMapPos}
+                          setPosition={setVendorMapPos}
+                          onLocationSelect={handleVendorLocationSelect}
+                        />
+                      </MapContainer>
+
+                      {isVendorGeocoding && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center text-white text-xs font-bold gap-2 z-10 pointer-events-none">
+                          <Loader2 size={16} className="animate-spin text-primary" />
+                          <span>Detecting shop location details...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {vendorLat && vendorLng && (
+                      <div className="flex items-center justify-between text-[11px] text-text-muted bg-bg-dark/50 px-3 py-2 rounded-xl border border-glass/60">
+                        <span className="flex items-center gap-1">
+                          <MapPin size={13} className="text-primary" />
+                          <span>GPS Coordinates: {vendorLat.toFixed(6)}, {vendorLng.toFixed(6)}</span>
+                        </span>
+                        <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                          <Check size={12} /> Location Pinned
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -9,13 +9,34 @@ export type ShopType =
   | 'BEVERAGES'
   | 'GENERAL_STORE';
 
+export interface Address {
+  id: string;
+  label?: string; // 'Home', 'Work', 'Other'
+  fullName?: string;
+  phone?: string;
+  street: string;
+  area?: string;
+  city: string;
+  state?: string;
+  pincode: string;
+  landmark?: string;
+  latitude?: number;
+  longitude?: number;
+  isDefault?: boolean;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   role: Role;
   shopId?: string;
   restaurantId?: string;
+  profileImage?: string;
+  addresses?: Address[];
+  createdAt?: string;
+  status?: string;
 }
 
 export interface AuthResponse {
