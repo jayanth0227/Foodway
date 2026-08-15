@@ -214,3 +214,51 @@ export const CartPageSkeleton: React.FC = () => {
     </div>
   );
 };
+
+export const ProfileSkeletonLoader: React.FC = () => {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {/* Tab Switcher Skeleton */}
+      <div className="p-1 bg-bg-cardSec/80 border border-glass rounded-2xl flex items-center h-12">
+        <div className="flex-1 h-9 rounded-xl bg-glass-subtle skeleton-box" />
+        <div className="flex-1 h-9 rounded-xl bg-glass-subtle ml-2 skeleton-box" />
+      </div>
+
+      {/* User Hero Profile Card Skeleton */}
+      <div className="rounded-3xl bg-bg-cardSec border border-glass p-5 space-y-4 shadow-luxury relative overflow-hidden">
+        <div className="flex items-center space-x-3.5">
+          <div className="w-14 h-14 rounded-2xl skeleton-box shrink-0" />
+          <div className="space-y-2 flex-1">
+            <div className="h-5 w-40 rounded-lg skeleton-box" />
+            <div className="h-3.5 w-24 rounded-md skeleton-box" />
+          </div>
+        </div>
+        <div className="pt-3 border-t border-glass flex justify-between items-center">
+          <div className="space-y-2 flex-1">
+            <div className="h-4 w-48 rounded-md skeleton-box" />
+            <div className="h-3.5 w-32 rounded-md skeleton-box" />
+          </div>
+          <div className="w-20 h-9 rounded-xl skeleton-box" />
+        </div>
+      </div>
+
+      {/* Quick Action Grid Skeleton */}
+      <div className="grid grid-cols-4 gap-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-20 rounded-2xl bg-bg-cardSec border border-glass flex flex-col items-center justify-center space-y-2 p-2">
+            <div className="w-9 h-9 rounded-xl skeleton-box" />
+            <div className="w-12 h-3 rounded-md skeleton-box" />
+          </div>
+        ))}
+      </div>
+
+      {/* Options Stack Skeleton */}
+      <div className="space-y-2.5">
+        <div className="h-14 rounded-2xl bg-bg-cardSec border border-glass skeleton-box" />
+        <div className="h-14 rounded-2xl bg-bg-cardSec border border-glass skeleton-box" />
+        <div className="h-14 rounded-2xl bg-bg-cardSec border border-glass skeleton-box" />
+      </div>
+    </div>
+  );
+};
+

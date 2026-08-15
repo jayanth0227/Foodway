@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { ProfileSkeletonLoader } from '../components/common/MobileSkeletonLoader';
 import type { Address } from '../types/auth.types';
 
 export const ProfilePage: React.FC = () => {
@@ -206,8 +207,12 @@ export const ProfilePage: React.FC = () => {
             )}
           </AnimatePresence>
 
-          {/* Header Card / Hero Profile Container */}
-          <div className="relative rounded-3xl bg-gradient-to-r from-primary/10 via-card-bg to-card-bg border border-border-color p-6 sm:p-8 overflow-hidden shadow-xl">
+          {!user ? (
+            <ProfileSkeletonLoader />
+          ) : (
+            <>
+              {/* Header Card / Hero Profile Container */}
+              <div className="relative rounded-3xl bg-gradient-to-r from-primary/10 via-card-bg to-card-bg border border-border-color p-6 sm:p-8 overflow-hidden shadow-xl">
             <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
             <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10">
@@ -300,45 +305,57 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Navigation Tabs Header */}
-          <div className="flex border-b border-border-color gap-4 sm:gap-8 overflow-x-auto no-scrollbar">
+          {/* Navigation Segmented Switch Control */}
+          <div className="relative p-1.5 bg-card-bg/80 border border-border-color rounded-2xl flex items-center shadow-sm max-w-md mx-auto sm:mx-0">
             <button
+              type="button"
               onClick={() => setActiveTab('DETAILS')}
-              className={`pb-4 px-2 text-sm font-bold transition-all relative flex items-center gap-2 shrink-0 ${
+              className={`relative flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center space-x-2 cursor-pointer z-10 ${
                 activeTab === 'DETAILS'
-                  ? 'text-primary'
+                  ? 'text-black font-black'
                   : 'text-text-muted hover:text-text-primary'
               }`}
             >
-              <UserIcon className="w-4 h-4" />
-              <span>Personal Details</span>
               {activeTab === 'DETAILS' && (
                 <motion.div
-                  layoutId="activeTabUnderline"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+                  layoutId="profilePageTabPill"
+                  className="absolute inset-0 bg-primary rounded-xl shadow-md"
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                 />
               )}
+              <span className="relative z-10 flex items-center gap-2">
+                <UserIcon className="w-4 h-4" />
+                <span>Personal Details</span>
+              </span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveTab('ADDRESSES')}
-              className={`pb-4 px-2 text-sm font-bold transition-all relative flex items-center gap-2 shrink-0 ${
+              className={`relative flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-black transition-all flex items-center justify-center space-x-2 cursor-pointer z-10 ${
                 activeTab === 'ADDRESSES'
-                  ? 'text-primary'
+                  ? 'text-black font-black'
                   : 'text-text-muted hover:text-text-primary'
               }`}
             >
-              <MapPin className="w-4 h-4" />
-              <span>Saved Addresses</span>
-              <span className="px-2 py-0.5 rounded-full bg-primary/15 text-primary text-xs font-black">
-                {addresses.length}
-              </span>
               {activeTab === 'ADDRESSES' && (
                 <motion.div
-                  layoutId="activeTabUnderline"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+                  layoutId="profilePageTabPill"
+                  className="absolute inset-0 bg-primary rounded-xl shadow-md"
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                 />
               )}
+              <span className="relative z-10 flex items-center gap-2">
+                <MapPin className="w-4 h-4" />
+                <span>Saved Addresses</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-xs font-black ${
+                    activeTab === 'ADDRESSES' ? 'bg-black/20 text-black' : 'bg-primary/20 text-primary'
+                  }`}
+                >
+                  {addresses.length}
+                </span>
+              </span>
             </button>
           </div>
 
@@ -556,7 +573,7 @@ export const ProfilePage: React.FC = () => {
                     onClick={() => navigate('/profile/address/new')}
                     className="px-6 py-2.5 rounded-xl bg-primary text-white text-xs font-bold inline-flex items-center gap-2 hover:bg-primary/90 transition-all shadow-md cursor-pointer"
                   >
-                    <Plus className="w-4 h-4" />
+                    {/* <Plus className="w-4 h-4" /> */}
                     <span>Add Address Now</span>
                   </button>
                 </div>
@@ -644,6 +661,8 @@ export const ProfilePage: React.FC = () => {
                 </div>
               )}
             </motion.div>
+          )}
+            </>
           )}
 
         </div>

@@ -14,7 +14,6 @@ import { ShopsPage } from './pages/ShopsPage';
 import { ShopDetailsPage } from './pages/ShopDetailsPage';
 import { CartPage } from './pages/CartPage';
 import { CustomerOrdersPage } from './pages/CustomerOrdersPage';
-import { ItemAddedToast } from './components/common/ItemAddedToast';
 import { FloatingCartBar } from './components/common/FloatingCartBar';
 import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
@@ -99,7 +98,6 @@ const AppContent: React.FC = () => {
       {/* Global Elements */}
       {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
-      <ItemAddedToast />
       <FloatingCartBar />
       <OfflineDetector />
 

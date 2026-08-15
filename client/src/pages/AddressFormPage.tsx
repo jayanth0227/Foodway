@@ -25,6 +25,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { Address } from '../types/auth.types';
+import { getFastAndAccurateLocation, fastReverseGeocode } from '../utils/geolocation';
 
 // Leaflet Imports
 import 'leaflet/dist/leaflet.css';
@@ -178,105 +179,46 @@ export const AddressFormPage: React.FC = () => {
     }
   }, [user, isAuthenticated, addressId, isEditing]);
 
-  // Reverse Geocoding using OpenStreetMap Nominatim API
+  // Fast & accurate reverse geocoding
   const reverseGeocode = async (latitude: number, longitude: number) => {
     setIsGeocoding(true);
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=en`,
-        {
-          headers: {
-            'Accept-Language': 'en-US,en;q=0.9'
-          }
-        }
-      );
-      const data = await response.json();
-      if (data && data.address) {
-        const addr = data.address;
-        const road = addr.road || fontSub(addr) || addr.pedestrian || addr.street || '';
-        const houseNo = addr.house_number || addr.building || '';
-        const combinedStreet = [houseNo, road].filter(Boolean).join(', ');
-
-        if (combinedStreet) setStreet(combinedStreet);
-        if (addr.suburb || addr.neighbourhood || fontSub(addr)) {
-          setArea(addr.suburb || addr.neighbourhood || fontSub(addr));
-        }
-        if (addr.city || addr.town || addr.village || addr.county) {
-          setCity(addr.city || addr.town || addr.village || addr.county);
-        }
-        if (addr.state) setState(addr.state);
-        if (addr.postcode) setPincode(addr.postcode);
+      const details = await fastReverseGeocode(latitude, longitude);
+      if (details) {
+        if (details.street) setStreet(details.street);
+        if (details.area) setArea(details.area);
+        if (details.city) setCity(details.city);
+        if (details.state) setState(details.state);
+        if (details.pincode) setPincode(details.pincode);
       }
     } catch (err) {
-      console.warn('Reverse geocoding failed:', err);
+      console.warn('Reverse geocoding error:', err);
     } finally {
       setIsGeocoding(false);
     }
   };
 
-  const fontSub = (addrObj: any) => {
-    return addrObj.residential || addrObj.subdivision || addrObj.commercial || '';
-  };
-
-  // Locate Me GPS Action Button
+  // High-Speed Dual-Phase GPS Locate Me Button
   const handleLocateMe = () => {
     setIsGeocoding(true);
     setStatus(null);
 
-    const useIPFallback = async () => {
-      try {
-        const ipRes = await fetch('https://ipapi.co/json/');
-        const ipData = await ipRes.json();
-        if (ipData && ipData.latitude && ipData.longitude) {
-          const latitude = Number(ipData.latitude);
-          const longitude = Number(ipData.longitude);
-          setLat(latitude);
-          setLng(longitude);
-          setMapPosition([latitude, longitude]);
-          reverseGeocode(latitude, longitude);
-          return;
+    getFastAndAccurateLocation(
+      async (res) => {
+        setLat(res.latitude);
+        setLng(res.longitude);
+        setMapPosition([res.latitude, res.longitude]);
+        await reverseGeocode(res.latitude, res.longitude);
+        if (res.isHighAccuracy) {
+          setStatus({ type: 'success', message: '📍 Precise GPS location locked!' });
+          setTimeout(() => setStatus(null), 3000);
         }
-      } catch (err) { }
-
-      try {
-        const ipRes2 = await fetch('https://ipinfo.io/json');
-        const ipData2 = await ipRes2.json();
-        if (ipData2 && ipData2.loc) {
-          const [latStr, lngStr] = ipData2.loc.split(',');
-          const latitude = Number(latStr);
-          const longitude = Number(lngStr);
-          if (!isNaN(latitude) && !isNaN(longitude)) {
-            setLat(latitude);
-            setLng(longitude);
-            setMapPosition([latitude, longitude]);
-            reverseGeocode(latitude, longitude);
-            return;
-          }
-        }
-      } catch (err2) { }
-
-      setIsGeocoding(false);
-      setStatus({ type: 'error', message: 'Could not auto-detect GPS location. Click anywhere on the Leaflet map below to pick location.' });
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const latitude = pos.coords.latitude;
-          const longitude = pos.coords.longitude;
-          setLat(latitude);
-          setLng(longitude);
-          setMapPosition([latitude, longitude]);
-          reverseGeocode(latitude, longitude);
-        },
-        () => {
-          useIPFallback();
-        },
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      useIPFallback();
-    }
+      },
+      (errMessage) => {
+        setIsGeocoding(false);
+        setStatus({ type: 'error', message: errMessage });
+      }
+    );
   };
 
   const handleLocationSelect = (selectedLat: number, selectedLng: number) => {

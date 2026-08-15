@@ -382,12 +382,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
       />
 
       {/* Fixed Solid Bottom Navigation Bar for Mobile/Tablet */}
-      <div
-        className={`fixed bottom-3 inset-x-3 max-w-md mx-auto z-[99999] lg:hidden bg-white dark:bg-bg-cardSec border border-slate-200 dark:border-glass shadow-2xl rounded-2xl px-2 py-1 flex items-center justify-around overflow-visible transition-all duration-200 ${isKeyboardOpen
-          ? 'opacity-0 pointer-events-none translate-y-16'
-          : 'opacity-100 translate-y-0'
-          }`}
-      >
+      {!(
+        location.pathname.startsWith('/admin') ||
+        location.pathname.startsWith('/restaurant') ||
+        location.pathname.startsWith('/delivery') ||
+        isProfileModalOpen
+      ) && (
+        <div
+          className={`fixed bottom-3 inset-x-3 max-w-md mx-auto z-[99999] lg:hidden bg-white dark:bg-bg-cardSec border border-slate-200 dark:border-glass shadow-2xl rounded-2xl px-2 py-1 flex items-center justify-around overflow-visible transition-all duration-200 ${isKeyboardOpen
+            ? 'opacity-0 pointer-events-none translate-y-16'
+            : 'opacity-100 translate-y-0'
+            }`}
+        >
         {/* 1. Home */}
         <button
           onClick={() => {
@@ -482,6 +488,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           </button>
         )}
       </div>
+      )}
     </>
   );
 };

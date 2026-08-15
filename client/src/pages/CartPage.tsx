@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import {
   ShoppingBag,
@@ -11,40 +11,29 @@ import {
   MapPin,
   Phone,
   User,
-  CreditCard,
   ShieldCheck,
   Utensils,
   Lock,
-  Sparkles,
-  ChefHat,
   ArrowRight,
   Clock,
   Home,
   Briefcase,
   Navigation,
-  Tag,
   CheckCircle2,
-  AlertCircle,
-  Truck,
-  Receipt,
-  Ticket,
-  ChevronRight,
-  Info
+  IndianRupee
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../hooks/useAuth';
-import { useLanguage } from '../context/LanguageContext';
 import { API_BASE_URL } from '../utils/api';
 import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
 import type { Address } from '../types/auth.types';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
-  const { cartItems, addToCart, incrementQuantity, reduceQuantity, removeFromCart, clearCart, totalAmount, totalItemsCount } = useCart();
+  const { cartItems, incrementQuantity, reduceQuantity, removeFromCart, clearCart, totalAmount, totalItemsCount } = useCart();
   const { user, isAuthenticated } = useAuth();
-  const { t } = useLanguage();
 
   const [isLoading, setIsLoading] = useState(true);
   const [mobileStep, setMobileStep] = useState<1 | 2>(1);
@@ -59,13 +48,8 @@ export const CartPage: React.FC = () => {
   const [isCustomAddress, setIsCustomAddress] = useState(false);
   const [instructions, setInstructions] = useState('');
 
-  // Coupon State
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount: number } | null>(null);
-  const [couponError, setCouponError] = useState<string | null>(null);
-
-  // Payment Method State
-  const [paymentMethod, setPaymentMethod] = useState<'CASH_ON_DELIVERY' | 'UPI' | 'ONLINE'>('CASH_ON_DELIVERY');
+  // Fixed Payment Method (Cash / Pay on Delivery)
+  const paymentMethod = 'CASH_ON_DELIVERY';
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
@@ -121,23 +105,6 @@ export const CartPage: React.FC = () => {
     setSelectedAddressId(addr.id);
     setIsCustomAddress(false);
     applyAddress(addr);
-  };
-
-  // Coupon Handler
-  const handleApplyCoupon = (e: React.FormEvent) => {
-    e.preventDefault();
-    setCouponError(null);
-    const cleanCode = couponCode.trim().toUpperCase();
-    if (!cleanCode) return;
-
-    if (cleanCode === 'FOODWAY10' || cleanCode === 'MKFOOD10') {
-      const discount = Math.round(totalAmount * 0.10);
-      setAppliedCoupon({ code: cleanCode, discount });
-    } else if (cleanCode === 'FREEDEL') {
-      setAppliedCoupon({ code: cleanCode, discount: 30 });
-    } else {
-      setCouponError('Invalid coupon code. Try FOODWAY10 for 10% OFF.');
-    }
   };
 
   // Platform Delivery Fee Rate State (from Admin Settings)
@@ -229,12 +196,9 @@ export const CartPage: React.FC = () => {
   }, [storeLat, storeLng, selectedLat, selectedLng]);
 
   // Calculation Breakdown (Distance-based Delivery Fee per KM - No taxes or hidden charges)
-  const freeDeliveryThreshold = 500;
   const effectiveDistance = calculatedDistanceKm ?? 2.0;
-  const rawCalculatedFee = Math.max(baseDeliveryFee, Math.round(effectiveDistance * deliveryFeePerKm));
-  const couponDiscount = appliedCoupon ? appliedCoupon.discount : 0;
-  const deliveryFee = appliedCoupon?.code === 'FREEDEL' ? 0 : rawCalculatedFee;
-  const grandTotal = Math.max(0, totalAmount + deliveryFee - couponDiscount);
+  const deliveryFee = Math.max(baseDeliveryFee, Math.round(effectiveDistance * deliveryFeePerKm));
+  const grandTotal = Math.max(0, totalAmount + deliveryFee);
 
   // Handle Order Submission
   const handlePlaceOrder = async (e: React.FormEvent) => {
@@ -277,7 +241,7 @@ export const CartPage: React.FC = () => {
           restaurantName: (item.dish as any).restaurantName || targetRestaurantName
         })),
         subtotal: totalAmount,
-        discount: couponDiscount,
+        discount: 0,
         deliveryFee,
         taxes: 0,
         distanceKm: effectiveDistance,
@@ -309,75 +273,112 @@ export const CartPage: React.FC = () => {
         <meta name="description" content="Review your cart items, select saved delivery addresses, apply discount coupons, and checkout securely." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-24 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-40 sm:pb-44 lg:pb-24 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
         <div className="max-w-7xl mx-auto space-y-8">
 
           {/* Clean Page Header */}
           <div className="flex items-center justify-between border-b border-border-color/60 pb-5">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate(-1)}
-                className="w-10 h-10 rounded-2xl bg-card-bg border border-border-color text-text-secondary hover:text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm"
+                onClick={() => {
+                  if (mobileStep === 2) {
+                    setMobileStep(1);
+                  } else {
+                    navigate(-1);
+                  }
+                }}
+                className="w-10 h-10 rounded-2xl bg-card-bg border border-border-color/80 text-text-secondary hover:text-primary flex items-center justify-center transition-all cursor-pointer active:scale-95"
                 title="Go Back"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-2xl sm:text-3xl font-black font-display text-text-primary tracking-tight">
+                <h1 className="text-xl sm:text-3xl font-black font-display text-text-primary tracking-tight">
                   {mobileStep === 2 ? 'Checkout & Delivery' : 'Shopping Cart'}
                 </h1>
-                <p className="text-xs text-text-muted mt-0.5">
+                <p className="text-[11px] sm:text-xs text-text-muted mt-0.5">
                   {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'} selected for fast delivery
                 </p>
               </div>
             </div>
-
-            {cartItems.length > 0 && (
-              <button
-                onClick={clearCart}
-                className="px-3.5 py-2 rounded-xl bg-error/10 hover:bg-error/20 border border-error/30 text-error text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Clear Cart</span>
-              </button>
-            )}
           </div>
 
-          {/* ORDER SUCCESS SCREEN */}
+          {/* MINIMALIST COMPACT ORDER CONFIRMED CARD WITH RECEIPT BREAKDOWN */}
           {orderSuccess ? (
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="max-w-lg mx-auto bg-card-bg border border-border-color rounded-3xl p-8 text-center space-y-6 shadow-2xl my-8 relative overflow-hidden"
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="max-w-md mx-auto bg-white dark:bg-card-bg/95 border border-slate-200/90 dark:border-border-color/80 rounded-3xl p-6 sm:p-7 space-y-5 my-6 text-left"
             >
-              <div className="w-20 h-20 bg-success/20 text-success rounded-full flex items-center justify-center mx-auto border-2 border-success/40 shadow-lg">
-                <CheckCircle2 className="w-10 h-10" />
-              </div>
-              <div className="space-y-2">
-                <h2 className="text-2xl sm:text-3xl font-black font-display text-text-primary">
-                  Order Confirmed!
-                </h2>
-                <p className="text-sm text-text-secondary">
-                  Your order has been dispatched to the restaurant kitchen.
-                </p>
-                <div className="inline-block bg-primary/10 border border-primary/30 px-4 py-1.5 rounded-full text-xs font-extrabold text-primary font-mono mt-2">
-                  Order ID: {orderSuccess}
+              {/* Top Header Row */}
+              <div className="flex items-center gap-3.5 pb-4 border-b border-border-color/60">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                  <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-lg sm:text-xl font-black font-display text-text-primary">
+                    Order Placed Successfully!
+                  </h3>
+                  <p className="text-xs text-text-muted font-medium">
+                    Dispatched to restaurant kitchen
+                  </p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-border-color/60 flex flex-col sm:flex-row gap-3 justify-center">
+              {/* Receipt Details Grid */}
+              <div className="bg-bg-dark/50 border border-border-color/70 rounded-2xl p-4 space-y-3 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-border-color/40">
+                  <span className="text-text-muted font-bold">Order ID</span>
+                  <span className="font-black font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                    #{orderSuccess}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-text-muted font-medium">Estimated Delivery</span>
+                  <span className="font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                    25 - 35 Mins
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-text-muted font-medium">Payment Method</span>
+                  <span className="font-extrabold text-text-primary">Cash on Delivery</span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-text-muted font-medium">Total Payable</span>
+                  <span className="font-black font-mono text-sm text-text-primary">
+                    ₹{grandTotal.toFixed(2)}
+                  </span>
+                </div>
+
+                {deliveryAddress && (
+                  <div className="pt-2 border-t border-border-color/40 space-y-0.5">
+                    <span className="text-text-muted font-bold block text-[10px] uppercase tracking-wider">Delivery Details</span>
+                    <p className="font-bold text-text-primary truncate">{customerName || 'Customer'} • {customerPhone}</p>
+                    <p className="text-[11px] text-text-muted truncate">{deliveryAddress}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Clean Action Buttons */}
+              <div className="pt-1 flex items-center gap-3">
                 <button
+                  type="button"
                   onClick={() => navigate('/orders')}
-                  className="px-6 py-3 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-3.5 px-4 rounded-2xl bg-primary hover:bg-primary-dark text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
                 >
                   <Clock className="w-4 h-4" />
                   <span>Track Live Order</span>
                 </button>
+
                 <button
+                  type="button"
                   onClick={() => navigate('/')}
-                  className="px-6 py-3 rounded-xl border border-border-color text-xs font-bold text-text-secondary hover:bg-bg-dark transition-colors cursor-pointer"
+                  className="px-5 py-3.5 rounded-2xl border border-border-color/80 text-xs font-bold text-text-secondary hover:bg-bg-dark transition-colors cursor-pointer active:scale-95"
                 >
-                  Continue Shopping
+                  Home
                 </button>
               </div>
             </motion.div>
@@ -385,8 +386,8 @@ export const CartPage: React.FC = () => {
             <CartPageSkeleton />
           ) : cartItems.length === 0 ? (
             /* EMPTY CART SCREEN */
-            <div className="text-center py-20 bg-card-bg border border-border-color rounded-3xl p-8 max-w-lg mx-auto space-y-6 shadow-xl">
-              <div className="w-24 h-24 rounded-full bg-primary/15 text-primary flex items-center justify-center mx-auto border border-primary/30 shadow-inner">
+            <div className="text-center py-20 bg-card-bg border border-border-color rounded-3xl p-8 max-w-lg mx-auto space-y-6">
+              <div className="w-24 h-24 rounded-full bg-primary/15 text-primary flex items-center justify-center mx-auto border border-primary/30">
                 <ShoppingBag className="w-12 h-12" />
               </div>
               <div className="space-y-2">
@@ -399,7 +400,7 @@ export const CartPage: React.FC = () => {
               </div>
               <button
                 onClick={() => navigate('/')}
-                className="px-8 py-3.5 rounded-2xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 inline-flex items-center gap-2 cursor-pointer"
+                className="px-8 py-3.5 rounded-2xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all inline-flex items-center gap-2 cursor-pointer"
               >
                 <Utensils className="w-4 h-4" />
                 <span>Explore Nearby Restaurants</span>
@@ -412,150 +413,132 @@ export const CartPage: React.FC = () => {
               {/* LEFT COLUMN: Cart Items List (7 cols) */}
               <div className={`lg:col-span-7 space-y-6 ${mobileStep === 2 ? 'hidden lg:block' : 'block'}`}>
 
-                {/* Free Delivery Progress Bar */}
-                <div className="bg-card-bg border border-border-color rounded-2xl p-4 shadow-sm space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="flex items-center gap-1.5 text-text-primary">
-                      <Truck className="w-4 h-4 text-primary" />
-                      <span>Free Delivery Status</span>
-                    </span>
-                    <span className={totalAmount >= freeDeliveryThreshold ? 'text-success' : 'text-primary'}>
-                      {totalAmount >= freeDeliveryThreshold
-                        ? '🎉 You unlocked FREE Delivery!'
-                        : `Add ₹${(freeDeliveryThreshold - totalAmount).toFixed(0)} more for FREE Delivery`}
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-bg-dark rounded-full overflow-hidden border border-border-color/50">
-                    <div
-                      className="h-full bg-primary transition-all duration-500 rounded-full"
-                      style={{ width: `${Math.min(100, (totalAmount / freeDeliveryThreshold) * 100)}%` }}
-                    />
-                  </div>
-                </div>
+                {/* Cart Items Cards (Scrollable List when many items added) */}
+                <div className="space-y-4 max-h-[58vh] sm:max-h-[62vh] lg:max-h-[70vh] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-border-color/80">
+                  {cartItems.map((item) => {
+                    const unitPrice = item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price);
+                    const itemSubtotal = unitPrice * item.quantity;
+                    const itemKey = item.itemKey || item.dish.id;
+                    const isVeg = (item.dish as any).isVeg ?? true;
 
-                {/* Cart Items Cards */}
-                <div className="space-y-4">
-                  {cartItems.map((item) => (
-                    <motion.div
-                      key={item.itemKey || item.dish.id}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      className="bg-card-bg border border-border-color rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                    >
-                      {/* Image & Title */}
-                      <div className="flex items-center gap-4 w-full sm:w-auto">
-                        <img
-                          src={item.dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
-                          alt={item.dish.name}
-                          className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl object-cover border border-border-color shrink-0 shadow-xs"
-                        />
-                        <div className="space-y-1">
-                          <h4 className="text-sm sm:text-base font-extrabold text-text-primary font-display leading-snug">
-                            {item.dish.name}
-                          </h4>
-                          {item.dish.category && (
-                            <span className="inline-block text-[11px] font-semibold text-text-muted bg-bg-dark px-2 py-0.5 rounded-md border border-border-color/50">
-                              {item.dish.category}
+                    return (
+                      <motion.div
+                        key={itemKey}
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="bg-white dark:bg-card-bg/90 border border-slate-200/90 dark:border-border-color/80 hover:border-primary/40 rounded-2xl p-4 sm:p-5 transition-all space-y-3.5 group"
+                      >
+                        {/* Top: Image, Title, Category & Unit Price */}
+                        <div className="flex items-start gap-3.5 sm:gap-4">
+                          {/* Dish Image */}
+                          <div className="relative w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl overflow-hidden border border-border-color/80 shrink-0 bg-bg-dark">
+                            <img
+                              src={item.dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
+                              alt={item.dish.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          </div>
+
+                          {/* Details Stack */}
+                          <div className="flex-1 min-w-0 space-y-1">
+                            {/* 1. Category & Variant Badges + Remove Button */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                {item.dish.category && (
+                                  <span className="inline-block text-[10px] font-bold text-text-muted bg-bg-dark/90 px-2 py-0.5 rounded-md border border-border-color/60">
+                                    {item.dish.category}
+                                  </span>
+                                )}
+                                {item.selectedVariant && item.selectedVariant.name && (
+                                  <span className="inline-block text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                                    {item.selectedVariant.name}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Remove Item Trash Button */}
+                              <button
+                                type="button"
+                                onClick={() => removeFromCart(itemKey)}
+                                className="w-7 h-7 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 flex items-center justify-center transition-all cursor-pointer shrink-0 active:scale-90"
+                                title="Remove item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* 2. Product / Item Name Row */}
+                            <div className="flex items-center gap-1.5 min-w-0 pt-0.5">
+                              {/* Veg / Non-Veg Icon Indicator */}
+                              <span className={`w-3.5 h-3.5 border-2 flex items-center justify-center rounded-xs shrink-0 ${isVeg ? 'border-emerald-600' : 'border-rose-600'}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                              </span>
+                              <h4 className="text-sm sm:text-base font-black text-text-primary font-display leading-tight truncate">
+                                {item.dish.name}
+                              </h4>
+                            </div>
+
+                            {/* 3. Unit Price Display */}
+                            <p className="text-xs font-bold text-text-muted font-mono pt-0.5">
+                              ₹{unitPrice.toFixed(2)} <span className="text-[10px] font-medium text-text-muted/70 font-sans">each</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Bottom Row: Quantity Stepper & Item Subtotal */}
+                        <div className="flex items-center justify-between pt-3 border-t border-border-color/60 gap-3">
+                          {/* Quantity Stepper Box */}
+                          <div className="flex items-center bg-bg-dark/90 border border-border-color/80 rounded-xl p-1">
+                            <button
+                              type="button"
+                              onClick={() => reduceQuantity(itemKey)}
+                              className="w-7 h-7 rounded-lg bg-card-bg hover:bg-primary text-text-secondary hover:text-white font-bold flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                              title="Decrease quantity"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="w-8 text-center font-black text-sm text-text-primary font-mono">
+                              {item.quantity}
                             </span>
-                          )}
-                          <p className="text-xs font-bold text-primary font-mono pt-0.5">
-                            ₹{(item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price)).toFixed(2)} each
-                          </p>
-                        </div>
-                      </div>
+                            <button
+                              type="button"
+                              onClick={() => incrementQuantity(itemKey)}
+                              className="w-7 h-7 rounded-lg bg-card-bg hover:bg-primary text-text-secondary hover:text-white font-bold flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                              title="Increase quantity"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
 
-                      {/* Quantity Stepper & Subtotal */}
-                      <div className="flex items-center justify-between sm:justify-end gap-4 sm:gap-6 w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-border-color/60">
-                        {/* Stepper */}
-                        <div className="flex items-center bg-bg-dark/80 border border-border-color rounded-xl p-1 shadow-inner">
-                          <button
-                            type="button"
-                            onClick={() => reduceQuantity(item.itemKey || item.dish.id)}
-                            className="w-7 h-7 rounded-lg bg-card-bg hover:bg-primary text-text-secondary hover:text-white font-bold flex items-center justify-center transition-all cursor-pointer"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="w-8 text-center font-extrabold text-sm text-text-primary font-mono">
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => incrementQuantity(item.itemKey || item.dish.id)}
-                            className="w-7 h-7 rounded-lg bg-card-bg hover:bg-primary text-text-secondary hover:text-white font-bold flex items-center justify-center transition-all cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Subtotal Pill */}
+                          <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/25 px-3 py-1.5 rounded-xl">
+                            <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                              Subtotal
+                            </span>
+                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                              ₹{itemSubtotal.toFixed(2)}
+                            </span>
+                          </div>
                         </div>
-
-                        {/* Subtotal */}
-                        <div className="text-right shrink-0 min-w-[70px]">
-                          <span className="text-[10px] font-bold text-text-muted block uppercase tracking-wider">Subtotal</span>
-                          <span className="text-sm font-black text-text-primary font-mono">
-                            ₹{((item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price)) * item.quantity).toFixed(2)}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => removeFromCart(item.itemKey || item.dish.id)}
-                          className="p-2 rounded-xl hover:bg-error/15 text-text-muted hover:text-error transition-colors cursor-pointer shrink-0"
-                          title="Remove item"
-                        >
-                          <Trash2 className="w-4.5 h-4.5" />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
 
-                {/* Coupon Code Section */}
-                <div className="bg-card-bg border border-border-color rounded-2xl p-5 shadow-sm space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Ticket className="w-4 h-4 text-primary" />
-                    <h4 className="text-xs font-black text-text-primary uppercase tracking-wider">
-                      Apply Promo / Coupon Code
-                    </h4>
-                  </div>
-                  <form onSubmit={handleApplyCoupon} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      placeholder="Try FOODWAY10 or FREEDEL"
-                      className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-border-color text-xs text-text-primary uppercase font-mono tracking-wider focus:outline-none focus:border-primary"
-                    />
-                    <button
-                      type="submit"
-                      className="px-5 py-2.5 rounded-xl bg-primary/15 hover:bg-primary/25 border border-primary/30 text-primary text-xs font-bold cursor-pointer transition-all shrink-0"
-                    >
-                      Apply
-                    </button>
-                  </form>
-                  {appliedCoupon && (
-                    <div className="text-xs text-success font-bold flex items-center gap-1.5 pt-1">
-                      <Check className="w-4 h-4" />
-                      <span>Coupon '{appliedCoupon.code}' applied! Saved ₹{appliedCoupon.discount}</span>
-                    </div>
-                  )}
-                  {couponError && (
-                    <p className="text-xs text-error font-semibold pt-1">{couponError}</p>
-                  )}
-                </div>
-
-                {/* Mobile Step 1 -> Step 2 Button */}
-                <div className="pt-4 lg:hidden">
+                {/* Mobile Step 1 -> Step 2 Button (Inline below items list) */}
+                <div className="pt-2 lg:hidden">
                   <button
                     type="button"
                     onClick={() => setMobileStep(2)}
-                    className="w-full py-4 px-6 rounded-2xl bg-primary text-white font-black shadow-xl flex items-center justify-between cursor-pointer active:scale-95 transition-transform"
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 text-white font-black flex items-center justify-between cursor-pointer active:scale-98 transition-all border border-white/20 shadow-md"
                   >
                     <div className="text-left">
-                      <span className="text-[10px] uppercase tracking-wider block opacity-80">Subtotal</span>
-                      <span className="text-sm font-black font-mono">₹{totalAmount.toFixed(2)}</span>
+                      <span className="text-[9px] uppercase tracking-wider block opacity-90 font-bold">Cart Subtotal</span>
+                      <span className="text-base font-black font-mono leading-none">₹{totalAmount.toFixed(2)}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs uppercase tracking-wider">
+                    <div className="flex items-center gap-2 bg-white text-emerald-700 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider hover:bg-slate-50 transition-colors">
                       <span>Proceed to Checkout</span>
                       <ArrowRight className="w-4 h-4" />
                     </div>
@@ -565,35 +548,30 @@ export const CartPage: React.FC = () => {
 
               {/* RIGHT COLUMN: Checkout & Saved Address Selector (5 cols) */}
               <div className={`lg:col-span-5 space-y-6 ${mobileStep === 1 ? 'hidden lg:block' : 'block'}`}>
-                <form onSubmit={handlePlaceOrder} className="bg-card-bg border border-border-color rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
-                  {/* Ambient Glow */}
-                  <div className="absolute top-0 right-0 w-60 h-60 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-
+                <form onSubmit={handlePlaceOrder} className="bg-white dark:bg-card-bg/95 border border-slate-200/90 dark:border-border-color/80 rounded-3xl p-5 sm:p-7 space-y-5 relative overflow-hidden">
                   {/* Header Title */}
-                  <div className="flex items-center justify-between border-b border-border-color/60 pb-4 relative z-10">
-                    <h3 className="text-lg font-black font-display text-text-primary flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-primary" />
-                      <span>Delivery Details</span>
-                    </h3>
-                    {mobileStep === 2 && (
-                      <button
-                        type="button"
-                        onClick={() => setMobileStep(1)}
-                        className="lg:hidden text-xs font-bold text-primary hover:underline"
-                      >
-                        Edit Items
-                      </button>
-                    )}
+                  <div className="flex items-center justify-between border-b border-border-color/60 pb-3.5 relative z-10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                        <MapPin className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base sm:text-lg font-black font-display text-text-primary">
+                          Delivery Details
+                        </h3>
+                        <p className="text-[10px] text-text-muted font-medium">Step 2: Address & Payment</p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="space-y-5 relative z-10">
+                  <div className="space-y-4.5 relative z-10">
 
                     {/* SAVED ADDRESSES SELECTOR */}
                     {isAuthenticated && user && (user.addresses || []).length > 0 && (
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
-                          <label className="block text-xs font-extrabold text-text-primary uppercase tracking-wider">
-                            Select Saved Delivery Address
+                          <label className="block text-[11px] font-black text-text-primary uppercase tracking-wider">
+                            Select Saved Address
                           </label>
                           <button
                             type="button"
@@ -605,42 +583,37 @@ export const CartPage: React.FC = () => {
                           </button>
                         </div>
 
-                        <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                        <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                           {(user.addresses || []).map((addr: Address) => {
                             const isSelected = selectedAddressId === addr.id && !isCustomAddress;
                             return (
                               <div
                                 key={addr.id}
                                 onClick={() => handleSelectAddressCard(addr)}
-                                className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                                className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
                                   isSelected
-                                    ? 'bg-primary/15 border-primary ring-2 ring-primary/30 text-text-primary shadow-md'
-                                    : 'bg-bg-dark/50 border-border-color text-text-secondary hover:border-primary/40'
+                                    ? 'bg-primary/10 border-primary ring-2 ring-primary/20 text-text-primary'
+                                    : 'bg-bg-dark/40 border-border-color/80 text-text-secondary hover:border-primary/40'
                                 }`}
                               >
-                                <div className="space-y-1 text-xs">
+                                <div className="space-y-1 text-xs min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <span className="px-2 py-0.5 rounded-full bg-bg-dark border border-border-color text-[10px] font-bold text-text-primary uppercase tracking-wider flex items-center gap-1">
+                                    <span className="px-2 py-0.5 rounded-md bg-bg-dark border border-border-color text-[10px] font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1">
                                       {addr.label === 'Home' && <Home className="w-3 h-3 text-primary" />}
                                       {addr.label === 'Work' && <Briefcase className="w-3 h-3 text-primary" />}
                                       {addr.label !== 'Home' && addr.label !== 'Work' && <Navigation className="w-3 h-3 text-primary" />}
                                       <span>{addr.label || 'Address'}</span>
                                     </span>
                                     {addr.isDefault && (
-                                      <span className="text-[9px] font-black text-success uppercase">Default</span>
+                                      <span className="text-[9px] font-black text-emerald-500 uppercase">Default</span>
                                     )}
                                   </div>
-                                  <p className="font-bold text-text-primary">{addr.fullName || user.name}</p>
-                                  <p className="text-[11px] text-text-muted leading-tight">
+                                  <p className="font-extrabold text-text-primary truncate">{addr.fullName || user.name}</p>
+                                  <p className="text-[11px] text-text-muted leading-tight line-clamp-2">
                                     {addr.street}, {addr.city} {addr.pincode}
                                   </p>
-                                  {addr.latitude && addr.longitude && (
-                                    <p className="text-[10px] text-primary font-mono flex items-center gap-1 pt-0.5">
-                                      <MapPin className="w-3 h-3 text-primary" /> GPS Pinned
-                                    </p>
-                                  )}
                                 </div>
-                                <div className="pt-1">
+                                <div className="pt-0.5 shrink-0">
                                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
                                     isSelected ? 'bg-primary border-primary text-white' : 'border-border-color'
                                   }`}>
@@ -654,8 +627,8 @@ export const CartPage: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Customer Contact & Address Override */}
-                    <div className="space-y-3.5 pt-2 border-t border-border-color/60">
+                    {/* Customer Contact & Address Inputs */}
+                    <div className="space-y-3 pt-1 border-t border-border-color/60">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
@@ -668,7 +641,7 @@ export const CartPage: React.FC = () => {
                               required
                               value={customerName}
                               onChange={(e) => setCustomerName(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary"
+                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
                               placeholder="Full Name"
                             />
                           </div>
@@ -685,7 +658,7 @@ export const CartPage: React.FC = () => {
                               required
                               value={customerPhone}
                               onChange={(e) => setCustomerPhone(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary"
+                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary font-medium font-mono"
                               placeholder="Mobile Number"
                             />
                           </div>
@@ -705,8 +678,8 @@ export const CartPage: React.FC = () => {
                             setDeliveryAddress(e.target.value);
                             setIsCustomAddress(true);
                           }}
-                          className="w-full p-3 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary resize-none"
-                          placeholder="House No, Street, Locality, City, Pincode"
+                          className="w-full p-3 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary resize-none font-medium leading-relaxed"
+                          placeholder="House No, Flat, Street, Locality, City, Pincode"
                         />
                       </div>
 
@@ -719,112 +692,108 @@ export const CartPage: React.FC = () => {
                           type="text"
                           value={instructions}
                           onChange={(e) => setInstructions(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary"
-                          placeholder="e.g. Leave with security, don't ring doorbell"
+                          className="w-full px-3 py-2.5 rounded-xl bg-bg-dark/60 border border-border-color text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                          placeholder="e.g. Leave with security, ring doorbell"
                         />
                       </div>
                     </div>
 
-                    {/* Payment Method Selector */}
-                    <div className="space-y-2 pt-3 border-t border-border-color/60">
-                      <label className="block text-xs font-extrabold text-text-primary uppercase tracking-wider">
+                    {/* Simplified Payment Method Reassurance Badge (Cash on Delivery) */}
+                    <div className="space-y-1.5 pt-2 border-t border-border-color/60">
+                      <label className="block text-[11px] font-extrabold text-text-primary uppercase tracking-wider">
                         Payment Method
                       </label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { id: 'CASH_ON_DELIVERY', label: 'Cash / Pay on Delivery', sub: 'COD' },
-                          { id: 'UPI', label: 'UPI / QR Code', sub: 'GPay, PhonePe, Paytm' }
-                        ].map(pm => (
-                          <button
-                            key={pm.id}
-                            type="button"
-                            onClick={() => setPaymentMethod(pm.id as any)}
-                            className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                              paymentMethod === pm.id
-                                ? 'bg-primary/15 border-primary text-primary font-bold shadow-sm'
-                                : 'bg-bg-dark/40 border-border-color text-text-secondary hover:border-primary/40'
-                            }`}
-                          >
-                            <span className="text-xs font-bold">{pm.label}</span>
-                            <span className="text-[10px] text-text-muted mt-0.5">{pm.sub}</span>
-                          </button>
-                        ))}
+                      <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                          <span className="font-extrabold text-text-primary">Cash / Pay on Delivery (COD)</span>
+                        </div>
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase bg-emerald-500/15 px-2 py-0.5 rounded-md">
+                          Verified
+                        </span>
                       </div>
                     </div>
 
                     {/* Bill Breakdown Summary */}
-                    <div className="pt-4 border-t border-border-color/60 space-y-2.5 text-xs">
-                      <div className="flex justify-between text-text-secondary">
-                        <span>Items Subtotal</span>
-                        <span className="text-text-primary font-bold font-mono">₹{totalAmount.toFixed(2)}</span>
-                      </div>
-
-                      {couponDiscount > 0 && (
-                        <div className="flex justify-between text-success font-bold">
-                          <span>Promo Coupon Discount</span>
-                          <span className="font-mono">- ₹{couponDiscount.toFixed(2)}</span>
+                    <div className="pt-2 border-t border-border-color/60 space-y-3">
+                      <div className="bg-bg-dark/50 border border-border-color/80 rounded-2xl p-4 space-y-3 text-xs">
+                        {/* Items Subtotal */}
+                        <div className="flex justify-between items-center text-text-secondary">
+                          <span className="flex items-center gap-2 font-bold text-text-primary">
+                            <IndianRupee className="w-4 h-4 text-emerald-500" />
+                            <span>Items Subtotal</span>
+                          </span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-extrabold font-mono text-sm">
+                            ₹{totalAmount.toFixed(2)}
+                          </span>
                         </div>
-                      )}
 
-                      <div className="flex justify-between text-text-secondary">
-                        <span className="flex items-center gap-1">
-                          <span>Delivery Fee</span>
-                          {calculatedDistanceKm ? (
-                            <span className="text-[10px] text-primary font-mono font-semibold">
-                              ({calculatedDistanceKm} km @ ₹{deliveryFeePerKm}/km)
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-text-muted font-mono">
-                              (Base rate @ ₹{deliveryFeePerKm}/km)
-                            </span>
-                          )}
-                        </span>
-                        <span className={deliveryFee === 0 ? 'text-success font-bold font-mono' : 'text-text-primary font-bold font-mono'}>
-                          {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}
-                        </span>
+                        {/* Delivery Fee */}
+                        <div className="flex justify-between items-center text-text-secondary pt-2.5 border-t border-border-color/40">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-semibold text-text-primary">Delivery Fee</span>
+                            {calculatedDistanceKm ? (
+                              <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-border-color/60">
+                                {calculatedDistanceKm} km @ ₹{deliveryFeePerKm}/km
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-border-color/60">
+                                Base rate @ ₹{deliveryFeePerKm}/km
+                              </span>
+                            )}
+                          </div>
+                          <span className={deliveryFee === 0 ? 'text-emerald-500 font-black font-mono text-xs bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20' : 'text-text-primary font-bold font-mono text-sm'}>
+                            {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="pt-3 border-t border-border-color/80 flex justify-between items-center">
+                      {/* Final To Pay Grand Total Banner */}
+                      <div className="bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-teal-500/10 border border-emerald-500/30 rounded-2xl p-4 flex justify-between items-center">
                         <div>
-                          <span className="text-sm font-black text-text-primary block font-display">To Pay</span>
-                          <span className="text-[10px] text-text-muted">No hidden charges</span>
+                          <span className="text-xs font-black text-text-primary uppercase tracking-wider block font-display">
+                            Total Amount To Pay
+                          </span>
+                          <span className="text-[10px] text-text-muted font-medium">Includes taxes & charges</span>
                         </div>
-                        <span className="text-2xl font-black text-primary font-mono">
+                        <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono tracking-tight">
                           ₹{grandTotal.toFixed(2)}
                         </span>
                       </div>
                     </div>
 
-                    {/* Submit CTA Action Button */}
-                    {!isAuthenticated || !user ? (
-                      <div className="space-y-3 pt-2">
-                        <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/30 flex items-start gap-2.5 text-xs text-primary">
-                          <Lock className="w-4 h-4 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="font-bold block">Login Required</span>
-                            <span>Log in to your account to place your delivery order.</span>
+                    {/* Submit CTA Action Button (with clear top spacing gap) */}
+                    <div className="pt-3 sm:pt-4">
+                      {!isAuthenticated || !user ? (
+                        <div className="space-y-2.5">
+                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-600 dark:text-amber-400">
+                            <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold block">Login Required</span>
+                              <span>Log in to your account to place your delivery order.</span>
+                            </div>
                           </div>
-                        </div>
 
+                          <button
+                            type="button"
+                            onClick={() => navigate('/login', { state: { from: '/cart' } })}
+                            className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark text-white font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 shadow-md"
+                          >
+                            <Lock className="w-4 h-4" />
+                            <span>Log In to Place Order</span>
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          type="button"
-                          onClick={() => navigate('/login', { state: { from: '/cart' } })}
-                          className="w-full py-4 rounded-2xl bg-primary text-white font-black text-xs uppercase tracking-wider hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer"
+                          type="submit"
+                          disabled={isPlacingOrder}
+                          className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark text-white font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-98 shadow-md"
                         >
-                          <Lock className="w-4 h-4" />
-                          <span>Log In to Place Order</span>
+                          <ShieldCheck className="w-5 h-5" />
+                          <span>{isPlacingOrder ? 'Dispatching Order...' : 'Place Order Now'}</span>
                         </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="submit"
-                        disabled={isPlacingOrder}
-                        className="w-full py-4 rounded-2xl bg-primary text-white font-black text-xs uppercase tracking-wider hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        <ShieldCheck className="w-5 h-5" />
-                        <span>{isPlacingOrder ? 'Dispatching Order...' : 'Place Order Now'}</span>
-                      </button>
-                    )}
+                      )}
+                    </div>
 
                   </div>
                 </form>
