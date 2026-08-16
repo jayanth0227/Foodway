@@ -60,5 +60,6 @@ export const ordersTableName = process.env.AWS_DYNAMODB_ORDERS_TABLE_NAME || 'fo
 export const orderItemsTableName = process.env.AWS_DYNAMODB_ORDER_ITEMS_TABLE_NAME || 'foodway-order-items';
 export const deliveryTableName = process.env.AWS_DYNAMODB_DELIVERY_TABLE_NAME || 'foodway-delivery';
 export const deliveryLocationsTableName = process.env.AWS_DYNAMODB_DELIVERY_LOCATIONS_TABLE_NAME || 'foodway-delivery-locations';
+export const categoriesTableName = process.env.AWS_DYNAMODB_CATEGORIES_TABLE_NAME || 'foodway-categories';
 
 

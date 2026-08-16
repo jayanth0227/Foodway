@@ -51,7 +51,7 @@ export const DeliveryDashboard: React.FC = () => {
         email: user?.email,
         isOnDuty: nextDutyState
       });
-      socketService.getIO().emit('partner_duty_updated', {
+      (socketService as any).getIO().emit('partner_duty_updated', {
         userId: user?.id,
         name: user?.name,
         email: user?.email,

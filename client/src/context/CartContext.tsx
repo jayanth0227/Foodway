@@ -54,7 +54,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync with Backend & WebSockets on user auth/mount
   useEffect(() => {
     const user = getCurrentUser();
-    const userId = user?.id || user?.userId;
+    const userId = user?.id || (user as any)?.userId;
     if (!userId) return;
 
     // Join Customer Socket Room
@@ -96,7 +96,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const user = getCurrentUser();
-    const userId = user?.id || user?.userId;
+    const userId = user?.id || (user as any)?.userId;
     if (userId && !isRemoteSyncingRef.current) {
       axios.put(`${API_BASE_URL}/cart/${userId}`, { cartItems })
         .catch(err => console.warn('Cart push sync warning:', err));

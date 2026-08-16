@@ -127,6 +127,7 @@ interface FoodItem {
   image: string;
   isAvailable: boolean;
   isCategoryFavourite?: boolean;
+  variants?: any[];
   status: 'active' | 'disabled';
 }
 
@@ -250,10 +251,7 @@ export const RestaurantDashboard: React.FC = () => {
       .toLowerCase();
 
   const openAddCategoryModal = () => {
-    const activeSuggestions = SUGGESTED_CATEGORIES.filter(sugg =>
-      categories.some(c => c.toLowerCase() === sugg.toLowerCase() || normCat(c) === normCat(sugg))
-    );
-    setSelectedSuggestions(activeSuggestions);
+    setSelectedSuggestions([]);
     setNewCategoryName('');
     setCategoryError(null);
     setIsAddCategoryOpen(true);
@@ -470,11 +468,14 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Load Menu, Categories, Orders and Restaurant Status
   const loadRestaurantData = async (resId: string) => {
+    let targetId = resId;
+
     // Load Latest Shop Profile & Coordinates from DynamoDB
     try {
       const shopResp = await axios.get(`${API_BASE_URL}/shops/${resId}`);
       if (shopResp.data && shopResp.data.success && (shopResp.data.shop || shopResp.data.restaurant)) {
         const fetchedShop = shopResp.data.shop || shopResp.data.restaurant;
+        targetId = fetchedShop.id || fetchedShop.shopId || fetchedShop.restaurantId || resId;
         setRestaurant(fetchedShop);
         setProfileForm(prev => ({
           ...prev,
@@ -500,7 +501,7 @@ export const RestaurantDashboard: React.FC = () => {
 
     // Load Restaurant Status
     try {
-      const statusResp = await axios.get(`${API_BASE_URL}/restaurant/status/${resId}`);
+      const statusResp = await axios.get(`${API_BASE_URL}/restaurant/status/${targetId}`);
       if (statusResp.data && typeof statusResp.data.isOpen === 'boolean') {
         setIsRestaurantOpen(statusResp.data.isOpen);
       }
@@ -508,31 +509,40 @@ export const RestaurantDashboard: React.FC = () => {
       console.warn('Failed to fetch restaurant status:', e);
     }
 
-    // Load Categories
+    // Load Categories from Database
     try {
-      const catResp = await axios.get(`${API_BASE_URL}/restaurant/categories/${resId}`);
-      if (catResp.data.success && Array.isArray(catResp.data.categories)) {
+      const catResp = await axios.get(`${API_BASE_URL}/restaurant/categories/${targetId}`);
+      if (catResp.data && catResp.data.success && Array.isArray(catResp.data.categories)) {
         setCategories(catResp.data.categories);
+      } else if (resId !== targetId) {
+        const fallbackCat = await axios.get(`${API_BASE_URL}/restaurant/categories/${resId}`);
+        if (fallbackCat.data && fallbackCat.data.success && Array.isArray(fallbackCat.data.categories)) {
+          setCategories(fallbackCat.data.categories);
+        }
       }
     } catch (e) {
       console.warn('Failed to fetch categories:', e);
     }
 
-    // Load Menu
+    // Load Menu from DynamoDB
     try {
-      const resp = await axios.get(`${API_BASE_URL}/restaurant/menu/${resId}`);
-      if (resp.data.success && resp.data.items && resp.data.items.length > 0) {
+      const resp = await axios.get(`${API_BASE_URL}/restaurant/menu/${targetId}`);
+      if (resp.data.success && Array.isArray(resp.data.items) && resp.data.items.length > 0) {
         setMenuItems(resp.data.items);
       } else {
-        setMenuItems(getInitialMenuItems(resId));
+        // Retry with resId if targetId returned empty
+        const fallbackResp = await axios.get(`${API_BASE_URL}/restaurant/menu/${resId}`);
+        if (fallbackResp.data.success && Array.isArray(fallbackResp.data.items) && fallbackResp.data.items.length > 0) {
+          setMenuItems(fallbackResp.data.items);
+        }
       }
     } catch (e) {
-      setMenuItems(getInitialMenuItems(resId));
+      console.warn('Failed to fetch menu items from database:', e);
     }
 
     // Load Orders from DynamoDB database
     try {
-      const resp = await axios.get(`${API_BASE_URL}/restaurant/orders/${resId}`);
+      const resp = await axios.get(`${API_BASE_URL}/restaurant/orders/${targetId}`);
       if (resp.data.success && Array.isArray(resp.data.orders)) {
         setOrders(resp.data.orders);
       } else {
@@ -712,55 +722,45 @@ export const RestaurantDashboard: React.FC = () => {
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const categoriesToSave = [...selectedSuggestions];
-    if (newCategoryName.trim() && !categoriesToSave.some(c => c.toLowerCase() === newCategoryName.trim().toLowerCase())) {
+    const categoriesToSave = [...categories];
+    const existingNorms = new Set(categories.map(c => normCat(c)));
+
+    for (const sug of selectedSuggestions) {
+      if (!existingNorms.has(normCat(sug))) {
+        categoriesToSave.push(sug);
+        existingNorms.add(normCat(sug));
+      }
+    }
+
+    if (newCategoryName.trim() && !existingNorms.has(normCat(newCategoryName.trim()))) {
       categoriesToSave.push(newCategoryName.trim());
+    }
+
+    if (categoriesToSave.length === categories.length) {
+      setIsAddCategoryOpen(false);
+      return;
     }
 
     setIsSavingCategory(true);
     setCategoryError(null);
 
-    const resId = restaurant?.id || restaurant?.name || 'RES-001';
-
-    // 1. Identify categories that were DESELECTED and need to be deleted
-    const categoriesToRemove = categories.filter(existing =>
-      !categoriesToSave.some(saving => existing === saving || normCat(existing) === normCat(saving))
-    );
-
-    // 2. Identify new categories that need to be saved
-    const categoriesToAdd = categoriesToSave.filter(saving =>
-      !categories.some(existing => existing === saving || normCat(existing) === normCat(saving))
-    );
-
-    let updatedCatList = [...categoriesToSave];
+    const currUser = getCurrentUser();
+    const resId = restaurant?.shopId || restaurant?.id || (restaurant as any)?.email || currUser?.id || currUser?.email || 'RES-001';
 
     try {
-      // Execute deletions for deselected categories
-      for (const removeCat of categoriesToRemove) {
-        try {
-          await axios.delete(`${API_BASE_URL}/restaurant/categories/${resId}/${encodeURIComponent(removeCat)}`);
-        } catch (e) {
-          console.warn('Failed removing category during sync:', removeCat, e);
-        }
+      const resp = await axios.put(`${API_BASE_URL}/restaurant/categories/${resId}/set`, {
+        categories: categoriesToSave
+      });
+
+      if (resp.data.success && Array.isArray(resp.data.categories)) {
+        setCategories(resp.data.categories);
+      } else {
+        setCategories(categoriesToSave);
       }
 
-      // Execute additions for newly selected categories
-      for (const addCat of categoriesToAdd) {
-        try {
-          const resp = await axios.post(`${API_BASE_URL}/restaurant/categories/${resId}`, {
-            name: addCat
-          });
-          if (resp.data.success && resp.data.categories) {
-            updatedCatList = resp.data.categories;
-          }
-        } catch (e) {
-          console.warn('Failed adding category during sync:', addCat, e);
-        }
-      }
-
-      setCategories(updatedCatList);
       logActivity('menu', `Updated menu categories.`);
       setNewCategoryName('');
+      setSelectedSuggestions([]);
       setIsAddCategoryOpen(false);
     } catch (err: any) {
       const errorMsg = err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to update categories.';
@@ -776,8 +776,9 @@ export const RestaurantDashboard: React.FC = () => {
       return;
     }
 
+    const currUser = getCurrentUser();
     const newName = editingCategoryValue.trim();
-    const resId = restaurant?.id || restaurant?.name || 'RES-001';
+    const resId = restaurant?.shopId || restaurant?.id || (restaurant as any)?.email || currUser?.id || currUser?.email || 'RES-001';
 
     try {
       const resp = await axios.put(`${API_BASE_URL}/restaurant/categories/${resId}`, {
@@ -799,7 +800,8 @@ export const RestaurantDashboard: React.FC = () => {
   };
 
   const handleDeleteCategorySubmit = async (catName: string) => {
-    const resId = restaurant?.id || restaurant?.name || 'RES-001';
+    const currUser = getCurrentUser();
+    const resId = restaurant?.shopId || restaurant?.id || (restaurant as any)?.email || currUser?.id || currUser?.email || 'RES-001';
     const targetNorm = normCat(catName);
 
     // Instant UI update
@@ -980,7 +982,8 @@ export const RestaurantDashboard: React.FC = () => {
       return;
     }
 
-    const resId = restaurant?.id || 'RES-001';
+    const currUser = getCurrentUser();
+    const resId = restaurant?.shopId || restaurant?.id || (restaurant as any)?.email || currUser?.id || currUser?.email || 'RES-001';
 
     if (cleanCategory && !categories.includes(cleanCategory)) {
       setCategories(prev => [...prev, cleanCategory]);
