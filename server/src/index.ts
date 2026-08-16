@@ -24,11 +24,13 @@ import { menuService } from './services/menu.service';
 import { orderService } from './services/order.service';
 import { orderItemRepository } from './repositories/orderItem.repository';
 import { RestaurantStatus } from './types/enums';
-import { restaurantService } from './services/restaurant.service';
+import shopService, { restaurantService } from './services/restaurant.service';
+import { shopRepository } from './repositories/shop.repository';
 import { userService } from './services/user.service';
 import { hashPassword } from './utils/hash.utils';
 import { generateUserId } from './utils/idGenerator';
 import { socketService } from './services/socket.service';
+import categoryService from './services/category.service';
 
 const app = express();
 const httpServer = createServer(app);
@@ -353,30 +355,84 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
 // Public Endpoint: Fetch All Unique Categories dynamically from DynamoDB
 app.get('/api/public/categories', async (req: Request, res: Response) => {
   try {
-    const scanCommand = new ScanCommand({ TableName: menuItemsTableName });
-    const response = await dynamoDocClient.send(scanCommand);
-    const items = response.Items || [];
-
     const categoryMap: Record<string, { id: string; name: string; description: string; itemCount: number; restaurants: Set<string>; image: string }> = {};
 
-    items.forEach((item: any) => {
-      const catName = item.category || 'Main Course';
-      if (!categoryMap[catName]) {
-        categoryMap[catName] = {
-          id: `cat_${catName.toLowerCase().replace(/\s+/g, '_')}`,
-          name: catName,
-          description: `Signature selection of ${catName} items from top kitchens.`,
-          itemCount: 1,
-          restaurants: new Set(item.restaurantId ? [item.restaurantId] : []),
-          image: item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
-        };
-      } else {
-        categoryMap[catName].itemCount += 1;
-        if (item.restaurantId) {
-          categoryMap[catName].restaurants.add(item.restaurantId);
+    // 1. Read categories saved in foodway-categories table
+    try {
+      const allDbCats = await categoryService.getAllCategories();
+      allDbCats.forEach((c: any) => {
+        const catName = (c.name || '').trim();
+        if (!catName || catName === 'Uncategorized') return;
+        if (!categoryMap[catName]) {
+          categoryMap[catName] = {
+            id: `cat_${catName.toLowerCase().replace(/\s+/g, '_')}`,
+            name: catName,
+            description: c.description || `Signature selection of ${catName} items from top kitchens.`,
+            itemCount: 0,
+            restaurants: new Set(c.restaurantId ? [c.restaurantId] : []),
+            image: c.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+          };
+        } else if (c.restaurantId) {
+          categoryMap[catName].restaurants.add(c.restaurantId);
         }
-      }
-    });
+      });
+    } catch (e) { }
+
+    // 2. Scan food items table for categories on food items
+    try {
+      const scanCommand = new ScanCommand({ TableName: menuItemsTableName });
+      const response = await dynamoDocClient.send(scanCommand);
+      const items = response.Items || [];
+
+      items.forEach((item: any) => {
+        const catName = (item.category || 'Main Course').trim();
+        if (!catName || catName === 'Uncategorized') return;
+
+        if (!categoryMap[catName]) {
+          categoryMap[catName] = {
+            id: `cat_${catName.toLowerCase().replace(/\s+/g, '_')}`,
+            name: catName,
+            description: `Signature selection of ${catName} items from top kitchens.`,
+            itemCount: 1,
+            restaurants: new Set(item.restaurantId ? [item.restaurantId] : []),
+            image: item.foodImage || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+          };
+        } else {
+          categoryMap[catName].itemCount += 1;
+          if (item.restaurantId) {
+            categoryMap[catName].restaurants.add(item.restaurantId);
+          }
+          if (!categoryMap[catName].image && (item.foodImage || item.image)) {
+            categoryMap[catName].image = item.foodImage || item.image;
+          }
+        }
+      });
+    } catch (e) { }
+
+    // 3. Scan shop profiles for categories
+    try {
+      const allShops = await restaurantService.getAllRestaurants();
+      allShops.forEach((shop: any) => {
+        if (Array.isArray(shop.categories)) {
+          shop.categories.forEach((catName: string) => {
+            const trimmed = (catName || '').trim();
+            if (!trimmed || trimmed === 'Uncategorized') return;
+            if (!categoryMap[trimmed]) {
+              categoryMap[trimmed] = {
+                id: `cat_${trimmed.toLowerCase().replace(/\s+/g, '_')}`,
+                name: trimmed,
+                description: `Signature selection of ${trimmed} items from top kitchens.`,
+                itemCount: 0,
+                restaurants: new Set(shop.id || shop.restaurantId || shop.shopId ? [shop.id || shop.restaurantId || shop.shopId] : []),
+                image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+              };
+            } else if (shop.id || shop.restaurantId || shop.shopId) {
+              categoryMap[trimmed].restaurants.add(shop.id || shop.restaurantId || shop.shopId);
+            }
+          });
+        }
+      });
+    } catch (e) { }
 
     const categories = Object.values(categoryMap).map(c => ({
       id: c.id,
@@ -1244,19 +1300,47 @@ app.post('/api/restaurant/login', async (req: Request, res: Response) => {
   }
 });
 
-// Fetch Menu Items for a specific Restaurant
+// Fetch Menu Items for a specific Restaurant (Resolves all vendor aliases & active establishment categories)
 app.get('/api/restaurant/menu/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
-    const items = await menuService.getMenuByRestaurantId(restaurantId);
+    const { canonicalId, shop } = await resolveCanonicalShopId(restaurantId);
 
-    // Map fields for frontend compatibility
-    const mapped = items.map(item => ({
+    const candidateIds: string[] = [restaurantId, canonicalId];
+    if (shop) {
+      if (shop.shopId) candidateIds.push(shop.shopId);
+      if (shop.id) candidateIds.push(shop.id);
+      if (shop.restaurantId) candidateIds.push(shop.restaurantId);
+      if (shop.ownerUserId) candidateIds.push(shop.ownerUserId);
+      if (shop.email) candidateIds.push(shop.email);
+    }
+
+    // Get vendor's active establishment categories
+    let vendorCategories: string[] = [];
+    try {
+      const dbCats = await categoryService.getCategoriesByRestaurantId(canonicalId);
+      vendorCategories = dbCats.map(c => c.name);
+      if (shop && Array.isArray(shop.categories)) {
+        shop.categories.forEach((c: string) => {
+          if (c && !vendorCategories.includes(c)) vendorCategories.push(c);
+        });
+      }
+    } catch (e) { }
+
+    const items = await menuService.getMenuByRestaurantId(candidateIds, vendorCategories);
+
+    // Map fields for frontend compatibility while preserving variants array
+    const mapped = items.map((item: any) => ({
       ...item,
-      id: item.menuItemId,
-      name: item.foodName,
-      image: item.foodImage,
-      prepTime: item.preparationTime
+      id: item.itemId || item.menuItemId,
+      itemId: item.itemId || item.menuItemId,
+      menuItemId: item.itemId || item.menuItemId,
+      name: item.foodName || item.name,
+      foodName: item.foodName || item.name,
+      image: item.foodImage || item.image,
+      foodImage: item.foodImage || item.image,
+      prepTime: item.preparationTime,
+      variants: Array.isArray(item.variants) && item.variants.length > 0 ? item.variants : []
     }));
 
     res.json({ success: true, items: mapped });
@@ -1265,20 +1349,26 @@ app.get('/api/restaurant/menu/:restaurantId', async (req: Request, res: Response
   }
 });
 
-// Save or Update Menu Item
+// Save or Update Menu Item (Resolves canonical vendor shop profile and attaches aliases)
 app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
   try {
     const menuItemData = req.body;
     const name = menuItemData.name || menuItemData.foodName;
-    const restaurantId = menuItemData.restaurantId;
+    const inputResId = menuItemData.restaurantId || menuItemData.shopId;
 
-    if (!menuItemData || !name || !restaurantId) {
+    if (!menuItemData || !name || !inputResId) {
       return res.status(400).json({ success: false, error: 'Missing required menu item fields.' });
     }
 
+    const { canonicalId, shop } = await resolveCanonicalShopId(inputResId);
+
     const saved = await menuService.saveMenuItem({
-      menuItemId: menuItemData.id || menuItemData.menuItemId,
-      restaurantId,
+      itemId: menuItemData.id || menuItemData.itemId || menuItemData.menuItemId,
+      menuItemId: menuItemData.id || menuItemData.itemId || menuItemData.menuItemId,
+      restaurantId: canonicalId,
+      shopId: canonicalId,
+      ownerUserId: shop?.ownerUserId || inputResId,
+      email: shop?.email || inputResId,
       foodName: name,
       name,
       description: menuItemData.description,
@@ -1292,12 +1382,19 @@ app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
       variants: Array.isArray(menuItemData.variants) ? menuItemData.variants : []
     });
 
+    if (saved) {
+      socketService.emitMenuUpdated(canonicalId, saved);
+      if (inputResId !== canonicalId) {
+        socketService.emitMenuUpdated(inputResId, saved);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Menu item saved successfully.',
       item: saved ? {
         ...saved,
-        id: saved.itemId || saved.menuItemId,
+        id: (saved as any).id || saved.itemId || saved.menuItemId,
         name: saved.name || saved.foodName,
         image: saved.image || saved.foodImage,
         prepTime: saved.preparationTime,
@@ -1313,7 +1410,11 @@ app.post('/api/restaurant/menu', async (req: Request, res: Response) => {
 app.delete('/api/restaurant/menu/:itemId', async (req: Request, res: Response) => {
   try {
     const { itemId } = req.params;
+    const item = await menuService.getItemById(itemId);
     await menuService.deleteMenuItem(itemId);
+    if (item && (item.shopId || item.restaurantId)) {
+      socketService.emitMenuUpdated((item.shopId || item.restaurantId)!, { deletedId: itemId });
+    }
     res.json({ success: true, message: 'Menu item deleted successfully.' });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to delete menu item.', details: error.message });
@@ -1737,99 +1838,233 @@ app.put('/api/restaurant/profile/:restaurantId', async (req: Request, res: Respo
   }
 });
 
-// Fetch Categories for a specific Restaurant (Dynamic from DynamoDB, no hardcoded defaults)
+// Helper: Safe DynamoDB item deletion handling key schema variations
+async function safeDeleteTableItem(targetTableName: string, item: any) {
+  if (!targetTableName || !item) return;
+
+  // Try 1: Key using pk and email
+  if (item.pk && item.email) {
+    try {
+      await dynamoDocClient.send(new DeleteCommand({ TableName: targetTableName, Key: { pk: item.pk, email: item.email } }));
+      return;
+    } catch (e: any) {
+      if (!e.message?.toLowerCase().includes('schema')) throw e;
+    }
+  }
+
+  // Try 2: Key using pk only
+  if (item.pk) {
+    try {
+      await dynamoDocClient.send(new DeleteCommand({ TableName: targetTableName, Key: { pk: item.pk } }));
+      return;
+    } catch (e: any) {
+      if (!e.message?.toLowerCase().includes('schema')) throw e;
+    }
+  }
+
+  // Try 3: Key using id only
+  if (item.id) {
+    try {
+      await dynamoDocClient.send(new DeleteCommand({ TableName: targetTableName, Key: { id: item.id } }));
+      return;
+    } catch (e: any) { }
+  }
+}
+
+// Helper: Resolve canonical shop ID and shop record from user ID, email, or restaurant ID
+async function resolveCanonicalShopId(idOrEmail: string): Promise<{ canonicalId: string; shop: any }> {
+  if (!idOrEmail) return { canonicalId: 'RES-001', shop: null };
+  const clean = String(idOrEmail).trim();
+
+  try {
+    const shop = await shopService.getShopById(clean);
+    if (shop) return { canonicalId: shop.shopId || (shop as any).id || clean, shop };
+  } catch (e) { }
+
+  try {
+    const shop = await shopService.getShopByOwnerUserId(clean);
+    if (shop) return { canonicalId: shop.shopId || (shop as any).id || clean, shop };
+  } catch (e) { }
+
+  try {
+    const shop = await shopRepository.findByEmail(clean);
+    if (shop) return { canonicalId: shop.shopId || (shop as any).id || clean, shop };
+  } catch (e) { }
+
+  try {
+    const all = await restaurantService.getAllRestaurants();
+    const cleanLower = clean.toLowerCase();
+    const matched = all.find((s: any) =>
+      (s.id && String(s.id).toLowerCase() === cleanLower) ||
+      (s.shopId && String(s.shopId).toLowerCase() === cleanLower) ||
+      (s.restaurantId && String(s.restaurantId).toLowerCase() === cleanLower) ||
+      (s.ownerUserId && String(s.ownerUserId).toLowerCase() === cleanLower) ||
+      (s.email && String(s.email).toLowerCase() === cleanLower)
+    );
+    if (matched) return { canonicalId: matched.shopId || (matched as any).id || clean, shop: matched };
+  } catch (e) { }
+
+  return { canonicalId: clean, shop: null };
+}
+
+// Fetch Categories for a specific Restaurant (Source of truth: foodway-categories & foodway-shops in DynamoDB)
 app.get('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
-    const customCategories: string[] = [];
+    const { canonicalId, shop } = await resolveCanonicalShopId(restaurantId);
 
-    // 1. Scan main table for saved categories
-    if (tableName) {
-      const command = new ScanCommand({ TableName: tableName });
-      const response = await dynamoDocClient.send(command);
-      (response.Items || [])
-        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
-        .forEach((item: any) => {
-          if (item.name && !customCategories.includes(item.name.trim())) {
-            customCategories.push(item.name.trim());
-          }
-        });
+    // 1. Query foodway-categories table in DynamoDB
+    let dbCats = await categoryService.getCategoriesByRestaurantId(canonicalId);
+    if (dbCats.length === 0 && restaurantId !== canonicalId) {
+      dbCats = await categoryService.getCategoriesByRestaurantId(restaurantId);
+    }
+    if (dbCats.length === 0 && shop?.email) {
+      dbCats = await categoryService.getCategoriesByRestaurantId(shop.email);
+    }
+    if (dbCats.length === 0 && shop?.ownerUserId) {
+      dbCats = await categoryService.getCategoriesByRestaurantId(shop.ownerUserId);
     }
 
-    // 2. Scan foodway-menu-items table for categories on food items
+    if (dbCats.length > 0) {
+      const catNames = Array.from(new Set(dbCats.map(c => c.name.trim()).filter(Boolean)));
+      return res.json({ success: true, categories: catNames });
+    }
+
+    // 2. Fallback: Shop profile categories list in foodway-shops
+    if (shop && Array.isArray(shop.categories) && shop.categories.length > 0) {
+      const catNames = Array.from(new Set(shop.categories.map((c: string) => String(c).trim()).filter(Boolean)));
+      return res.json({ success: true, categories: catNames });
+    }
+
+    // 3. Fallback: Items belonging strictly to this restaurant
     try {
-      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
-      menuItems.forEach((item: any) => {
-        if (item.category && item.category.trim() && !customCategories.includes(item.category.trim())) {
-          customCategories.push(item.category.trim());
-        }
-      });
-    } catch (e) {
-      console.warn('Error fetching menu items for categories:', e);
-    }
+      const menuItems = await menuService.getMenuByRestaurantId(canonicalId || restaurantId);
+      const catNames = Array.from(new Set(
+        menuItems
+          .map((item: any) => (item.category || '').trim())
+          .filter((c: string) => c && c !== 'Uncategorized')
+      ));
+      if (catNames.length > 0) {
+        return res.json({ success: true, categories: catNames });
+      }
+    } catch (e) { }
 
-    res.json({ success: true, categories: customCategories });
+    res.json({ success: true, categories: [] });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch restaurant categories.', details: error.message });
   }
 });
 
-// Add New Category for a specific Restaurant (Persists to DynamoDB)
+// Add New Category for a specific Restaurant (Persists strictly to foodway-categories table in DynamoDB & Shop Details)
 app.post('/api/restaurant/categories/:restaurantId', async (req: Request, res: Response) => {
   try {
     const { restaurantId } = req.params;
     const { name } = req.body;
+    const { canonicalId, shop } = await resolveCanonicalShopId(restaurantId);
 
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, error: 'Category name is required.' });
     }
 
     const categoryName = name.trim();
-    const categoryId = `cat_${Date.now()}`;
 
-    if (tableName) {
-      const command = new PutCommand({
-        TableName: tableName,
-        Item: {
-          pk: `CATEGORY#${restaurantId}#${categoryId}`,
-          email: `CATEGORY#${restaurantId}#${categoryId}`,
-          id: categoryId,
-          restaurantId,
-          name: categoryName,
-          type: 'category',
-          createdAt: new Date().toISOString()
-        }
-      });
-      await dynamoDocClient.send(command);
+    // 1. Persist directly to foodway-categories table in DynamoDB
+    await categoryService.addCategory(canonicalId, categoryName);
+    if (restaurantId !== canonicalId) {
+      await categoryService.addCategory(restaurantId, categoryName);
     }
 
-    // Gather all categories after adding
-    const customCategories: string[] = [categoryName];
+    // 2. Gather all categories after adding
+    const customCategories: string[] = [];
+    const addCat = (c: string) => {
+      if (c && c.trim()) {
+        const trimmed = c.trim();
+        if (!customCategories.some(existing => existing.toLowerCase() === trimmed.toLowerCase())) {
+          customCategories.push(trimmed);
+        }
+      }
+    };
 
-    if (tableName) {
-      const scanCommand = new ScanCommand({ TableName: tableName });
-      const response = await dynamoDocClient.send(scanCommand);
-      (response.Items || [])
-        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
-        .forEach((item: any) => {
-          if (item.name && !customCategories.includes(item.name.trim())) {
-            customCategories.push(item.name.trim());
-          }
-        });
+    addCat(categoryName);
+
+    try {
+      const dbCats = await categoryService.getCategoriesByRestaurantId(canonicalId);
+      dbCats.forEach(c => addCat(c.name));
+    } catch (e) { }
+
+    if (shop && Array.isArray(shop.categories)) {
+      shop.categories.forEach((catName: string) => addCat(catName));
     }
 
     try {
-      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      const menuItems = await menuService.getMenuByRestaurantId(canonicalId || restaurantId);
       menuItems.forEach((item: any) => {
-        if (item.category && item.category.trim() && !customCategories.includes(item.category.trim())) {
-          customCategories.push(item.category.trim());
+        if (item.category && item.category.trim() && item.category.trim() !== 'Uncategorized') {
+          addCat(item.category);
         }
       });
     } catch (e) { }
 
+    // 3. Update shop profile in foodway-shops
+    try {
+      await shopService.updateShop(canonicalId, {
+        categories: customCategories,
+        cuisine: customCategories.join(', ')
+      });
+      if (restaurantId !== canonicalId) {
+        await shopService.updateShop(restaurantId, {
+          categories: customCategories,
+          cuisine: customCategories.join(', ')
+        });
+      }
+    } catch (e) {
+      console.warn('Warning: Could not update categories on shop record:', e);
+    }
+
     res.json({ success: true, message: 'Category added successfully.', category: categoryName, categories: customCategories });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to save category.', details: error.message });
+  }
+});
+
+// Set Full Category List for a specific Restaurant (Overwrites and persists strictly to foodway-categories table in DynamoDB)
+app.put('/api/restaurant/categories/:restaurantId/set', async (req: Request, res: Response) => {
+  try {
+    const { restaurantId } = req.params;
+    const { categories: inputCategories } = req.body;
+    const { canonicalId } = await resolveCanonicalShopId(restaurantId);
+
+    if (!Array.isArray(inputCategories)) {
+      return res.status(400).json({ success: false, error: 'Categories array is required.' });
+    }
+
+    const cleanCategories = Array.from(new Set(inputCategories.map((c: string) => String(c).trim()).filter(Boolean)));
+
+    // 1. Overwrite categories in foodway-categories table in DynamoDB
+    await categoryService.setCategoriesForRestaurant(canonicalId, cleanCategories);
+    if (restaurantId !== canonicalId) {
+      await categoryService.setCategoriesForRestaurant(restaurantId, cleanCategories);
+    }
+
+    // 2. Update shop profile categories in foodway-shops table
+    try {
+      await shopService.updateShop(canonicalId, {
+        categories: cleanCategories,
+        cuisine: cleanCategories.join(', ')
+      });
+      if (restaurantId !== canonicalId) {
+        await shopService.updateShop(restaurantId, {
+          categories: cleanCategories,
+          cuisine: cleanCategories.join(', ')
+        });
+      }
+    } catch (e) {
+      console.warn('Warning: Could not update categories on shop record:', e);
+    }
+
+    res.json({ success: true, message: 'Categories set successfully.', categories: cleanCategories });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to set categories.', details: error.message });
   }
 });
 
@@ -1838,6 +2073,7 @@ app.put('/api/restaurant/categories/:restaurantId', async (req: Request, res: Re
   try {
     const { restaurantId } = req.params;
     const { oldName, newName } = req.body;
+    const { canonicalId } = await resolveCanonicalShopId(restaurantId);
 
     if (!oldName || !newName || !newName.trim()) {
       return res.status(400).json({ success: false, error: 'Old and new category names are required.' });
@@ -1846,27 +2082,13 @@ app.put('/api/restaurant/categories/:restaurantId', async (req: Request, res: Re
     const trimmedOld = oldName.trim();
     const trimmedNew = newName.trim();
 
-    // 1. Update Category items in main table
-    if (tableName) {
-      const scanCommand = new ScanCommand({ TableName: tableName });
-      const response = await dynamoDocClient.send(scanCommand);
-      const categoryItems = (response.Items || []).filter(
-        (item: any) => item.type === 'category' && item.restaurantId === restaurantId && item.name === trimmedOld
-      );
+    // 1. Update Category in foodway-categories table
+    await categoryService.deleteCategory(canonicalId, trimmedOld);
+    await categoryService.addCategory(canonicalId, trimmedNew);
 
-      for (const catItem of categoryItems) {
-        await dynamoDocClient.send(
-          new PutCommand({
-            TableName: tableName,
-            Item: { ...catItem, name: trimmedNew, updatedAt: new Date().toISOString() }
-          })
-        );
-      }
-    }
-
-    // 2. Update category field on any food items matching trimmedOld in foodway-menu-items table
+    // 2. Update category field on any food items matching trimmedOld in foodway-items table
     try {
-      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      const menuItems = await menuService.getMenuByRestaurantId(canonicalId || restaurantId);
       for (const item of menuItems) {
         if (item.category === trimmedOld) {
           await menuService.saveMenuItem({
@@ -1879,28 +2101,8 @@ app.put('/api/restaurant/categories/:restaurantId', async (req: Request, res: Re
       console.warn('Error updating menu item categories:', e);
     }
 
-    // Fetch updated categories list
-    const updatedCategories: string[] = [];
-    if (tableName) {
-      const scanCommand = new ScanCommand({ TableName: tableName });
-      const response = await dynamoDocClient.send(scanCommand);
-      (response.Items || [])
-        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
-        .forEach((item: any) => {
-          if (item.name && !updatedCategories.includes(item.name.trim())) {
-            updatedCategories.push(item.name.trim());
-          }
-        });
-    }
-
-    try {
-      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
-      menuItems.forEach((item: any) => {
-        if (item.category && item.category.trim() && !updatedCategories.includes(item.category.trim())) {
-          updatedCategories.push(item.category.trim());
-        }
-      });
-    } catch (e) { }
+    const dbCats = await categoryService.getCategoriesByRestaurantId(canonicalId);
+    const updatedCategories = dbCats.map(c => c.name);
 
     res.json({ success: true, message: 'Category renamed successfully.', categories: updatedCategories });
   } catch (error: any) {
@@ -1916,39 +2118,24 @@ const normalizeCatName = (name: string) => {
     .toLowerCase();
 };
 
-// Delete Category for a specific Restaurant (Deletes category item & updates food item categories)
+// Delete Category for a specific Restaurant (Deletes category item from foodway-categories & updates food item categories)
 app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req: Request, res: Response) => {
   try {
     const { restaurantId, categoryName } = req.params;
     const targetCat = decodeURIComponent(categoryName).trim();
-    const normalizedTarget = normalizeCatName(targetCat);
+    const { canonicalId } = await resolveCanonicalShopId(restaurantId);
 
-    // 1. Delete matching category items from main table
-    if (tableName) {
-      const scanCommand = new ScanCommand({ TableName: tableName });
-      const response = await dynamoDocClient.send(scanCommand);
-      const categoryItems = (response.Items || []).filter(
-        (item: any) =>
-          item.type === 'category' &&
-          item.restaurantId === restaurantId &&
-          (item.name === targetCat || normalizeCatName(item.name) === normalizedTarget)
-      );
-
-      for (const catItem of categoryItems) {
-        await dynamoDocClient.send(
-          new DeleteCommand({
-            TableName: tableName,
-            Key: { pk: catItem.pk, email: catItem.email }
-          })
-        );
-      }
+    // 1. Delete matching category items from foodway-categories table
+    await categoryService.deleteCategory(canonicalId, targetCat);
+    if (restaurantId !== canonicalId) {
+      await categoryService.deleteCategory(restaurantId, targetCat);
     }
 
-    // 2. Update food items in foodway-menu-items table matching targetCat
+    // 2. Clear category on matching food items in foodway-items
     try {
-      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
+      const menuItems = await menuService.getMenuByRestaurantId(canonicalId || restaurantId);
       for (const item of menuItems) {
-        if (item.category === targetCat || normalizeCatName(item.category) === normalizedTarget) {
+        if (item.category === targetCat || normalizeCatName(item.category) === normalizeCatName(targetCat)) {
           await menuService.saveMenuItem({
             ...item,
             category: 'Uncategorized'
@@ -1959,39 +2146,17 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
       console.warn('Error clearing food item categories on delete:', e);
     }
 
-    // 3. Fetch remaining categories
-    const remainingCategories: string[] = [];
-    if (tableName) {
-      const scanCommand = new ScanCommand({ TableName: tableName });
-      const response = await dynamoDocClient.send(scanCommand);
-      (response.Items || [])
-        .filter((item: any) => item.type === 'category' && item.restaurantId === restaurantId)
-        .forEach((item: any) => {
-          if (
-            item.name &&
-            item.name.trim() !== targetCat &&
-            normalizeCatName(item.name) !== normalizedTarget &&
-            !remainingCategories.includes(item.name.trim())
-          ) {
-            remainingCategories.push(item.name.trim());
-          }
-        });
-    }
+    const dbCats = await categoryService.getCategoriesByRestaurantId(canonicalId);
+    const remainingCategories = dbCats.map(c => c.name);
 
     try {
-      const menuItems = await menuService.getMenuByRestaurantId(restaurantId);
-      menuItems.forEach((item: any) => {
-        if (
-          item.category &&
-          item.category.trim() !== 'Uncategorized' &&
-          item.category.trim() !== targetCat &&
-          normalizeCatName(item.category) !== normalizedTarget &&
-          !remainingCategories.includes(item.category.trim())
-        ) {
-          remainingCategories.push(item.category.trim());
-        }
+      await shopService.updateShop(canonicalId, {
+        categories: remainingCategories,
+        cuisine: remainingCategories.join(', ')
       });
-    } catch (e) { }
+    } catch (e) {
+      console.warn('Warning: Could not update shop categories on delete:', e);
+    }
 
     res.json({ success: true, message: `Category "${targetCat}" deleted successfully.`, categories: remainingCategories });
   } catch (error: any) {

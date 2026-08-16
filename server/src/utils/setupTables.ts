@@ -9,7 +9,8 @@ import {
   ordersTableName,
   orderItemsTableName,
   deliveryTableName,
-  deliveryLocationsTableName
+  deliveryLocationsTableName,
+  categoriesTableName
 } from '../config/aws';
 
 async function verifyOrCreateTable(tableName: string, keySchema: any[], attributeDefinitions: any[], globalSecondaryIndexes?: any[]) {
@@ -184,6 +185,23 @@ export async function ensureAllTablesExist() {
       {
         IndexName: 'status-index',
         KeySchema: [{ AttributeName: 'status', KeyType: 'HASH' }],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ]
+  );
+
+  // 8. foodway-categories (PK: categoryId, GSIs: restaurantId-index, shopId-index)
+  await verifyOrCreateTable(
+    categoriesTableName,
+    [{ AttributeName: 'categoryId', KeyType: 'HASH' }],
+    [
+      { AttributeName: 'categoryId', AttributeType: 'S' },
+      { AttributeName: 'restaurantId', AttributeType: 'S' }
+    ],
+    [
+      {
+        IndexName: 'restaurantId-index',
+        KeySchema: [{ AttributeName: 'restaurantId', KeyType: 'HASH' }],
         Projection: { ProjectionType: 'ALL' }
       }
     ]

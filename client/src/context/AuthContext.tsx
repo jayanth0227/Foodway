@@ -21,37 +21,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Initialize auth from SessionStorage and validate with backend on app load
+  // Initialize auth from SessionStorage/LocalStorage and validate with backend silently on app load
   useEffect(() => {
     const initializeAuth = async () => {
       setIsLoading(true);
       const existingToken = getToken();
       const storedUser = getCurrentUser();
 
-      if (existingToken && storedUser) {
-        setToken(existingToken);
+      if (storedUser) {
+        setToken(existingToken || 'active_session');
         setUser(storedUser);
         setRole(storedUser.role);
 
-        // Validate token with backend /api/auth/me
-        try {
-          const res = await authService.getCurrentUser();
-          if (res.success && res.user) {
-            setUser(res.user);
-            setRole(res.user.role);
-            saveSession(existingToken, res.user);
-            // Sync FCM token with backend asynchronously
-            notificationService.syncFcmTokenAfterLogin();
-          } else {
-            handleLogout();
+        if (existingToken) {
+          try {
+            const res = await authService.getCurrentUser();
+            if (res && res.success && res.user) {
+              setUser(res.user);
+              setRole(res.user.role);
+              saveSession(existingToken, res.user);
+              notificationService.syncFcmTokenAfterLogin();
+            }
+          } catch (error) {
+            console.warn('Backend session verification warning:', error);
           }
-        } catch (error) {
-          console.warn('Session verification failed on backend:', error);
-          // If backend validation fails (e.g. 401), handleLogout
-          handleLogout();
         }
-      } else {
-        clearSession();
       }
       setIsLoading(false);
     };

@@ -122,6 +122,13 @@ export class SocketService {
     console.log(`📡 [Socket Emit: CART_UPDATED] -> Room [${userRoom}] Items Count: ${cartItems.length}`);
     this.io.to(userRoom).emit('cart_updated', { userId, cartItems });
   }
+
+  // Real-Time Menu & Catalog Synchronization
+  emitMenuUpdated(restaurantId: string, item?: any): void {
+    if (!this.io || !restaurantId) return;
+    console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}]`);
+    this.io.emit('menu_updated', { restaurantId, item });
+  }
 }
 
 export const socketService = new SocketService();

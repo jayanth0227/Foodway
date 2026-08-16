@@ -34,7 +34,6 @@ export class ItemRepository {
     });
 
     if (variants.length === 0 && (raw.price !== undefined && raw.price !== null)) {
-      // Fallback single variant from legacy price
       variants = [{
         variantId: `${itemId}-V1`,
         id: `${itemId}-V1`,
@@ -87,60 +86,63 @@ export class ItemRepository {
     }
   }
 
-  async findByShopId(shopId: string): Promise<IItem[]> {
+  async findByShopId(shopIdOrIds: string | string[], vendorCategories?: string[]): Promise<IItem[]> {
+    if (!shopIdOrIds) return [];
+    const ids = Array.isArray(shopIdOrIds) ? shopIdOrIds : [shopIdOrIds];
+    const candidateSet = new Set(ids.map(id => String(id).trim().toLowerCase()).filter(Boolean));
+    const categorySet = new Set((vendorCategories || []).map(c => String(c).trim().toLowerCase()).filter(c => c && c !== 'uncategorized'));
+
     try {
-      // 1. Try shopId-index
-      try {
-        const queryCommand = new QueryCommand({
-          TableName: itemsTableName,
-          IndexName: 'shopId-index',
-          KeyConditionExpression: 'shopId = :sId',
-          ExpressionAttributeValues: { ':sId': shopId }
-        });
-        const queryResp = await dynamoDocClient.send(queryCommand);
-        if (queryResp.Items && queryResp.Items.length > 0) {
-          return queryResp.Items.map(item => this.normalizeItem(item)!).filter(Boolean);
-        }
-      } catch (e) { }
-
-      // 2. Try restaurantId-index fallback
-      try {
-        const resQueryCommand = new QueryCommand({
-          TableName: itemsTableName,
-          IndexName: 'restaurantId-index',
-          KeyConditionExpression: 'restaurantId = :sId',
-          ExpressionAttributeValues: { ':sId': shopId }
-        });
-        const resQueryResp = await dynamoDocClient.send(resQueryCommand);
-        if (resQueryResp.Items && resQueryResp.Items.length > 0) {
-          return resQueryResp.Items.map(item => this.normalizeItem(item)!).filter(Boolean);
-        }
-      } catch (e) { }
-
-      // 3. Scan fallback
       const scanCommand = new ScanCommand({
-        TableName: itemsTableName,
-        FilterExpression: 'shopId = :sId OR restaurantId = :sId',
-        ExpressionAttributeValues: { ':sId': shopId }
+        TableName: itemsTableName
       });
       const response = await dynamoDocClient.send(scanCommand);
-      if (!response.Items) return [];
-      return response.Items.map(item => this.normalizeItem(item)!).filter(Boolean);
+      if (!response.Items || response.Items.length === 0) return [];
+
+      const matchedMap = new Map<string, any>();
+
+      response.Items.forEach((raw: any) => {
+        const itemShop = (raw.shopId || '').toString().toLowerCase();
+        const itemRes = (raw.restaurantId || '').toString().toLowerCase();
+        const itemUser = (raw.userId || raw.ownerUserId || '').toString().toLowerCase();
+        const itemEmail = (raw.email || raw.ownerEmail || '').toString().toLowerCase();
+        const itemCat = (raw.category || '').toString().trim().toLowerCase();
+
+        const isDirectMatch = candidateSet.has(itemShop) ||
+                              candidateSet.has(itemRes) ||
+                              candidateSet.has(itemUser) ||
+                              candidateSet.has(itemEmail);
+
+        const isLegacyMatch = (itemShop === 'res-001' || itemShop === 'res_default' || itemShop === 'default' || itemShop === '' ||
+                               itemRes === 'res-001' || itemRes === 'res_default' || itemRes === 'default' || itemRes === '') &&
+                              categorySet.has(itemCat);
+
+        if (isDirectMatch || isLegacyMatch) {
+          const itemId = raw.itemId || raw.menuItemId || raw.id;
+          if (itemId && !matchedMap.has(itemId)) {
+            matchedMap.set(itemId, raw);
+          }
+        }
+      });
+
+      return Array.from(matchedMap.values()).map(item => this.normalizeItem(item)!).filter(Boolean);
     } catch (error) {
-      console.error(`Error in ItemRepository.findByShopId(${shopId}):`, error);
+      console.error(`Error in ItemRepository.findByShopId(${shopIdOrIds}):`, error);
       return [];
     }
   }
 
-  async findByRestaurantId(restaurantId: string): Promise<IItem[]> {
-    return this.findByShopId(restaurantId);
+  async findByRestaurantId(restaurantId: string | string[], vendorCategories?: string[]): Promise<IItem[]> {
+    return this.findByShopId(restaurantId, vendorCategories);
   }
 
-  async create(item: IItem): Promise<IItem> {
+  async create(item: IItem & { ownerUserId?: string; email?: string }): Promise<IItem> {
     const normalized = {
       ...item,
       menuItemId: item.itemId,
       restaurantId: item.shopId,
+      ownerUserId: item.ownerUserId || item.shopId,
+      email: item.email || item.shopId,
       foodName: item.name,
       foodImage: item.image,
       price: item.variants && item.variants.length > 0 ? item.variants[0].price : (item.price || 0)
@@ -153,7 +155,7 @@ export class ItemRepository {
     return this.normalizeItem(normalized)!;
   }
 
-  async update(itemId: string, updates: Partial<IItem>): Promise<IItem | null> {
+  async update(itemId: string, updates: Partial<IItem> & { ownerUserId?: string; email?: string }): Promise<IItem | null> {
     let existing = await this.findByItemId(itemId);
 
     if (!existing && (updates.shopId || updates.restaurantId) && (updates.name || updates.foodName)) {
@@ -169,11 +171,15 @@ export class ItemRepository {
     const variants = updates.variants !== undefined ? updates.variants : (existing ? existing.variants : []);
     const defaultPrice = variants.length > 0 ? variants[0].price : (updates.price !== undefined ? updates.price : (existing ? existing.price : 0));
 
-    const updatedItem: IItem = {
+    const updatedItem: any = {
+      ...(existing || {}),
+      ...updates,
       itemId: targetId,
       menuItemId: targetId,
       shopId: updates.shopId || updates.restaurantId || (existing ? existing.shopId : ''),
       restaurantId: updates.shopId || updates.restaurantId || (existing ? existing.shopId : ''),
+      ownerUserId: updates.ownerUserId || (existing as any)?.ownerUserId || updates.shopId || '',
+      email: updates.email || (existing as any)?.email || updates.shopId || '',
       name: updates.name || updates.foodName || (existing ? existing.name : ''),
       foodName: updates.name || updates.foodName || (existing ? existing.name : ''),
       description: updates.description !== undefined ? updates.description : (existing ? existing.description : ''),
@@ -196,7 +202,7 @@ export class ItemRepository {
       Item: updatedItem
     });
     await dynamoDocClient.send(command);
-    return updatedItem;
+    return this.normalizeItem(updatedItem)!;
   }
 
   async delete(itemId: string): Promise<boolean> {

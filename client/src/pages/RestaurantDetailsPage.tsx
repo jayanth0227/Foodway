@@ -8,6 +8,8 @@ import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
 import { MobileMenuSkeleton } from '../components/common/MobileSkeletonLoader';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
+import socketService from '../services/socket.service';
+import GooeyPopover from '../components/GooeyPopover';
 
 const removeEmojis = (str: string) => {
   if (!str) return '';
@@ -39,9 +41,18 @@ export const RestaurantDetailsPage: React.FC = () => {
     if (id) {
       fetchRestaurantDetails(id, true);
 
+      // Join Restaurant Socket Room for real-time menu updates
+      socketService.joinRestaurant(id);
+
       // Real-time status poll every 4s
       const pollInterval = setInterval(() => fetchRestaurantDetails(id, false), 4000);
       const handleStatusUpdate = () => fetchRestaurantDetails(id, false);
+
+      const unsubscribeMenu = socketService.onMenuUpdated((data) => {
+        if (data && (data.restaurantId === id || data.restaurantId === restaurant?.id)) {
+          fetchRestaurantDetails(id, false);
+        }
+      });
 
       window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
       window.addEventListener('storage', handleStatusUpdate);
@@ -56,6 +67,7 @@ export const RestaurantDetailsPage: React.FC = () => {
       window.addEventListener('foodway_wishlist_updated', syncWishlist);
       return () => {
         clearInterval(pollInterval);
+        unsubscribeMenu();
         window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
         window.removeEventListener('storage', handleStatusUpdate);
         window.removeEventListener('foodway_wishlist_updated', syncWishlist);
@@ -121,6 +133,15 @@ export const RestaurantDetailsPage: React.FC = () => {
 
   const categories = ['All', ...Array.from(new Set(menuItems.map(m => m.category).filter(Boolean)))];
 
+  const categoryCounts = React.useMemo(() => {
+    const counts: Record<string, number> = { 'All': menuItems.length };
+    menuItems.forEach(item => {
+      const cat = item.category || 'General';
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return counts;
+  }, [menuItems]);
+
   const filteredMenuItems = menuItems.filter(item => {
     const itemName = item.foodName || item.name || '';
     const itemDesc = item.description || '';
@@ -152,21 +173,7 @@ export const RestaurantDetailsPage: React.FC = () => {
             <div className="block sm:hidden glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
           ) : restaurant && (
             <div className="block sm:hidden glass-panel border border-glass rounded-3xl p-4 shadow-luxury bg-bg-cardSec space-y-3.5">
-              {/* Top Bar: Back Button (Left) & Rating Badge (Right) */}
-              <div className="flex items-center justify-between gap-2 border-b border-glass/60 pb-3">
-                <button
-                  onClick={() => navigate('/')}
-                  className="px-4 py-1.5 rounded-full bg-glass border border-glass text-text-primary font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
-                >
-                  <ArrowLeft size={14} className="text-primary" />
-                  <span>Back</span>
-                </button>
 
-                <div className="flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-black">
-                  <Star size={13} className="fill-emerald-400 text-emerald-400" />
-                  <span>{restaurant.rating || 4.8} Rating</span>
-                </div>
-              </div>
 
               {/* Shop Main Info Row: Logo Thumbnail + Name & Address */}
               <div className="flex items-start gap-3.5">
@@ -232,6 +239,30 @@ export const RestaurantDetailsPage: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Restructured Navigation Header Bar with Back Button & Breadcrumbs */}
+          <div className="flex items-center justify-between gap-3 bg-bg-cardSec/80 backdrop-blur-md border border-glass/80 p-2.5 sm:p-3.5 rounded-2xl shadow-luxury">
+            <button
+              onClick={() => navigate('/shops')}
+              className="px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary font-black text-xs flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 transition-all group"
+            >
+              <ArrowLeft size={16} className="text-primary group-hover:-translate-x-1 transition-transform" />
+              <span>Back to Restaurants</span>
+            </button>
+
+            <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-text-muted">
+              <span>Stores</span>
+              <span>/</span>
+              <span className="text-primary font-black truncate max-w-xs">{restaurant?.name || 'Store Details'}</span>
+            </div>
+
+            {restaurant && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-black shrink-0">
+                <Star size={13} className="fill-emerald-400 text-emerald-400" />
+                <span>{restaurant.rating || 4.8} Rating</span>
+              </div>
+            )}
+          </div>
 
           {/* Desktop-Only Banner Header */}
           {loading ? (
@@ -384,19 +415,27 @@ export const RestaurantDetailsPage: React.FC = () => {
 
                 <div className="h-4 w-px bg-glass shrink-0 mx-1" />
 
-                {/* Swiggy Categories Chips */}
-                {categories.map(cat => (
+                {/* Category Drawer Trigger Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryFabOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 transition-all cursor-pointer shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm"
+                >
+                  <Layers size={14} />
+                  <span>Categories ({categories.filter(c => c !== 'All').length})</span>
+                </button>
+
+                {/* Selected Category Pill */}
+                {selectedCategory !== 'All' && (
                   <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 ${selectedCategory === cat
-                        ? 'bg-primary text-black font-black shadow-md'
-                        : 'bg-glass hover:bg-glass-subtle border border-glass text-text-secondary'
-                      }`}
+                    type="button"
+                    onClick={() => setSelectedCategory('All')}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 shrink-0 hover:bg-amber-500/30 transition-all cursor-pointer"
                   >
-                    {removeEmojis(cat)}
+                    <span>{removeEmojis(selectedCategory)}</span>
+                    <X size={13} />
                   </button>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -718,6 +757,84 @@ export const RestaurantDetailsPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Liquid Viscous SVG Gooey Popover Menu */}
+      {categories.length > 1 && (
+        <div className="fixed bottom-6 right-6 z-40">
+          <GooeyPopover
+            isOpen={isCategoryFabOpen}
+            onOpenChange={setIsCategoryFabOpen}
+            triggerWidth={124}
+            triggerHeight={46}
+            contentWidth={290}
+            side="top"
+            align="right"
+            sideOffset={18}
+            speed={0.28}
+            bgClassName="bg-slate-900/95"
+            contentClassName="p-4"
+            trigger={
+              <div className="flex items-center justify-center gap-2 px-3.5 w-full h-full rounded-full bg-gradient-to-r from-primary via-amber-400 to-amber-500 text-black font-black text-xs uppercase tracking-wider whitespace-nowrap">
+                <Utensils size={16} className="stroke-[2.5] shrink-0" />
+                <span className="font-black text-xs shrink-0">MENU</span>
+                <span className="w-5 h-5 rounded-full bg-black text-amber-300 font-black text-[10px] flex items-center justify-center border border-amber-400/40 shrink-0 shadow-inner">
+                  {categories.filter(c => c !== 'All').length}
+                </span>
+              </div>
+            }
+          >
+            <div className="space-y-3 text-left">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-amber-400 text-black flex items-center justify-center font-black shrink-0">
+                    <Utensils size={14} className="stroke-[2.5]" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-black text-xs text-white uppercase tracking-wider font-display">STORE CATEGORIES</h3>
+                    <p className="text-[10px] text-amber-300/80 font-bold">{menuItems.length} Total Dishes</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Categories list */}
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1 [&::-webkit-scrollbar]:hidden text-left" style={{ scrollbarWidth: 'none' }}>
+                {categories.map((cat) => {
+                  const count = categoryCounts[cat] || 0;
+                  const isSelected = selectedCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat);
+                        setIsCategoryFabOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all duration-200 cursor-pointer ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-primary via-amber-400 to-amber-500 text-black font-black shadow-lg ring-1 ring-amber-300'
+                          : 'bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-white font-bold hover:border-amber-400/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 pr-2 text-left">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-black' : 'bg-amber-400'}`} />
+                        <span className="text-xs font-extrabold truncate text-left">
+                          {cat === 'All' ? 'All Establishment Dishes' : removeEmojis(cat)}
+                        </span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                        isSelected ? 'bg-black text-amber-300' : 'bg-black/40 text-amber-300/90 border border-amber-400/30'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </GooeyPopover>
+        </div>
+      )}
     </>
   );
 };

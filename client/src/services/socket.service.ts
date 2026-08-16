@@ -140,6 +140,14 @@ class ClientSocketService {
       socket.off('cart_updated', callback);
     };
   }
+
+  onMenuUpdated(callback: (data: { restaurantId: string; item?: any }) => void): () => void {
+    const socket = this.connect();
+    socket.on('menu_updated', callback);
+    return () => {
+      socket.off('menu_updated', callback);
+    };
+  }
 }
 
 export const socketService = new ClientSocketService();

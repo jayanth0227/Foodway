@@ -56,6 +56,7 @@ export interface IShop {
   rating?: number;
   isOpen?: boolean;
   cuisine?: string;
+  categories?: string[];
   fcmToken?: string;
   lastTokenUpdatedAt?: string;
   createdAt: string;
@@ -99,6 +100,19 @@ export interface IItem {
 }
 
 export interface IMenuItem extends IItem { } // Backward compatibility type alias
+
+export interface ICategory {
+  categoryId: string;
+  id?: string;
+  name: string;
+  restaurantId: string;
+  shopId?: string;
+  image?: string;
+  description?: string;
+  type?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface IOrder {
   orderId: string;

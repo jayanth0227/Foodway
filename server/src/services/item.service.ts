@@ -3,8 +3,8 @@ import { IItem, IItemVariant } from '../types/db.types';
 import { generateItemId } from '../utils/idGenerator';
 
 export class ItemService {
-  async getItemsByShopId(shopId: string): Promise<IItem[]> {
-    return itemRepository.findByShopId(shopId);
+  async getItemsByShopId(shopId: string | string[], vendorCategories?: string[]): Promise<IItem[]> {
+    return itemRepository.findByShopId(shopId, vendorCategories);
   }
 
   async getItemById(itemId: string): Promise<IItem | null> {
@@ -80,9 +80,12 @@ export class ItemService {
   }
 
   async saveMenuItem(data: any): Promise<IItem | null> {
-    const id = data.itemId || data.menuItemId;
-    if (id) {
-      return this.updateItem(id, data);
+    const id = data.itemId || data.menuItemId || data.id;
+    if (id && !id.startsWith('item_') && !id.startsWith('temp_')) {
+      const existing = await this.getItemById(id);
+      if (existing) {
+        return this.updateItem(id, data);
+      }
     }
     return this.createItem(data);
   }
