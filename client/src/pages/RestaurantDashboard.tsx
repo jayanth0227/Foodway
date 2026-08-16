@@ -648,7 +648,7 @@ export const RestaurantDashboard: React.FC = () => {
     const handleStatusChange = (updatedOrder: any) => {
       const orderId = updatedOrder.orderId || updatedOrder.id;
       const newStatus = updatedOrder.status || updatedOrder.orderStatus;
-      
+
       setOrders(prev => prev.map(o => {
         if (o.id === orderId || (o as any).orderId === orderId) {
           return { ...o, orderStatus: newStatus };
