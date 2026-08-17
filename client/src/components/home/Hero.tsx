@@ -62,7 +62,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
         setLoadingHero(false);
       });
   }, []);
-  
+
   // Simulated loading states for premium feel
   const [isOrdering, setIsOrdering] = useState(false);
   const [isExploring, setIsExploring] = useState(false);
@@ -81,7 +81,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
 
   // Scroll Tracking
   const { scrollY } = useScroll();
-  
+
   // Parallax elements scroll rates
   const leafScrollY1 = useTransform(scrollY, [0, 800], [0, -160]);
   const leafScrollY2 = useTransform(scrollY, [0, 800], [0, -260]);
@@ -238,13 +238,13 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       {/* Premium left-to-right gradient overlay optimized for mobile contrast & readability */}
       <div className="absolute inset-0 bg-gradient-to-r from-bg-dark-color/95 via-bg-dark-color/85 to-bg-dark-color/40 md:from-bg-dark-color/90 md:via-bg-dark-color/50 md:to-transparent pointer-events-none z-0" />
       {/* Background Cinematic Gradients and Orbs (Mouse-driven parallax) */}
-      <motion.div 
+      <motion.div
         style={{ x: bgBlob1X, y: bgBlob1Y }}
-        className="absolute top-[15%] left-[20%] w-[350px] sm:w-[550px] h-[350px] sm:h-[550px] rounded-full bg-primary/10 blur-[100px] sm:blur-[130px] pointer-events-none animate-pulse-slow" 
+        className="absolute top-[15%] left-[20%] w-[350px] sm:w-[550px] h-[350px] sm:h-[550px] rounded-full bg-primary/10 blur-[100px] sm:blur-[130px] pointer-events-none animate-pulse-slow"
       />
-      <motion.div 
+      <motion.div
         style={{ x: bgBlob2X, y: bgBlob2Y }}
-        className="absolute bottom-[20%] right-[15%] w-[350px] sm:w-[550px] h-[350px] sm:h-[550px] rounded-full bg-accent/5 blur-[100px] sm:blur-[130px] pointer-events-none animate-glow-slow" 
+        className="absolute bottom-[20%] right-[15%] w-[350px] sm:w-[550px] h-[350px] sm:h-[550px] rounded-full bg-accent/5 blur-[100px] sm:blur-[130px] pointer-events-none animate-glow-slow"
       />
       <div className="absolute top-[40%] right-[35%] w-[250px] sm:w-[350px] h-[250px] sm:h-[350px] rounded-full bg-secondary/5 blur-[80px] sm:blur-[100px] pointer-events-none" />
 
@@ -289,10 +289,10 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       </motion.div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-16 items-center relative z-10">
-        
+
         {/* Left Content Text Column */}
         <div className="lg:col-span-7 space-y-5 sm:space-y-8 text-center lg:text-left">
-          
+
           {/* Tagline */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -302,7 +302,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
           >
             <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-primary animate-ping" />
             <span className="text-[9px] sm:text-[10px] font-bold tracking-[0.2em] sm:tracking-[0.25em] text-primary uppercase">
-              Fast Delivery Across Konaseema. 
+              Fast Delivery Across Konaseema.
             </span>
           </motion.div>
 
@@ -313,8 +313,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
             className="text-3xl sm:text-5xl md:text-6.5xl lg:text-5xl font-extrabold font-display leading-tight sm:leading-[1.05] tracking-tight text-text-primary"
           >
-            Fresh food,<br />
-            <span className="text-gradient-gold text-glow-gold">Delivered to your doorstep... </span>
+            Everything you need,<br />
+            <span className="text-gradient-gold text-glow-gold">delivered to your doorstep.</span>
           </motion.h1>
 
           {/* Description */}
@@ -324,7 +324,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
             className="text-xs sm:text-sm md:text-base text-text-secondary/90 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium"
           >
-            Discover the best restaurants across Konaseema and enjoy hot, freshly prepared meals delivered quickly, safely, and with care. 
+            From fresh groceries and fruits to delicious meals, sweets and everyday essentials — discover everything around you.
           </motion.p>
 
           {/* Search bar */}
@@ -336,9 +336,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
           >
             <form
               onSubmit={handleSearchSubmit}
-              className={`flex items-center bg-bg-cardSec/80 backdrop-blur-xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 ${
-                searchFocused ? 'border-primary/60 shadow-[0_0_35px_rgba(197,147,99,0.18)]' : 'border-glass'
-              }`}
+              className={`flex items-center bg-bg-cardSec/80 backdrop-blur-xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 ${searchFocused ? 'border-primary/60 shadow-[0_0_35px_rgba(197,147,99,0.18)]' : 'border-glass'
+                }`}
             >
               <div className="flex-1 flex items-center px-2.5 sm:px-4 space-x-2 sm:space-x-3">
                 <Search size={16} className={`transition-colors duration-300 ${searchFocused ? 'text-primary' : 'text-text-muted'}`} />
@@ -385,9 +384,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               onFocus={() => setIsPrimaryFocused(true)}
               onBlur={() => setIsPrimaryFocused(false)}
               disabled={isOrdering}
-              className={`flex-1 sm:flex-none btn-primary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl uppercase tracking-wider sm:tracking-widest text-center shadow-lg relative flex items-center justify-center min-w-[130px] sm:min-w-[170px] ${
-                isPrimaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
-              } ${isOrdering ? 'opacity-85 cursor-not-allowed' : ''}`}
+              className={`flex-1 sm:flex-none btn-primary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl uppercase tracking-wider sm:tracking-widest text-center shadow-lg relative flex items-center justify-center min-w-[130px] sm:min-w-[170px] ${isPrimaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
+                } ${isOrdering ? 'opacity-85 cursor-not-allowed' : ''}`}
             >
               {isOrdering ? (
                 <div className="flex items-center space-x-1.5">
@@ -407,9 +405,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               onFocus={() => setIsSecondaryFocused(true)}
               onBlur={() => setIsSecondaryFocused(false)}
               disabled={isExploring}
-              className={`flex-1 sm:flex-none btn-secondary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center ${
-                isSecondaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
-              } ${isExploring ? 'opacity-85 cursor-not-allowed' : ''}`}
+              className={`flex-1 sm:flex-none btn-secondary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center ${isSecondaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
+                } ${isExploring ? 'opacity-85 cursor-not-allowed' : ''}`}
             >
               {isExploring ? (
                 <div className="flex items-center space-x-1.5">
@@ -456,7 +453,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               </div>
             </div>
           </motion.div>
-          
+
         </div>
 
         {/* Right Content Column empty to let background image show through */}

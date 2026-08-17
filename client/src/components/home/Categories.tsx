@@ -92,7 +92,7 @@ export const Categories: React.FC = () => {
             viewport={{ once: true, margin: '-60px' }}
             className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6"
           >
-            {categories.slice(0, 12).map((category) => {
+            {categories.slice(0, 8).map((category) => {
               const cleanName = (category.name || '').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
               const cleanDesc = (category.description || '').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
 
@@ -127,13 +127,9 @@ export const Categories: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Footer shop counter */}
+                  {/* Footer item counter */}
                   <div className="flex items-center justify-between pt-2.5 sm:pt-4 md:pt-5 border-t border-glass mt-3 sm:mt-4 md:mt-5 text-text-muted group-hover:text-text-secondary transition-colors text-[9px] sm:text-[10px] font-bold tracking-wider uppercase">
-                    <span>
-                      {category.restaurantCount
-                        ? `${category.restaurantCount} ${category.restaurantCount === 1 ? 'Store' : 'Stores'}`
-                        : 'Explore Shops'}
-                    </span>
+                    <span>Explore Items</span>
                     <ArrowRight size={12} className="text-primary group-hover:translate-x-1 transition-transform duration-300" />
                   </div>
                 </motion.div>

@@ -173,7 +173,7 @@ export const ShopsPage: React.FC = () => {
                 const shopCat = shop.shopType || shop.category || shop.cuisine || 'General Store';
                 const shopRating = shop.rating || 4.5;
                 const shopTime = shop.deliveryTime || '15-25 MINS';
-                const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive';
+                const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive' || shop.status === 'INACTIVE' || shop.status === 'OFFLINE' || shop.status === 'offline' || shop.status === 'CLOSED';
                 const isOpen = !isClosed;
                 const isFav = !!favorites[shopId];
 

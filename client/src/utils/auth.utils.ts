@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   ROLE: 'foodway_user_role',
   NAME: 'foodway_user_name',
   EMAIL: 'foodway_user_email',
+  PHONE: 'foodway_user_phone',
+  ADDRESSES: 'foodway_user_addresses',
   RESTAURANT_ID: 'foodway_restaurant_id',
   TOKEN_EXPIRY: 'foodway_token_expiry',
 };
@@ -33,6 +35,17 @@ export const saveSession = (
 
     sessionStorage.setItem(STORAGE_KEYS.EMAIL, user.email);
     localStorage.setItem(STORAGE_KEYS.EMAIL, user.email);
+
+    if (user.phone) {
+      sessionStorage.setItem(STORAGE_KEYS.PHONE, user.phone);
+      localStorage.setItem(STORAGE_KEYS.PHONE, user.phone);
+    }
+
+    if (Array.isArray(user.addresses)) {
+      const addrStr = JSON.stringify(user.addresses);
+      sessionStorage.setItem(STORAGE_KEYS.ADDRESSES, addrStr);
+      localStorage.setItem(STORAGE_KEYS.ADDRESSES, addrStr);
+    }
 
     if (user.restaurantId) {
       sessionStorage.setItem(STORAGE_KEYS.RESTAURANT_ID, user.restaurantId);
@@ -77,6 +90,8 @@ export const saveSession = (
         id: user.id,
         email: user.email,
         name: user.name,
+        phone: user.phone,
+        addresses: user.addresses || [],
         role: 'user',
         token
       });
@@ -124,15 +139,26 @@ export const getCurrentUser = (): User | null => {
   const role = (sessionStorage.getItem(STORAGE_KEYS.ROLE) || localStorage.getItem(STORAGE_KEYS.ROLE)) as Role | null;
   const name = sessionStorage.getItem(STORAGE_KEYS.NAME) || localStorage.getItem(STORAGE_KEYS.NAME);
   const email = sessionStorage.getItem(STORAGE_KEYS.EMAIL) || localStorage.getItem(STORAGE_KEYS.EMAIL);
+  const phone = sessionStorage.getItem(STORAGE_KEYS.PHONE) || localStorage.getItem(STORAGE_KEYS.PHONE) || undefined;
   const restaurantId = sessionStorage.getItem(STORAGE_KEYS.RESTAURANT_ID) || localStorage.getItem(STORAGE_KEYS.RESTAURANT_ID) || undefined;
+
+  let addresses: any[] = [];
+  try {
+    const rawAddresses = sessionStorage.getItem(STORAGE_KEYS.ADDRESSES) || localStorage.getItem(STORAGE_KEYS.ADDRESSES);
+    if (rawAddresses) {
+      addresses = JSON.parse(rawAddresses);
+    }
+  } catch (e) { }
 
   if (id && role && name && email) {
     return {
       id,
       name,
       email,
+      phone,
       role: role.toUpperCase() as Role,
-      restaurantId
+      restaurantId,
+      addresses
     };
   }
 

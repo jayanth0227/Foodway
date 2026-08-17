@@ -240,19 +240,28 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
     const allRestaurants = await restaurantService.getAllRestaurants();
     const targetRes = allRestaurants.find((r: any) =>
       r.restaurantId === resId ||
+      r.shopId === resId ||
       r.id === resId ||
+      r.ownerUserId === resId ||
       (r.email && r.email.toLowerCase() === resId.toLowerCase()) ||
-      (r.restaurantName && r.restaurantName.toLowerCase() === resId.toLowerCase())
+      (r.restaurantName && r.restaurantName.toLowerCase() === resId.toLowerCase()) ||
+      (r.shopName && r.shopName.toLowerCase() === resId.toLowerCase())
     );
 
     if (targetRes) {
-      const targetId = targetRes.shopId || targetRes.restaurantId || '';
+      const targetId = targetRes.shopId || targetRes.restaurantId || (targetRes as any).id || '';
       if (targetId) {
         await restaurantService.updateProfile(targetId, {
           isOpen,
           status: nextStatus
         });
       }
+    } else {
+      // Direct update attempt by resId
+      await restaurantService.updateProfile(resId, {
+        isOpen,
+        status: nextStatus
+      });
     }
 
     // 2. Also update in main table if present
@@ -263,7 +272,7 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
         const mainResItems = (response.Items || []).filter(
           (item: any) =>
             item.type === 'restaurant' &&
-            (item.id === resId || item.restaurantId === resId || (item.name && item.name.toLowerCase() === resId.toLowerCase()) || (item.email && item.email.toLowerCase() === resId.toLowerCase()))
+            (item.id === resId || item.restaurantId === resId || item.shopId === resId || (item.name && item.name.toLowerCase() === resId.toLowerCase()) || (item.email && item.email.toLowerCase() === resId.toLowerCase()))
         );
 
         for (const resItem of mainResItems) {
@@ -294,9 +303,15 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
     const rawRestaurants = await restaurantService.getAllRestaurants();
     const mapped = rawRestaurants.map((r: any) => {
       const isClosed = r.isOpen === false || r.isOpen === 'false' || r.status === 'closed' || r.status === 'inactive' || r.status === 'INACTIVE' || r.status === 'OFFLINE' || r.status === 'offline' || r.status === 'CLOSED';
+      const resId = r.shopId || r.restaurantId || r.id;
+      const resName = r.shopName || r.restaurantName || r.name;
       return {
-        id: r.restaurantId,
-        name: r.restaurantName,
+        id: resId,
+        shopId: resId,
+        restaurantId: resId,
+        name: resName,
+        shopName: resName,
+        restaurantName: resName,
         cuisine: r.cuisine || 'Multi-Cuisine',
         rating: r.rating || 4.8,
         deliveryTime: '20-30 mins',

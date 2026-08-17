@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { getCurrentUser } from '../../utils/auth.utils';
 
 export const FloatingCartBar: React.FC = () => {
   const { totalItemsCount, totalAmount, lastAddedItem, setCartOpen } = useCart();
@@ -10,14 +11,27 @@ export const FloatingCartBar: React.FC = () => {
   const navigate = useNavigate();
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
 
-  // Hide on admin/restaurant/delivery portal routes, or on checkout/cart pages
-  const isPortalOrCartRoute =
+  // Auto-reset dismissed state whenever items count changes or a new item is added
+  useEffect(() => {
+    if (totalItemsCount > 0) {
+      setIsDismissed(false);
+    }
+  }, [totalItemsCount, lastAddedItem?.timestamp]);
+
+  const currentUser = getCurrentUser();
+
+  // Hide on auth (login/register), admin/restaurant/delivery portal routes, or on checkout/cart pages
+  const isAuthOrPortalRoute =
+    location.pathname === '/login' ||
+    location.pathname === '/register' ||
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/restaurant') ||
     location.pathname.startsWith('/delivery') ||
-    location.pathname === '/cart';
+    location.pathname === '/cart' ||
+    location.pathname === '/checkout';
 
-  if (isPortalOrCartRoute || totalItemsCount === 0 || isDismissed) {
+  // Only show popup when customer is logged in, not on auth/portal pages, and cart is not empty
+  if (!currentUser || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
     return null;
   }
 
@@ -26,23 +40,23 @@ export const FloatingCartBar: React.FC = () => {
     navigate('/cart');
   };
 
-  const displayName = lastAddedItem?.name || (lastAddedItem as any)?.restaurantName || 'Foodway Orders';
+  const displayName = lastAddedItem?.name || (lastAddedItem as any)?.restaurantName || 'Foodway Cart';
   const displayImage = lastAddedItem?.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200';
 
   return (
     <AnimatePresence>
       <motion.div
-        key={lastAddedItem ? lastAddedItem.name + totalItemsCount : 'swiggy-cart-bar'}
-        initial={{ y: 70, opacity: 0, scale: 0.95 }}
+        key={lastAddedItem ? lastAddedItem.name + totalItemsCount : 'floating-cart-popup'}
+        initial={{ y: 80, opacity: 0, scale: 0.95 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 70, opacity: 0, scale: 0.95 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 260 }}
-        className="fixed bottom-[84px] lg:bottom-6 left-3 right-3 sm:left-auto sm:right-6 z-[9990] sm:w-[410px]"
+        exit={{ y: 80, opacity: 0, scale: 0.95 }}
+        transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+        className="fixed bottom-5 left-4 right-4 sm:left-auto sm:right-6 z-[9999] sm:w-[420px]"
       >
-        <div className="w-full p-2.5 sm:p-3 rounded-full bg-white dark:bg-bg-cardSec text-text-primary shadow-[0_12px_40px_rgba(0,0,0,0.3)] border border-slate-200 dark:border-glass/60 flex items-center justify-between gap-2.5 backdrop-blur-xl">
-          {/* Left: Round Avatar Thumbnail & Text Stack */}
-          <div className="flex items-center gap-2.5 min-w-0 pl-1">
-            <div className="relative w-11 h-11 rounded-full overflow-hidden border border-slate-100 dark:border-glass shrink-0 shadow-sm bg-bg-dark">
+        <div className="w-full p-3 rounded-2xl bg-gradient-to-r from-slate-900 via-zinc-900 to-black text-white shadow-[0_15px_45px_rgba(0,0,0,0.5)] border border-primary/30 flex items-center justify-between gap-3 backdrop-blur-2xl">
+          {/* Left: Thumbnail & Text Stack */}
+          <div className="flex items-center gap-3 min-w-0 pl-1">
+            <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-primary/40 shrink-0 shadow-sm bg-black">
               <img
                 src={displayImage}
                 alt={displayName}
@@ -50,40 +64,37 @@ export const FloatingCartBar: React.FC = () => {
               />
             </div>
 
-            <div className="min-w-0 text-left leading-tight space-y-0.5">
-              <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white truncate max-w-[140px] sm:max-w-[170px]">
-                {displayName}
-              </h4>
-              <button
-                type="button"
-                onClick={handleCheckout}
-                className="text-[11px] font-bold text-slate-500 dark:text-text-muted hover:text-emerald-500 underline cursor-pointer block truncate"
-              >
-                View full cart
-              </button>
+            <div className="min-w-0 text-left space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <ShoppingBag size={13} className="text-primary shrink-0" />
+                <h4 className="font-extrabold text-xs text-white truncate max-w-[140px] sm:max-w-[170px]">
+                  {displayName}
+                </h4>
+              </div>
+              <p className="text-[11px] font-medium text-emerald-400">
+                {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'} in cart
+              </p>
             </div>
           </div>
 
-          {/* Right: Green Swiggy Checkout Pill & Close Icon */}
+          {/* Right: View Cart & Checkout Button & Close Icon */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleCheckout}
-              className="px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold flex flex-col items-center justify-center transition-all shadow-md active:scale-95 cursor-pointer leading-none space-y-1"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-amber-500 hover:brightness-110 text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
             >
-              <span className="text-xs font-black tracking-tight">Checkout</span>
-              <span className="text-[10px] font-bold opacity-90">
-                {totalItemsCount} {totalItemsCount === 1 ? 'Item' : 'Items'} • ₹{Math.round(totalAmount)}
-              </span>
+              <span>View Cart • ₹{Math.round(totalAmount)}</span>
+              <ArrowRight size={14} className="stroke-[3]" />
             </button>
 
             <button
               type="button"
               onClick={() => setIsDismissed(true)}
-              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-glass hover:bg-slate-200 dark:hover:bg-glass-subtle flex items-center justify-center text-slate-400 dark:text-text-muted transition-colors cursor-pointer shrink-0"
+              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-text-muted hover:text-white transition-colors cursor-pointer shrink-0"
               title="Dismiss"
             >
-              <X size={15} />
+              <X size={14} />
             </button>
           </div>
         </div>

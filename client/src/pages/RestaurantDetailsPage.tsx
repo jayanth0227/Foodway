@@ -96,26 +96,62 @@ export const RestaurantDetailsPage: React.FC = () => {
   const fetchRestaurantDetails = async (resId: string, isInitial = false) => {
     if (isInitial) setLoading(true);
     try {
-      // 1. Fetch restaurant info
-      const resResponse = await axios.get(`${API_BASE_URL}/public/restaurants`);
-      if (resResponse.data.success && Array.isArray(resResponse.data.restaurants)) {
-        const found = resResponse.data.restaurants.find((r: any) => r.id === resId || r.restaurantId === resId);
-        if (found) {
-          setRestaurant(found);
-        } else {
-          setRestaurant({
-            id: resId,
-            name: 'Partner Restaurant',
-            cuisine: 'Multi-Cuisine',
-            rating: 4.8,
-            deliveryTime: '20-30 mins',
-            image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
-            isOpen: true
-          });
+      let foundRes: any = null;
+
+      // 1. Try fetching specific shop profile directly
+      try {
+        const singleResp = await axios.get(`${API_BASE_URL}/shops/${resId}`);
+        if (singleResp.data?.success && (singleResp.data.shop || singleResp.data.restaurant)) {
+          foundRes = singleResp.data.shop || singleResp.data.restaurant;
         }
+      } catch (e) { }
+
+      // 2. Try fetching from public restaurants endpoint if direct lookup failed
+      if (!foundRes) {
+        try {
+          const resResponse = await axios.get(`${API_BASE_URL}/public/restaurants`);
+          if (resResponse.data.success && Array.isArray(resResponse.data.restaurants)) {
+            foundRes = resResponse.data.restaurants.find((r: any) =>
+              r.id === resId || r.restaurantId === resId || r.shopId === resId ||
+              (r.name && r.name.toLowerCase() === resId.toLowerCase()) ||
+              (r.shopName && r.shopName.toLowerCase() === resId.toLowerCase())
+            );
+          }
+        } catch (e) { }
       }
 
-      // 2. Fetch menu items for this specific restaurant from DynamoDB
+      if (foundRes) {
+        const isClosed = foundRes.isOpen === false || foundRes.isOpen === 'false' || foundRes.status === 'closed' || foundRes.status === 'inactive' || foundRes.status === 'INACTIVE' || foundRes.status === 'OFFLINE' || foundRes.status === 'offline' || foundRes.status === 'CLOSED';
+        setRestaurant({
+          ...foundRes,
+          id: foundRes.id || foundRes.shopId || foundRes.restaurantId || resId,
+          name: foundRes.name || foundRes.shopName || foundRes.restaurantName || 'Partner Shop',
+          isOpen: !isClosed,
+          status: isClosed ? 'closed' : 'active'
+        });
+      } else {
+        // Fallback: fetch status from status API endpoint
+        let isOpenStatus = true;
+        try {
+          const statusResp = await axios.get(`${API_BASE_URL}/restaurant/status/${resId}`);
+          if (statusResp.data && typeof statusResp.data.isOpen === 'boolean') {
+            isOpenStatus = statusResp.data.isOpen;
+          }
+        } catch (e) { }
+
+        setRestaurant({
+          id: resId,
+          name: 'Partner Restaurant',
+          cuisine: 'Multi-Cuisine',
+          rating: 4.8,
+          deliveryTime: '20-30 mins',
+          image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
+          isOpen: isOpenStatus,
+          status: isOpenStatus ? 'active' : 'closed'
+        });
+      }
+
+      // 3. Fetch menu items for this specific restaurant from DynamoDB
       const menuResponse = await axios.get(`${API_BASE_URL}/restaurant/menu/${resId}`);
       if (menuResponse.data.success && Array.isArray(menuResponse.data.items)) {
         setMenuItems(menuResponse.data.items);
@@ -451,7 +487,7 @@ export const RestaurantDetailsPage: React.FC = () => {
             <div className="flex flex-col space-y-4 w-full">
               {filteredMenuItems.map(item => {
                 const dishId = item.menuItemId || item.id;
-                const isRestaurantClosed = restaurant && (restaurant.isOpen === false || restaurant.status === 'closed');
+                const isRestaurantClosed = isResClosed;
                 const isOutOfStock = isRestaurantClosed || item.isAvailable === false || item.status === 'UNAVAILABLE' || item.status === 'disabled';
 
                 const itemVariants = Array.isArray(item.variants) && item.variants.length > 0

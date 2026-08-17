@@ -9,13 +9,62 @@ export interface CategoryItem {
 }
 
 export const DEFAULT_CULINARY_CATEGORIES: CategoryItem[] = [
-
-
-
-
-
-
-
+  {
+    id: 'cat_biryani',
+    name: 'Biryani',
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=600',
+    description: 'Signature selection of Biryani & Rice Specialties.',
+    keywords: ['biryani', 'rice', 'pulao', 'dum']
+  },
+  {
+    id: 'cat_naans',
+    name: 'Naans & Tandoori',
+    image: 'https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&q=80&w=600',
+    description: 'Fresh Naans, Rotis, Kebabs & Tandoori Starters.',
+    keywords: ['naan', 'roti', 'tandoori', 'kebab', 'tandoor']
+  },
+  {
+    id: 'cat_soups',
+    name: 'Soups & Starters',
+    image: 'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&q=80&w=600',
+    description: 'Signature Soups & Crispy Appetizers.',
+    keywords: ['soup', 'starter', 'appetizer', 'chilli', '65']
+  },
+  {
+    id: 'cat_maincourse',
+    name: 'Main Course',
+    image: 'https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?auto=format&fit=crop&q=80&w=600',
+    description: 'Rich Curries, Gravies & Thali Meals.',
+    keywords: ['main course', 'curry', 'gravy', 'paneer', 'chicken curry', 'thali', 'meal']
+  },
+  {
+    id: 'cat_bakery',
+    name: 'Bakery & Cakes',
+    image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=600',
+    description: 'Signature selection of Cakes, Pastries & Bakery items.',
+    keywords: ['bakery', 'cake', 'pastry', 'bread', 'puff', 'cookie']
+  },
+  {
+    id: 'cat_fastfood',
+    name: 'Fast Food & Combos',
+    image: 'https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&q=80&w=600',
+    description: 'Burgers, Pizzas, Noodles & Value Combos.',
+    keywords: ['fast food', 'burger', 'pizza', 'noodle', 'chinese', 'combo']
+  },
+  {
+    id: 'cat_desserts',
+    name: 'Desserts & Sweets',
+    image: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&q=80&w=600',
+    description: 'Ice Creams, Traditional Sweets & Desserts.',
+    keywords: ['dessert', 'sweet', 'ice cream', 'halwa', 'jamun']
+  },
+  {
+    id: 'cat_beverages',
+    name: 'Beverages',
+    image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=600',
+    description: 'Refreshing Cold Beverages, Milkshakes & Juices.',
+    keywords: ['beverage', 'drink', 'shake', 'juice', 'soda', 'tea', 'coffee']
+  }
 ];
 
 export const cleanCategoryName = (name: string = ''): string => {
@@ -26,7 +75,13 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
   const merged: CategoryItem[] = [];
   const seen = new Set<string>();
 
-  // Only include categories that exist in the database (or are created by vendors)
+  // Always include default curated categories first
+  DEFAULT_CULINARY_CATEGORIES.forEach(cat => {
+    seen.add(cat.name.toLowerCase());
+    merged.push({ ...cat });
+  });
+
+  // Merge any additional vendor DB categories
   if (Array.isArray(dbCategories)) {
     dbCategories.forEach((cat) => {
       const rawName = cat.name || '';
@@ -37,7 +92,6 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
       if (!seen.has(lowerName)) {
         seen.add(lowerName);
 
-        // Check matching default category for keywords & high quality image fallback
         const defaultMatch = DEFAULT_CULINARY_CATEGORIES.find(
           d => d.name.toLowerCase() === lowerName || d.keywords.some(k => lowerName.includes(k) || k.includes(lowerName))
         );
@@ -63,7 +117,8 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
     });
   }
 
-  return merged;
+  // Keep limited categories (8 curated categories)
+  return merged.slice(0, 8);
 };
 
 export const getTranslatedCategoryName = (name: string = '', t: (key: string) => string): string => {

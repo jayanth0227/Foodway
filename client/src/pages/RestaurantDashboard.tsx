@@ -21,6 +21,8 @@ import {
   Sun,
   Moon,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Menu as MenuIcon,
   X,
   ToggleLeft,
@@ -272,8 +274,44 @@ export const RestaurantDashboard: React.FC = () => {
   // Orders State
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [orderSearch, setOrderSearch] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState('All');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('Pending');
   const [isNotificationOpen, setIsNotificationOpen] = useState<boolean>(false);
+  const [expandedOrdersMap, setExpandedOrdersMap] = useState<Record<string, boolean>>({});
+
+  const toggleOrderExpand = (orderId: string) => {
+    setExpandedOrdersMap(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+  };
+
+  const getItemVariantLabel = (it: any): string | null => {
+    if (!it) return null;
+
+    if (it.variantLabel && typeof it.variantLabel === 'string' && it.variantLabel.trim() !== '') {
+      return it.variantLabel.trim();
+    }
+
+    const v = it.selectedVariant || it.variant;
+    if (v) {
+      if (typeof v === 'string' && v.trim() !== '') return v.trim();
+      if (typeof v === 'object') {
+        const name = v.name || v.label || v.variantName || v.portionName || v.title;
+        const qty = v.quantity || v.qty || v.weight || v.packSize;
+        const unit = v.unit || v.type || '';
+        const qtyUnit = (qty || unit) ? `${qty || ''} ${unit}`.trim() : '';
+
+        if (name && qtyUnit && name !== qtyUnit) return `${name} (${qtyUnit})`;
+        if (name) return name;
+        if (qtyUnit) return qtyUnit;
+      }
+    }
+
+    if (it.portion) return String(it.portion);
+    if (it.portionSize) return String(it.portionSize);
+    if (it.unit && it.quantity) return `${it.quantity} ${it.unit}`;
+    if (it.unit) return String(it.unit);
+    if (it.size) return String(it.size);
+    if (it.weight) return String(it.weight);
+    return null;
+  };
 
   // Profile Form State
   const [profileForm, setProfileForm] = useState({
@@ -688,8 +726,8 @@ export const RestaurantDashboard: React.FC = () => {
     setIsRestaurantOpen(nextStatus); // Instant UI Update
     setIsUpdatingStatus(true);
 
-    const resId = restaurant?.id || restaurant?.name || 'default';
-    const updatedRes = { ...restaurant, isOpen: nextStatus, status: nextStatus ? 'open' : 'closed' };
+    const resId = restaurant?.shopId || restaurant?.restaurantId || restaurant?.id || (restaurant as any)?.ownerUserId || restaurant?.name || 'default';
+    const updatedRes = { ...restaurant, isOpen: nextStatus, status: nextStatus ? 'ACTIVE' : 'INACTIVE' };
     setRestaurant(updatedRes);
 
     // Persist in local storage
@@ -710,6 +748,9 @@ export const RestaurantDashboard: React.FC = () => {
 
     try {
       await axios.put(`${API_BASE_URL}/restaurant/status/${resId}`, { isOpen: nextStatus });
+      if (restaurant?.shopId && restaurant?.shopId !== resId) {
+        await axios.put(`${API_BASE_URL}/restaurant/status/${restaurant.shopId}`, { isOpen: nextStatus }).catch(() => {});
+      }
       localStorage.setItem('foodway_status_changed_at', Date.now().toString());
       window.dispatchEvent(new Event('foodway_restaurant_status_updated'));
     } catch (err) {
@@ -1225,11 +1266,30 @@ export const RestaurantDashboard: React.FC = () => {
     );
   };
 
-  // Filtered Orders
+  // Filtered Orders (Case-insensitive status matching with synonyms)
   const filteredOrders = orders.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(orderSearch.toLowerCase()) || o.customerName.toLowerCase().includes(orderSearch.toLowerCase());
-    const matchesStatus = orderStatusFilter === 'All' || o.orderStatus === orderStatusFilter;
-    return matchesSearch && matchesStatus;
+    const q = orderSearch.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      o.id.toLowerCase().includes(q) ||
+      (o.customerName || '').toLowerCase().includes(q) ||
+      (o.customerPhone || '').includes(q);
+
+    if (!matchesSearch) return false;
+
+    if (orderStatusFilter === 'All') return true;
+
+    const filterLower = orderStatusFilter.toLowerCase();
+    const statusLower = (o.orderStatus || (o as any).status || '').toString().toLowerCase();
+
+    if (filterLower === 'pending') return statusLower === 'pending';
+    if (filterLower === 'accepted') return statusLower === 'accepted';
+    if (filterLower === 'preparing') return statusLower === 'preparing' || statusLower === 'accepted';
+    if (filterLower === 'ready') return statusLower === 'ready';
+    if (filterLower === 'completed') return statusLower === 'completed' || statusLower === 'delivered';
+    if (filterLower === 'rejected') return statusLower === 'rejected' || statusLower === 'cancelled';
+
+    return statusLower === filterLower;
   });
 
   // Today Stats Calculations (Case-insensitive status check)
@@ -2667,214 +2727,279 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
             ) : (
               <>
-                {/* 1. MOBILE ORDERS CARD LIST (Shown on Mobile screens < 640px) */}
-                <div className="space-y-4 sm:hidden">
+                {/* ACCORDION VENDOR ORDER CARDS LIST */}
+                <div className="space-y-4 w-full">
                   {filteredOrders.map(o => {
                     const status = (o.orderStatus || (o as any).status || 'Pending').toString();
-                    const isPending = status.toLowerCase() === 'pending';
-                    const isPreparing = status.toLowerCase() === 'preparing' || status.toLowerCase() === 'accepted';
-                    const isReady = status.toLowerCase() === 'ready';
-                    const isCompleted = status.toLowerCase() === 'completed' || status.toLowerCase() === 'delivered';
-                    const isRejected = status.toLowerCase() === 'rejected';
+                    const statusLower = status.toLowerCase();
+                    const isPending = statusLower === 'pending';
+                    const isPreparing = statusLower === 'preparing' || statusLower === 'accepted';
+                    const isReady = statusLower === 'ready';
+                    const isCompleted = statusLower === 'completed' || statusLower === 'delivered';
+                    const isRejected = statusLower === 'rejected';
+
+                    const isExpanded = !!expandedOrdersMap[o.id];
+
+                    let itemsList: any[] = [];
+                    if (Array.isArray(o.items)) {
+                      itemsList = o.items;
+                    } else if (typeof o.items === 'string' && o.items.trim().startsWith('[')) {
+                      try {
+                        itemsList = JSON.parse(o.items);
+                      } catch (e) {}
+                    }
+
+                    const totalItemsQty = itemsList.length > 0
+                      ? itemsList.reduce((acc: number, it: any) => acc + Number(it.quantity || it.qty || 1), 0)
+                      : 1;
 
                     return (
                       <motion.div
                         key={o.id}
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`glass-panel border rounded-2xl p-4 space-y-3.5 shadow-luxury relative overflow-hidden transition-all ${isPending
-                          ? 'border-amber-500/40 bg-amber-500/[0.03]'
+                        className={`glass-panel border rounded-2xl overflow-hidden shadow-luxury transition-all ${isPending
+                          ? 'border-amber-500/40 bg-amber-500/[0.02]'
                           : isPreparing
-                            ? 'border-blue-500/40 bg-blue-500/[0.03]'
+                            ? 'border-blue-500/40 bg-blue-500/[0.02]'
                             : isReady
-                              ? 'border-emerald-500/40 bg-emerald-500/[0.03]'
+                              ? 'border-emerald-500/40 bg-emerald-500/[0.02]'
                               : 'border-glass bg-bg-cardSec/40'
                           }`}
                       >
-                        {/* Top Header Strip: Order ID & Status Badge */}
-                        <div className="flex items-center justify-between gap-2 border-b border-glass/60 pb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-black text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg tracking-wider">
-                              #{o.id}
-                            </span>
-                            {o.time && (
-                              <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
-                                <Clock size={11} className="text-text-muted" />
-                                {o.time}
-                              </span>
-                            )}
-                          </div>
+                        {/* 1. Accordion Summary Header (Always Visible) */}
+                        <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bg-dark/40 border-b border-glass/60 hover:bg-glass/30 transition-colors">
+                          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                            {/* Accordion Expand/Collapse Icon Button */}
+                            <button
+                              type="button"
+                              onClick={() => toggleOrderExpand(o.id)}
+                              className="p-2 sm:p-2.5 rounded-xl bg-glass border border-glass text-primary hover:bg-primary/20 transition-all cursor-pointer shrink-0 mt-0.5 sm:mt-0"
+                              title={isExpanded ? 'Collapse Details' : 'Expand Details'}
+                            >
+                              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                            </button>
 
-                          <span
-                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 border shadow-sm ${isPending
-                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                              : isPreparing
-                                ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
-                                : isReady
-                                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                                  : isCompleted
-                                    ? 'bg-glass text-text-muted border-glass'
-                                    : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
-                              }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${isPending
-                                ? 'bg-amber-400 animate-pulse'
-                                : isPreparing
-                                  ? 'bg-blue-400 animate-pulse'
-                                  : isReady
-                                    ? 'bg-emerald-400 animate-pulse'
-                                    : isCompleted
-                                      ? 'bg-text-muted'
-                                      : 'bg-rose-400'
-                                }`}
-                            />
-                            <span>{status}</span>
-                          </span>
-                        </div>
+                            {/* Order Info & Customer Summary */}
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs sm:text-sm font-black text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-lg tracking-wider">
+                                  #{o.id}
+                                </span>
+                                <span
+                                  className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 border shadow-sm ${isPending
+                                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                                    : isPreparing
+                                      ? 'bg-blue-500/15 text-blue-400 border-blue-500/30'
+                                      : isReady
+                                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                                        : isCompleted
+                                          ? 'bg-glass text-text-muted border-glass'
+                                          : 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                                    }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${isPending
+                                      ? 'bg-amber-400 animate-pulse'
+                                      : isPreparing
+                                        ? 'bg-blue-400 animate-pulse'
+                                        : isReady
+                                          ? 'bg-emerald-400 animate-pulse'
+                                          : isCompleted
+                                            ? 'bg-text-muted'
+                                            : 'bg-rose-400'
+                                      }`}
+                                  />
+                                  <span>{status}</span>
+                                </span>
 
-                        {/* Customer Details Box */}
-                        <div className="bg-bg-dark/60 border border-glass/60 rounded-xl p-3 space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-black text-xs text-text-primary flex items-center gap-1.5">
-                              <User size={13} className="text-primary shrink-0" />
-                              <span>{o.customerName || 'Customer'}</span>
-                            </span>
-
-                            {o.customerPhone && (
-                              <a
-                                href={`tel:${o.customerPhone}`}
-                                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20"
-                              >
-                                <Phone size={11} />
-                                <span>{o.customerPhone}</span>
-                              </a>
-                            )}
-                          </div>
-
-                          {o.customerAddress && (
-                            <p className="text-[11px] text-text-muted font-medium flex items-start gap-1.5 leading-snug pt-0.5">
-                              <MapPin size={12} className="text-text-muted shrink-0 mt-0.5" />
-                              <span className="line-clamp-2">{o.customerAddress}</span>
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Ordered Items List Box */}
-                        <div className="space-y-1.5">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-text-muted block px-0.5">
-                            Items Ordered
-                          </span>
-
-                          <div className="bg-glass-subtle/50 border border-glass/60 rounded-xl p-3 space-y-1.5">
-                            {Array.isArray(o.items) && o.items.length > 0 ? (
-                              o.items.map((it: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between text-xs font-semibold text-text-primary border-b border-glass/30 last:border-0 pb-1 last:pb-0">
-                                  <span className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                    <span>{it.foodName || it.name || 'Food Item'}</span>
+                                {o.time && (
+                                  <span className="text-[10px] text-text-muted font-bold flex items-center gap-1">
+                                    <Clock size={11} />
+                                    {o.time}
                                   </span>
-                                  <span className="font-extrabold text-primary bg-primary/10 px-2 py-0.5 rounded-md text-[10px]">
-                                    x{it.quantity || 1}
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2.5 text-xs text-text-secondary">
+                                <span className="font-bold text-text-primary flex items-center gap-1">
+                                  <User size={13} className="text-primary" />
+                                  {o.customerName || 'Customer'}
+                                </span>
+                                <span className="text-text-muted">•</span>
+                                <span className="font-extrabold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 text-[11px] flex items-center gap-1">
+                                  <ShoppingBag size={12} />
+                                  {totalItemsQty} {totalItemsQty === 1 ? 'item' : 'items'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Header Actions: Total Price, Accept/Reject Buttons, Toggle Button */}
+                          <div className="flex items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 pt-3 sm:pt-0 border-glass/40">
+                            <div className="text-left sm:text-right shrink-0">
+                              <span className="text-[10px] text-text-muted font-black uppercase tracking-wider block leading-none">
+                                Total Order
+                              </span>
+                              <span className="text-base sm:text-lg font-black text-primary font-display">
+                                ₹{Number(o.total || 0).toFixed(2)}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {renderRestaurantOrderAction(o)}
+
+                              <button
+                                type="button"
+                                onClick={() => toggleOrderExpand(o.id)}
+                                className={`px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${isExpanded
+                                  ? 'bg-primary text-black border-primary'
+                                  : 'bg-glass text-text-primary hover:border-primary/50 border-glass'
+                                  }`}
+                              >
+                                <span>{isExpanded ? 'Hide Details' : 'View Items'}</span>
+                                {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 2. Expandable Accordion Item & Customer Details Panel */}
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="bg-bg-dark/90 p-4 sm:p-6 border-t border-glass space-y-5"
+                            >
+                              {/* Customer & Delivery Summary Box */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-glass-subtle/50 p-4 rounded-2xl border border-glass/80">
+                                <div className="space-y-1.5">
+                                  <span className="text-[10px] font-black uppercase text-primary tracking-widest block">
+                                    Customer & Contact Details
+                                  </span>
+                                  <div className="text-xs font-bold text-text-primary flex items-center gap-2">
+                                    <User size={14} className="text-primary shrink-0" />
+                                    <span className="text-sm">{o.customerName || 'Customer'}</span>
+                                  </div>
+                                  {o.customerPhone && (
+                                    <a
+                                      href={`tel:${o.customerPhone}`}
+                                      className="text-xs text-primary font-extrabold hover:underline flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20 w-fit"
+                                    >
+                                      <Phone size={12} />
+                                      <span>{o.customerPhone}</span>
+                                    </a>
+                                  )}
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  <span className="text-[10px] font-black uppercase text-primary tracking-widest block">
+                                    Delivery Address
+                                  </span>
+                                  <p className="text-xs font-semibold text-text-secondary flex items-start gap-1.5 leading-relaxed">
+                                    <MapPin size={14} className="text-primary shrink-0 mt-0.5" />
+                                    <span>{o.customerAddress || 'No address specified'}</span>
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Detailed Item & Variant Breakdown */}
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between px-1">
+                                  <span className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-2">
+                                    <Utensils size={15} className="text-primary" />
+                                    <span>Itemized Order Breakdown ({itemsList.length} unique items)</span>
                                   </span>
                                 </div>
-                              ))
-                            ) : typeof o.items === 'string' ? (
-                              <p className="text-xs font-semibold text-text-primary">{o.items}</p>
-                            ) : (
-                              <span className="text-text-muted italic text-[11px]">No items listed</span>
-                            )}
-                          </div>
-                        </div>
 
-                        {/* Order Payment & Total Pricing Strip */}
-                        <div className="flex items-center justify-between pt-1 border-t border-glass/60">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-text-muted font-bold uppercase tracking-wider">Payment:</span>
-                            <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                              {o.paymentStatus || 'PAID'}
-                            </span>
-                          </div>
+                                <div className="space-y-2.5">
+                                  {itemsList.length > 0 ? (
+                                    itemsList.map((it: any, idx: number) => {
+                                      const foodName = it.foodName || it.name || it.dishName || 'Food Item';
+                                      const qty = it.quantity || it.qty || 1;
+                                      const price = it.price ? Number(it.price) : undefined;
+                                      const variantLabel = getItemVariantLabel(it);
+                                      const img = it.image || it.dishImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200';
 
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-text-muted font-bold uppercase">Total:</span>
-                            <span className="text-base font-black text-primary font-display">
-                              ₹{Number(o.total || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="p-3.5 rounded-2xl bg-bg-cardSec/90 border border-glass flex items-center justify-between gap-4 shadow-sm hover:border-primary/40 transition-all"
+                                        >
+                                          <div className="flex items-center gap-3.5 min-w-0">
+                                            <img
+                                              src={img}
+                                              alt={foodName}
+                                              className="w-12 h-12 rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                            />
+                                            <div className="space-y-1 min-w-0">
+                                              <h4 className="font-black text-xs sm:text-sm text-text-primary truncate">
+                                                {foodName}
+                                              </h4>
+                                              {variantLabel ? (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[11px] font-black tracking-wide">
+                                                  <span>Variant / Portion:</span>
+                                                  <strong className="text-white">{variantLabel}</strong>
+                                                </span>
+                                              ) : (
+                                                <span className="text-[10px] text-text-muted font-medium italic">Standard Portion</span>
+                                              )}
+                                            </div>
+                                          </div>
 
-                        {/* Order Action Button Strip */}
-                        <div className="pt-2 border-t border-glass/60 flex items-center justify-end">
-                          {renderRestaurantOrderAction(o)}
-                        </div>
+                                          <div className="text-right shrink-0 space-y-1">
+                                            <span className="px-3 py-1 rounded-xl bg-primary/20 text-primary border border-primary/30 text-xs font-black inline-block">
+                                              x{qty}
+                                            </span>
+                                            {price !== undefined && (
+                                              <span className="text-xs font-bold text-text-secondary block">
+                                                ₹{price} × {qty} = <strong className="text-primary font-black">₹{(price * qty).toFixed(2)}</strong>
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  ) : typeof o.items === 'string' ? (
+                                    <div className="p-3.5 rounded-2xl bg-bg-cardSec/90 border border-glass text-xs font-bold text-text-primary">
+                                      {o.items}
+                                    </div>
+                                  ) : (
+                                    <div className="p-3.5 rounded-2xl bg-bg-cardSec/90 border border-glass text-xs font-medium text-text-muted italic">
+                                      No items listed for this order.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Special Instructions (If Any) */}
+                              {o.instructions && (
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 text-xs text-amber-300 font-semibold space-y-1">
+                                  <span className="font-black text-[10px] uppercase tracking-wider block text-amber-400">
+                                    Customer Instructions / Notes:
+                                  </span>
+                                  <p>"{o.instructions}"</p>
+                                </div>
+                              )}
+
+                              {/* Bottom Action Bar in Expanded Accordion */}
+                              <div className="pt-3 border-t border-glass/80 flex flex-col sm:flex-row items-center justify-between gap-3 bg-bg-dark/40 p-3 rounded-2xl">
+                                <span className="text-xs text-text-muted font-semibold text-center sm:text-left">
+                                  Review item quantities & portion variants above before accepting/rejecting this order.
+                                </span>
+                                <div className="shrink-0">
+                                  {renderRestaurantOrderAction(o)}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </motion.div>
                     );
                   })}
-                </div>
-
-                {/* 2. DESKTOP ORDERS TABLE (Shown on screens >= 640px) */}
-                <div className="hidden sm:block glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-bg-dark/80 border-b border-glass text-[10px] uppercase tracking-wider text-text-muted font-bold">
-                        <tr>
-                          <th className="p-4">Order ID</th>
-                          <th className="p-4">Customer Details</th>
-                          <th className="p-4">Items Ordered</th>
-                          <th className="p-4">Total</th>
-                          <th className="p-4">Payment</th>
-                          <th className="p-4">Order Status</th>
-                          <th className="p-4 text-right">Update Status Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-glass font-medium text-text-secondary">
-                        {filteredOrders.map(o => (
-                          <tr key={o.id} className="hover:bg-glass/40 transition-colors">
-                            <td className="p-4 font-mono font-bold text-primary">{o.id}</td>
-                            <td className="p-4">
-                              <div className="font-bold text-text-primary">{o.customerName}</div>
-                              <div className="text-[10px] text-text-muted">{o.customerPhone} • {o.customerAddress}</div>
-                            </td>
-                            <td className="p-4 max-w-xs">
-                              {Array.isArray(o.items) && o.items.length > 0 ? (
-                                <div className="space-y-1">
-                                  {o.items.map((it: any, idx: number) => (
-                                    <div key={idx} className="text-xs font-semibold text-text-primary">
-                                      {it.foodName || it.name || 'Food Item'} <span className="text-primary font-bold">x{it.quantity || 1}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : typeof o.items === 'string' ? (
-                                o.items
-                              ) : (
-                                <span className="text-text-muted italic text-[11px]">No items listed</span>
-                              )}
-                            </td>
-                            <td className="p-4 font-bold text-text-primary">₹{Number(o.total || 0).toFixed(2)}</td>
-                            <td className="p-4">
-                              <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                {o.paymentStatus}
-                              </span>
-                            </td>
-                            <td className="p-4">
-                              <span className={`px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase ${o.orderStatus === 'Pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' :
-                                o.orderStatus === 'Accepted' || o.orderStatus === 'Preparing' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                  o.orderStatus === 'Ready' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                    o.orderStatus === 'Completed' ? 'bg-glass text-text-muted border border-glass' :
-                                      'bg-error/10 text-error border border-error/20'
-                                }`}>
-                                {o.orderStatus}
-                              </span>
-                            </td>
-                            <td className="p-4 text-right">
-                              {renderRestaurantOrderAction(o)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
               </>
             )}

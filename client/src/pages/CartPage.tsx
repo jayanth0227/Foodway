@@ -27,6 +27,8 @@ import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../hooks/useAuth';
 import { API_BASE_URL } from '../utils/api';
+import { getCurrentUser, getToken, saveSession } from '../utils/auth.utils';
+import authService from '../services/auth.service';
 import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
 import type { Address } from '../types/auth.types';
 
@@ -39,6 +41,9 @@ export const CartPage: React.FC = () => {
   const [mobileStep, setMobileStep] = useState<1 | 2>(1);
 
   // Delivery & Contact State
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>(() => {
+    return user?.addresses || getCurrentUser()?.addresses || [];
+  });
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
@@ -59,21 +64,45 @@ export const CartPage: React.FC = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  // 2. Pre-fill Customer details and default saved address from profile
+  // 2. Pre-fill Customer details and default saved address from profile + fetch fresh backend addresses
   useEffect(() => {
-    if (user) {
-      setCustomerName(user.name || '');
-      setCustomerPhone(user.phone || '');
+    const syncUserAddresses = async () => {
+      const activeUser = user || getCurrentUser();
+      if (activeUser) {
+        setCustomerName(activeUser.name || '');
+        setCustomerPhone(activeUser.phone || '');
 
-      const userAddresses: Address[] = user.addresses || [];
-      if (userAddresses.length > 0) {
-        const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
-        setSelectedAddressId(defaultAddr.id);
-        applyAddress(defaultAddr);
-      } else if ((user as any).address) {
-        setDeliveryAddress((user as any).address);
+        const userAddresses: Address[] = activeUser.addresses || [];
+        if (userAddresses.length > 0) {
+          setSavedAddresses(userAddresses);
+          const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
+          setSelectedAddressId(defaultAddr.id);
+          applyAddress(defaultAddr);
+        } else if ((activeUser as any).address) {
+          setDeliveryAddress((activeUser as any).address);
+        }
+
+        // Fetch fresh user profile & addresses from backend API silently
+        try {
+          const res = await authService.getCurrentUser();
+          if (res && res.success && res.user && Array.isArray(res.user.addresses)) {
+            const token = getToken() || 'active_session';
+            saveSession(token, res.user);
+            const freshAddresses: Address[] = res.user.addresses;
+            if (freshAddresses.length > 0) {
+              setSavedAddresses(freshAddresses);
+              const defaultAddr = freshAddresses.find(a => a.isDefault) || freshAddresses[0];
+              setSelectedAddressId(defaultAddr.id);
+              applyAddress(defaultAddr);
+            }
+          }
+        } catch (e) {
+          console.warn('Silent user address sync warning:', e);
+        }
       }
-    }
+    };
+
+    syncUserAddresses();
   }, [user]);
 
   // 3. Synchronize loading timer with user & address resolution to prevent layout shift
@@ -119,8 +148,9 @@ export const CartPage: React.FC = () => {
     const fetchDeliveryConfig = async () => {
       try {
         const res = await axios.get(`${API_BASE_URL}/settings/delivery`);
-        if (res.data && typeof res.data.deliveryFeePerKm === 'number') {
-          setDeliveryFeePerKm(res.data.deliveryFeePerKm);
+        const rate = res.data?.deliveryFeePerKm ?? res.data?.settings?.deliveryFeePerKm;
+        if (typeof rate === 'number') {
+          setDeliveryFeePerKm(rate);
         }
         if (res.data && typeof res.data.baseDeliveryFee === 'number') {
           setBaseDeliveryFee(res.data.baseDeliveryFee);
@@ -135,20 +165,59 @@ export const CartPage: React.FC = () => {
   // Fetch Store / Restaurant Coordinates
   useEffect(() => {
     if (cartItems.length > 0) {
-      const targetResId = (cartItems[0]?.dish as any)?.restaurantId;
-      if (targetResId) {
+      const firstDish = cartItems[0]?.dish;
+      const targetResId = (firstDish as any)?.restaurantId || (firstDish as any)?.shopId;
+
+      if ((firstDish as any)?.restaurantLatitude && (firstDish as any)?.restaurantLongitude) {
+        setStoreLat(Number((firstDish as any).restaurantLatitude));
+        setStoreLng(Number((firstDish as any).restaurantLongitude));
+      } else if (targetResId) {
         axios.get(`${API_BASE_URL}/shops/${targetResId}`)
           .then(res => {
-            const shop = res.data?.shop || res.data?.restaurant;
+            const shop = res.data?.shop || res.data?.restaurant || res.data;
             if (shop?.latitude && shop?.longitude) {
-              setStoreLat(shop.latitude);
-              setStoreLng(shop.longitude);
+              setStoreLat(Number(shop.latitude));
+              setStoreLng(Number(shop.longitude));
+            } else {
+              setStoreLat(17.3616);
+              setStoreLng(78.4850);
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            setStoreLat(17.3616);
+            setStoreLng(78.4850);
+          });
+      } else {
+        setStoreLat(17.3616);
+        setStoreLng(78.4850);
       }
     }
   }, [cartItems]);
+
+  // Geocode delivery address if lat/lng are missing
+  useEffect(() => {
+    if ((!selectedLat || !selectedLng) && deliveryAddress && deliveryAddress.trim().length > 3) {
+      const controller = new AbortController();
+      const geocode = async () => {
+        try {
+          const query = encodeURIComponent(deliveryAddress.trim());
+          const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
+            signal: controller.signal
+          });
+          const data = await resp.json();
+          if (data && data.length > 0) {
+            setSelectedLat(parseFloat(data[0].lat));
+            setSelectedLng(parseFloat(data[0].lon));
+          }
+        } catch (e) {}
+      };
+      const timer = setTimeout(geocode, 500);
+      return () => {
+        clearTimeout(timer);
+        controller.abort();
+      };
+    }
+  }, [deliveryAddress, selectedLat, selectedLng]);
 
   // Compute 100% Real Road Driving Distance via OSRM OpenStreetMap Routing API
   useEffect(() => {
@@ -156,7 +225,6 @@ export const CartPage: React.FC = () => {
       let isCancelled = false;
       const fetchDrivingDistance = async () => {
         try {
-          // OSRM routing format: lon1,lat1;lon2,lat2
           const url = `https://router.project-osrm.org/route/v1/driving/${storeLng},${storeLat};${selectedLng},${selectedLat}?overview=false`;
           const resp = await fetch(url);
           const data = await resp.json();
@@ -195,9 +263,9 @@ export const CartPage: React.FC = () => {
     }
   }, [storeLat, storeLng, selectedLat, selectedLng]);
 
-  // Calculation Breakdown (Distance-based Delivery Fee per KM - No taxes or hidden charges)
+  // Delivery Fee Calculation (Strictly Distance in KM * Price per KM set by Admin)
   const effectiveDistance = calculatedDistanceKm ?? 2.0;
-  const deliveryFee = Math.max(baseDeliveryFee, Math.round(effectiveDistance * deliveryFeePerKm));
+  const deliveryFee = Math.round(effectiveDistance * deliveryFeePerKm);
   const grandTotal = Math.max(0, totalAmount + deliveryFee);
 
   // Handle Order Submission
@@ -229,17 +297,39 @@ export const CartPage: React.FC = () => {
         instructions: instructions.trim(),
         restaurantId: targetRestaurantId,
         restaurantName: targetRestaurantName,
-        items: cartItems.map(item => ({
-          id: item.dish.id,
-          menuItemId: item.dish.id,
-          name: item.dish.name,
-          foodName: item.dish.name,
-          price: item.dish.price,
-          quantity: item.quantity,
-          image: item.dish.image,
-          restaurantId: (item.dish as any).restaurantId || targetRestaurantId,
-          restaurantName: (item.dish as any).restaurantName || targetRestaurantName
-        })),
+        items: cartItems.map(item => {
+          const v = item.selectedVariant;
+          const effectivePrice = v ? Number(v.price) : Number(item.dish.price);
+
+          let variantLabel: string | undefined = undefined;
+          if (v) {
+            if (typeof v === 'string') {
+              variantLabel = v;
+            } else if (typeof v === 'object') {
+              const name = v.name || v.label || v.variantName;
+              const qtyStr = (v.quantity || v.qty) ? `${v.quantity || v.qty} ${v.unit || ''}`.trim() : (v.unit || '');
+              if (name && qtyStr && name !== qtyStr) {
+                variantLabel = `${name} (${qtyStr})`;
+              } else {
+                variantLabel = name || qtyStr || undefined;
+              }
+            }
+          }
+
+          return {
+            id: item.dish.id,
+            menuItemId: item.dish.id,
+            name: item.dish.name,
+            foodName: item.dish.name,
+            price: effectivePrice,
+            quantity: item.quantity,
+            image: item.dish.image,
+            selectedVariant: v || null,
+            variantLabel: variantLabel || (v ? `${v.quantity || ''} ${v.unit || ''}`.trim() : undefined),
+            restaurantId: (item.dish as any).restaurantId || targetRestaurantId,
+            restaurantName: (item.dish as any).restaurantName || targetRestaurantName
+          };
+        }),
         subtotal: totalAmount,
         discount: 0,
         deliveryFee,
@@ -567,7 +657,7 @@ export const CartPage: React.FC = () => {
                   <div className="space-y-4.5 relative z-10">
 
                     {/* SAVED ADDRESSES SELECTOR */}
-                    {isAuthenticated && user && (user.addresses || []).length > 0 && (
+                    {(isAuthenticated || !!getCurrentUser()) && savedAddresses.length > 0 && (
                       <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
                           <label className="block text-[11px] font-black text-text-primary uppercase tracking-wider">
@@ -584,7 +674,7 @@ export const CartPage: React.FC = () => {
                         </div>
 
                         <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                          {(user.addresses || []).map((addr: Address) => {
+                          {savedAddresses.map((addr: Address) => {
                             const isSelected = selectedAddressId === addr.id && !isCustomAddress;
                             return (
                               <div

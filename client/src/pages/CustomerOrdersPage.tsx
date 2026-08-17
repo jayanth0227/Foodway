@@ -336,13 +336,13 @@ export const CustomerOrdersPage: React.FC = () => {
                     key={orderId}
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="glass-panel border border-glass hover:border-primary/40 rounded-3xl p-6 space-y-5 shadow-luxury transition-all"
+                    className="glass-panel border border-glass hover:border-primary/40 rounded-2xl p-4 sm:p-5 space-y-4 shadow-luxury transition-all"
                   >
                     {/* Card Top Header & Status Row */}
-                    <div className="space-y-2 border-b border-glass pb-4">
+                    <div className="space-y-2 border-b border-glass pb-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-black text-primary">{orderId}</span>
+                          <span className="font-mono text-xs sm:text-sm font-black text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-lg tracking-wider">#{orderId}</span>
                           <span className="text-xs text-text-muted font-medium">• {formattedDate}</span>
                         </div>
 
@@ -368,16 +368,16 @@ export const CustomerOrdersPage: React.FC = () => {
 
                         <button
                           onClick={() => handleReorder(order)}
-                          className="px-4 py-2 rounded-2xl bg-primary text-black hover:bg-primary/90 font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0"
+                          className="px-3.5 py-1.5 rounded-xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0"
                         >
-                          <RefreshCw size={15} />
+                          <RefreshCw size={14} />
                           <span>REORDER</span>
                         </button>
                       </div>
                     </div>
 
                     {/* Ordered Items Full Breakdown */}
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
                           <Utensils size={14} className="text-primary" />
@@ -390,42 +390,75 @@ export const CustomerOrdersPage: React.FC = () => {
                           Item details saved in database order record #{orderId}.
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                           {itemsList.map((item: any, idx: number) => {
                             const itemName = item.foodName || item.name || 'Food Item';
                             const itemQty = Number(item.quantity || 1);
                             const itemPrice = Number(item.price || 0);
                             const itemTotal = itemPrice * itemQty;
                             const itemImage = item.image || item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=300';
+                            
+                            const variantLabel = (() => {
+                              if (item.variantLabel && typeof item.variantLabel === 'string' && item.variantLabel.trim() !== '') {
+                                return item.variantLabel.trim();
+                              }
+                              const v = item.selectedVariant || item.variant;
+                              if (v) {
+                                if (typeof v === 'string' && v.trim() !== '') return v.trim();
+                                if (typeof v === 'object') {
+                                  const name = v.name || v.label || v.variantName || v.portionName;
+                                  const qty = v.quantity || v.qty || v.weight || v.packSize;
+                                  const unit = v.unit || v.type || '';
+                                  const qtyUnit = (qty || unit) ? `${qty || ''} ${unit}`.trim() : '';
+
+                                  if (name && qtyUnit && name !== qtyUnit) return `${name} (${qtyUnit})`;
+                                  if (name) return name;
+                                  if (qtyUnit) return qtyUnit;
+                                }
+                              }
+                              if (item.portion) return String(item.portion);
+                              if (item.portionSize) return String(item.portionSize);
+                              if (item.unit && item.quantity) return `${item.quantity} ${item.unit}`;
+                              if (item.unit) return String(item.unit);
+                              if (item.size) return String(item.size);
+                              if (item.weight) return String(item.weight);
+                              return null;
+                            })();
 
                             return (
                               <div
                                 key={idx}
-                                className="p-3 rounded-2xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/30 transition-all shadow-sm"
+                                className="p-3 rounded-xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/40 transition-all shadow-sm"
                               >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                   <img
                                     src={itemImage}
                                     alt={itemName}
-                                    className="w-12 h-12 rounded-xl object-cover border border-glass shrink-0 bg-bg-dark"
+                                    className="rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                    style={{ width: '52px', height: '52px', minWidth: '52px', minHeight: '52px' }}
                                   />
-                                  <div className="min-w-0 space-y-0.5 flex-1">
-                                    <h4 className="text-xs font-extrabold text-text-primary truncate">
+                                  <div className="min-w-0 space-y-1 flex-1">
+                                    <h4 className="text-xs sm:text-sm font-black text-text-primary truncate">
                                       {itemName}
                                     </h4>
                                     <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                                      <span className="px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-black text-[10px]">
-                                        x{itemQty}
+                                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 font-black text-[11px] font-mono shadow-xs">
+                                        QTY: {itemQty}
                                       </span>
-                                      <span className="text-text-muted font-medium text-[11px]">
-                                        ₹{Number.isInteger(itemPrice) ? itemPrice : itemPrice.toFixed(2)} each
+                                      {variantLabel && (
+                                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 font-extrabold text-[11px] font-mono shadow-xs">
+                                          {variantLabel}
+                                        </span>
+                                      )}
+                                      <span className="text-text-muted font-bold text-[11px]">
+                                        • ₹{Number.isInteger(itemPrice) ? itemPrice : itemPrice.toFixed(2)} each
                                       </span>
                                     </div>
                                   </div>
                                 </div>
 
                                 <div className="text-right shrink-0">
-                                  <span className="text-xs sm:text-sm font-black text-text-primary font-display block">
+                                  <span className="text-xs sm:text-sm font-black text-primary font-display block">
                                     ₹{Number.isInteger(itemTotal) ? itemTotal : itemTotal.toFixed(2)}
                                   </span>
                                 </div>

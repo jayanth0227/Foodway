@@ -49,6 +49,8 @@ export class ShopService {
     const name = raw.shopName || raw.restaurantName || raw.name || 'Shop';
     const shopType = raw.shopType || 'FOOD';
 
+    const isClosed = raw.isOpen === false || raw.isOpen === 'false' || raw.status === 'closed' || raw.status === 'inactive' || raw.status === 'INACTIVE' || raw.status === 'OFFLINE' || raw.status === 'offline' || raw.status === 'CLOSED';
+
     return {
       id,
       shopId: id,
@@ -63,7 +65,7 @@ export class ShopService {
       isPopular: raw.isPopular !== false,
       address: raw.address || '',
       phone: raw.phone || '',
-      isOpen: raw.isOpen !== false
+      isOpen: !isClosed
     };
   }
 

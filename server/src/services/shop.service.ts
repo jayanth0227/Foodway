@@ -153,7 +153,10 @@ export class ShopService {
   }
 
   async updateShopStatus(shopId: string, isOpen: boolean): Promise<IShop | null> {
-    return shopRepository.update(shopId, { isOpen });
+    return shopRepository.update(shopId, {
+      isOpen,
+      status: isOpen ? 'ACTIVE' : 'INACTIVE'
+    });
   }
 
   // Alias methods for backward compatibility

@@ -37,7 +37,7 @@ export class ShopRepository {
       // Fallback try scan if shopId is stored under different attribute
       const scanCommand = new ScanCommand({
         TableName: shopsTableName,
-        FilterExpression: 'shopId = :sId OR restaurantId = :sId',
+        FilterExpression: 'shopId = :sId OR restaurantId = :sId OR id = :sId OR ownerUserId = :sId OR email = :sId OR shopName = :sId OR restaurantName = :sId',
         ExpressionAttributeValues: { ':sId': cleanId }
       });
       const scanResp = await dynamoDocClient.send(scanCommand);
