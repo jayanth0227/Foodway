@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Role, AuthState } from '../types/auth.types';
-import { saveSession, clearSession, getToken, getCurrentUser } from '../utils/auth.utils';
+import { saveSession, clearSession, cleanupObsoleteStorage, setCurrentUser, setToken as setInMemoryToken } from '../utils/auth.utils';
 import authService from '../services/auth.service';
 import notificationService from '../services/notification.service';
 
@@ -21,33 +21,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Initialize auth from SessionStorage/LocalStorage and validate with backend silently on app load
+  // Initialize auth & restore session securely from backend HttpOnly cookie on app startup
   useEffect(() => {
     const initializeAuth = async () => {
       setIsLoading(true);
-      const existingToken = getToken();
-      const storedUser = getCurrentUser();
 
-      if (storedUser) {
-        setToken(existingToken || 'active_session');
-        setUser(storedUser);
-        setRole(storedUser.role);
+      // Purge obsolete sensitive credentials from localStorage/sessionStorage
+      cleanupObsoleteStorage();
 
-        if (existingToken) {
-          try {
-            const res = await authService.getCurrentUser();
-            if (res && res.success && res.user) {
-              setUser(res.user);
-              setRole(res.user.role);
-              saveSession(existingToken, res.user);
-              notificationService.syncFcmTokenAfterLogin();
-            }
-          } catch (error) {
-            console.warn('Backend session verification warning:', error);
-          }
+      try {
+        const res = await authService.getCurrentUser();
+        if (res && res.success && res.user) {
+          const activeToken = res.token || 'active_session';
+          saveSession(activeToken, res.user);
+          setUser(res.user);
+          setRole(res.user.role);
+          setToken(activeToken);
+
+          // Asynchronously sync FCM push notification token post-restoration
+          notificationService.syncFcmTokenAfterLogin();
+        } else {
+          clearSession();
+          setUser(null);
+          setRole(null);
+          setToken(null);
         }
+      } catch (error) {
+        clearSession();
+        setUser(null);
+        setRole(null);
+        setToken(null);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     initializeAuth();
@@ -58,12 +64,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsLoading(true);
       const res = await authService.login({ email, password });
 
-      if (res.success && res.token && res.user) {
-        saveSession(res.token, res.user, res.expiresIn);
-        setToken(res.token);
+      if (res.success && res.user) {
+        const activeToken = res.token || 'active_session';
+        saveSession(activeToken, res.user, res.expiresIn);
+        setToken(activeToken);
         setUser(res.user);
         setRole(res.user.role);
         setIsLoading(false);
+
         // Sync FCM token with backend post-login asynchronously
         notificationService.syncFcmTokenAfterLogin();
         return { success: true, role: res.user.role };
@@ -78,7 +86,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (e) {}
     clearSession();
     setUser(null);
     setRole(null);
@@ -89,12 +100,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       const res = await authService.register({ name, email, password, phone });
-      if (res.success && res.token && res.user) {
-        saveSession(res.token, res.user, res.expiresIn);
-        setToken(res.token);
+      if (res.success && res.user) {
+        const activeToken = res.token || 'active_session';
+        saveSession(activeToken, res.user, res.expiresIn);
+        setToken(activeToken);
         setUser(res.user);
         setRole(res.user.role);
         setIsLoading(false);
+
         // Sync FCM token with backend post-registration asynchronously
         notificationService.syncFcmTokenAfterLogin();
         return { success: true };
@@ -110,17 +123,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const refreshAuth = async () => {
-    const existingToken = getToken();
-    if (!existingToken) {
-      handleLogout();
-      return;
-    }
     try {
       const res = await authService.getCurrentUser();
       if (res.success && res.user) {
+        const activeToken = res.token || token || 'active_session';
+        saveSession(activeToken, res.user);
         setUser(res.user);
         setRole(res.user.role);
-        saveSession(existingToken, res.user);
+        setToken(activeToken);
+      } else {
+        handleLogout();
       }
     } catch (e) {
       handleLogout();
@@ -131,13 +143,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const res = await authService.updateProfile(data);
       if (res.success && res.user) {
-        const activeToken = res.token || token || getToken() || '';
+        const activeToken = res.token || token || 'active_session';
+        saveSession(activeToken, res.user);
         setUser(res.user);
         setRole(res.user.role);
         if (res.token) {
           setToken(res.token);
         }
-        saveSession(activeToken, res.user);
         return { success: true, user: res.user };
       }
       return { success: false, error: res.error || 'Failed to update profile' };

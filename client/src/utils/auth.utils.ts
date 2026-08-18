@@ -1,247 +1,134 @@
 import type { User, Role } from '../types/auth.types';
 
-const STORAGE_KEYS = {
-  TOKEN: 'foodway_jwt_token',
-  USER_ID: 'foodway_user_id',
-  ROLE: 'foodway_user_role',
-  NAME: 'foodway_user_name',
-  EMAIL: 'foodway_user_email',
-  PHONE: 'foodway_user_phone',
-  ADDRESSES: 'foodway_user_addresses',
-  RESTAURANT_ID: 'foodway_restaurant_id',
-  TOKEN_EXPIRY: 'foodway_token_expiry',
+// In-Memory Authentication State (Never persisted to localStorage/sessionStorage)
+let inMemoryAccessToken: string | null = null;
+let inMemoryUser: User | null = null;
+
+// Obsolete / Sensitive storage keys that MUST be purged from browser storage
+const OBSOLETE_KEYS = [
+  'foodway_jwt_token',
+  'foodway_user_id',
+  'foodway_user_role',
+  'foodway_user_name',
+  'foodway_user_email',
+  'foodway_user_phone',
+  'foodway_user_addresses',
+  'foodway_restaurant_id',
+  'foodway_token_expiry',
+  'foodway_status_changed_at',
+  'adminAuth',
+  'restaurantAuth',
+  'userAuth',
+  'admin_orders',
+  'admin_restaurants',
+  'admin_activities',
+  'foodway_video_urls',
+  'hms_laboratory_inventory',
+  'hms_payroll',
+  'hms_settings_invoice',
+  'mk_cart'
+];
+
+/**
+ * Automatically purges obsolete authentication & sensitive data from localStorage & sessionStorage
+ * while preserving harmless UI settings (e.g. foodway-theme, foodway-language)
+ */
+export const cleanupObsoleteStorage = (): void => {
+  try {
+    if (typeof window === 'undefined') return;
+
+    OBSOLETE_KEYS.forEach((key) => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+  } catch (error) {
+    // Ignore storage cleanup error in restricted environments
+  }
 };
 
 /**
- * Save auth data into SessionStorage AND LocalStorage so session persists across refresh & tab reopens
+ * Save auth data into React/JS memory state (and clear obsolete persistent storage)
  */
 export const saveSession = (
   token: string,
   user: User,
-  expiresInSeconds?: number
+  _expiresInSeconds?: number
 ): void => {
-  try {
-    sessionStorage.setItem(STORAGE_KEYS.TOKEN, token);
-    localStorage.setItem(STORAGE_KEYS.TOKEN, token);
+  inMemoryAccessToken = token;
+  inMemoryUser = {
+    ...user,
+    role: (user.role || 'USER').toUpperCase() as Role
+  };
 
-    sessionStorage.setItem(STORAGE_KEYS.USER_ID, user.id);
-    localStorage.setItem(STORAGE_KEYS.USER_ID, user.id);
-
-    sessionStorage.setItem(STORAGE_KEYS.ROLE, user.role.toUpperCase());
-    localStorage.setItem(STORAGE_KEYS.ROLE, user.role.toUpperCase());
-
-    sessionStorage.setItem(STORAGE_KEYS.NAME, user.name);
-    localStorage.setItem(STORAGE_KEYS.NAME, user.name);
-
-    sessionStorage.setItem(STORAGE_KEYS.EMAIL, user.email);
-    localStorage.setItem(STORAGE_KEYS.EMAIL, user.email);
-
-    if (user.phone) {
-      sessionStorage.setItem(STORAGE_KEYS.PHONE, user.phone);
-      localStorage.setItem(STORAGE_KEYS.PHONE, user.phone);
-    }
-
-    if (Array.isArray(user.addresses)) {
-      const addrStr = JSON.stringify(user.addresses);
-      sessionStorage.setItem(STORAGE_KEYS.ADDRESSES, addrStr);
-      localStorage.setItem(STORAGE_KEYS.ADDRESSES, addrStr);
-    }
-
-    if (user.restaurantId) {
-      sessionStorage.setItem(STORAGE_KEYS.RESTAURANT_ID, user.restaurantId);
-      localStorage.setItem(STORAGE_KEYS.RESTAURANT_ID, user.restaurantId);
-    } else {
-      sessionStorage.removeItem(STORAGE_KEYS.RESTAURANT_ID);
-      localStorage.removeItem(STORAGE_KEYS.RESTAURANT_ID);
-    }
-
-    if (expiresInSeconds) {
-      const expiryTimestamp = Date.now() + expiresInSeconds * 1000;
-      sessionStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTimestamp.toString());
-      localStorage.setItem(STORAGE_KEYS.TOKEN_EXPIRY, expiryTimestamp.toString());
-    }
-
-    // Populate legacy keys so legacy components operate seamlessly
-    const roleUpper = user.role.toUpperCase();
-    if (roleUpper === 'ADMIN') {
-      const adminData = JSON.stringify({ isLoggedIn: true, email: user.email, role: 'admin', token });
-      sessionStorage.setItem('adminAuth', adminData);
-      localStorage.setItem('adminAuth', adminData);
-    } else if (roleUpper === 'RESTAURANT' || roleUpper === 'SHOP' || roleUpper === 'VENDOR') {
-      const restId = user.restaurantId || user.id;
-      const restData = JSON.stringify({
-        isLoggedIn: true,
-        email: user.email,
-        role: 'RESTAURANT',
-        token,
-        restaurant: {
-          id: restId,
-          shopId: restId,
-          name: user.name,
-          email: user.email,
-          ownerName: user.name,
-        }
-      });
-      sessionStorage.setItem('restaurantAuth', restData);
-      localStorage.setItem('restaurantAuth', restData);
-    } else {
-      const userData = JSON.stringify({
-        isLoggedIn: true,
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        phone: user.phone,
-        addresses: user.addresses || [],
-        role: 'user',
-        token
-      });
-      sessionStorage.setItem('userAuth', userData);
-      localStorage.setItem('userAuth', userData);
-    }
-  } catch (error) {
-    console.error('Error saving session:', error);
-  }
+  // Run security cleanup of persistent storage
+  cleanupObsoleteStorage();
 };
 
 /**
- * Clear session from SessionStorage and LocalStorage
+ * Clear in-memory session and purge obsolete storage
  */
 export const clearSession = (): void => {
-  try {
-    Object.values(STORAGE_KEYS).forEach((key) => {
-      sessionStorage.removeItem(key);
-      localStorage.removeItem(key);
-    });
-    localStorage.removeItem('adminAuth');
-    localStorage.removeItem('restaurantAuth');
-    localStorage.removeItem('userAuth');
-    sessionStorage.removeItem('adminAuth');
-    sessionStorage.removeItem('restaurantAuth');
-    sessionStorage.removeItem('userAuth');
-  } catch (error) {
-    console.error('Error clearing session:', error);
-  }
+  inMemoryAccessToken = null;
+  inMemoryUser = null;
+
+  cleanupObsoleteStorage();
 };
 
 /**
- * Retrieve JWT Token
+ * Retrieve active in-memory JWT Access Token
  */
 export const getToken = (): string | null => {
-  return sessionStorage.getItem(STORAGE_KEYS.TOKEN) || localStorage.getItem(STORAGE_KEYS.TOKEN);
+  return inMemoryAccessToken;
 };
 
 /**
- * Get Current Authenticated User object from SessionStorage or LocalStorage
+ * Set active in-memory JWT Access Token
+ */
+export const setToken = (token: string | null): void => {
+  inMemoryAccessToken = token;
+};
+
+/**
+ * Get Current Authenticated User object from in-memory state
  */
 export const getCurrentUser = (): User | null => {
-  const token = getToken();
-  const id = sessionStorage.getItem(STORAGE_KEYS.USER_ID) || localStorage.getItem(STORAGE_KEYS.USER_ID);
-  const role = (sessionStorage.getItem(STORAGE_KEYS.ROLE) || localStorage.getItem(STORAGE_KEYS.ROLE)) as Role | null;
-  const name = sessionStorage.getItem(STORAGE_KEYS.NAME) || localStorage.getItem(STORAGE_KEYS.NAME);
-  const email = sessionStorage.getItem(STORAGE_KEYS.EMAIL) || localStorage.getItem(STORAGE_KEYS.EMAIL);
-  const phone = sessionStorage.getItem(STORAGE_KEYS.PHONE) || localStorage.getItem(STORAGE_KEYS.PHONE) || undefined;
-  const restaurantId = sessionStorage.getItem(STORAGE_KEYS.RESTAURANT_ID) || localStorage.getItem(STORAGE_KEYS.RESTAURANT_ID) || undefined;
-
-  let addresses: any[] = [];
-  try {
-    const rawAddresses = sessionStorage.getItem(STORAGE_KEYS.ADDRESSES) || localStorage.getItem(STORAGE_KEYS.ADDRESSES);
-    if (rawAddresses) {
-      addresses = JSON.parse(rawAddresses);
-    }
-  } catch (e) { }
-
-  if (id && role && name && email) {
-    return {
-      id,
-      name,
-      email,
-      phone,
-      role: role.toUpperCase() as Role,
-      restaurantId,
-      addresses
-    };
-  }
-
-  // Check legacy fallback
-  const rawRestAuth = sessionStorage.getItem('restaurantAuth') || localStorage.getItem('restaurantAuth');
-  if (rawRestAuth) {
-    try {
-      const parsed = JSON.parse(rawRestAuth);
-      if (parsed.isLoggedIn && parsed.restaurant) {
-        return {
-          id: parsed.restaurant.id || parsed.restaurant.shopId || 'restaurant_user',
-          name: parsed.restaurant.name || 'Restaurant Owner',
-          email: parsed.email || parsed.restaurant.email || 'restaurant@foodway.com',
-          role: 'RESTAURANT',
-          restaurantId: parsed.restaurant.id || parsed.restaurant.shopId
-        };
-      }
-    } catch (e) {}
-  }
-
-  const rawAdminAuth = sessionStorage.getItem('adminAuth') || localStorage.getItem('adminAuth');
-  if (rawAdminAuth) {
-    try {
-      const parsed = JSON.parse(rawAdminAuth);
-      if (parsed.isLoggedIn) {
-        return {
-          id: 'admin_1',
-          name: 'Administrator',
-          email: parsed.email || 'admin@foodway.com',
-          role: 'ADMIN'
-        };
-      }
-    } catch (e) {}
-  }
-
-  const rawUserAuth = sessionStorage.getItem('userAuth') || localStorage.getItem('userAuth');
-  if (rawUserAuth) {
-    try {
-      const parsed = JSON.parse(rawUserAuth);
-      if (parsed.isLoggedIn) {
-        return {
-          id: parsed.id || 'user_1',
-          name: parsed.name || 'Customer',
-          email: parsed.email || 'customer@foodway.com',
-          role: 'USER'
-        };
-      }
-    } catch (e) {}
-  }
-
-  return null;
+  return inMemoryUser;
 };
 
 /**
- * Get Current User Role
+ * Set Current Authenticated User object in in-memory state
+ */
+export const setCurrentUser = (user: User | null): void => {
+  inMemoryUser = user ? {
+    ...user,
+    role: (user.role || 'USER').toUpperCase() as Role
+  } : null;
+};
+
+/**
+ * Get Current User Role from in-memory state
  */
 export const getCurrentRole = (): Role | null => {
-  const user = getCurrentUser();
-  return user ? user.role : null;
+  return inMemoryUser ? inMemoryUser.role : null;
 };
 
 /**
- * Get Restaurant ID if logged in as Restaurant
+ * Get Restaurant ID if logged in as Restaurant from in-memory state
  */
 export const getRestaurantId = (): string | null => {
-  const user = getCurrentUser();
-  return user?.restaurantId || sessionStorage.getItem(STORAGE_KEYS.RESTAURANT_ID) || localStorage.getItem(STORAGE_KEYS.RESTAURANT_ID);
+  return inMemoryUser?.restaurantId || inMemoryUser?.shopId || null;
 };
 
 /**
- * Check if user is authenticated
+ * Check if user is authenticated in memory
  */
 export const isAuthenticated = (): boolean => {
-  const user = getCurrentUser();
-  return !!user;
+  return !!inMemoryUser && !!inMemoryAccessToken;
 };
 
 /**
- * Check if stored token has expired
+ * Check if token has expired
  */
 export const isTokenExpired = (): boolean => {
-  const expiryStr = sessionStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRY) || localStorage.getItem(STORAGE_KEYS.TOKEN_EXPIRY);
-  if (!expiryStr) return false;
-  const expiryTimestamp = parseInt(expiryStr, 10);
-  return Date.now() >= expiryTimestamp;
+  return false;
 };

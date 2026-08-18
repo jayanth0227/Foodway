@@ -8,6 +8,26 @@ import userRepository from '../repositories/user.repository';
 import restaurantRepository from '../repositories/restaurant.repository';
 import { generateUserId } from '../utils/idGenerator';
 
+export const setAuthCookie = (res: Response, token: string) => {
+  res.cookie('foodway_session', token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 24 * 60 * 60 * 1000
+  });
+};
+
+export const logout = async (_req: Request, res: Response) => {
+  res.clearCookie('foodway_session', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/'
+  });
+  return res.json({ success: true, message: 'Logged out successfully.' });
+};
+
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -53,6 +73,7 @@ export const login = async (req: Request, res: Response) => {
 
         const token = generateToken(payload);
         const expiresInSeconds = 86400;
+        setAuthCookie(res, token);
 
         return res.json({
           success: true,
@@ -142,6 +163,7 @@ export const login = async (req: Request, res: Response) => {
 
     const token = generateToken(payload);
     const expiresInSeconds = 86400;
+    setAuthCookie(res, token);
 
     return res.json({
       success: true,
@@ -172,11 +194,15 @@ export const me = async (req: AuthenticatedRequest, res: Response) => {
     return res.status(401).json({ success: false, error: 'Not authenticated.' });
   }
 
+  // Extract current token from Bearer header or cookie to echo back to React memory state
+  const activeToken = req.headers.authorization?.split(' ')[1] || req.cookies?.foodway_session || '';
+
   try {
     const dbUser = await userService.getUserById(req.user.id);
     if (!dbUser) {
       return res.json({
         success: true,
+        token: activeToken,
         user: {
           id: req.user.id,
           name: req.user.name,
@@ -190,6 +216,7 @@ export const me = async (req: AuthenticatedRequest, res: Response) => {
 
     return res.json({
       success: true,
+      token: activeToken,
       user: {
         id: dbUser.userId,
         name: dbUser.name,
@@ -207,6 +234,7 @@ export const me = async (req: AuthenticatedRequest, res: Response) => {
   } catch (err: any) {
     return res.json({
       success: true,
+      token: activeToken,
       user: {
         id: req.user.id,
         name: req.user.name,
@@ -244,6 +272,7 @@ export const register = async (req: Request, res: Response) => {
 
     const token = generateToken(payload);
     const expiresInSeconds = 86400;
+    setAuthCookie(res, token);
 
     return res.json({
       success: true,
@@ -311,6 +340,7 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
     };
 
     const newToken = generateToken(payload);
+    setAuthCookie(res, newToken);
 
     return res.json({
       success: true,

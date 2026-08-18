@@ -20,6 +20,14 @@ export const authService = {
   updateProfile: async (userData: { name?: string; email?: string; phone?: string; profileImage?: string; addresses?: any[] }): Promise<AuthResponse> => {
     const response = await api.put<AuthResponse>('/auth/profile', userData);
     return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    try {
+      await api.post('/auth/logout');
+    } catch (e) {
+      // Ignore network failure on logout
+    }
   }
 };
 

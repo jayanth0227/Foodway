@@ -32,6 +32,7 @@ import { generateUserId } from './utils/idGenerator';
 import { socketService } from './services/socket.service';
 import categoryService from './services/category.service';
 
+import cookieParser from 'cookie-parser';
 import { securityHeaders } from './middleware/security.middleware';
 import { authRateLimiter, apiRateLimiter } from './middleware/rateLimit.middleware';
 
@@ -40,8 +41,9 @@ const app = express();
 // Disable technology disclosure header
 app.disable('x-powered-by');
 
-// Enable security headers middleware
+// Enable security headers & cookie parser middleware
 app.use(securityHeaders);
+app.use(cookieParser());
 
 // Enable CORS (supports localhost, 127.0.0.1, local IP addresses like 192.168.x.x, and production domain)
 const clientUrl = process.env.CLIENT_URL;

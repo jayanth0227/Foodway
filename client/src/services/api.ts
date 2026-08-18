@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../utils/api';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -39,15 +40,15 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
-      const { status } = error.response;
+      const { status, config } = error.response;
 
-      if (status === 401 || status === 403) {
-        console.warn(`[API Interceptor] Auth error (${status}). Clearing session and redirecting to /login.`);
+      // Skip global redirect if checking auth status on /auth/me
+      if (status === 401 && config?.url?.includes('/auth/me')) {
+        return Promise.reject(error);
+      }
+
+      if (status === 401) {
         clearSession();
-
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
       }
     }
     return Promise.reject(error);
