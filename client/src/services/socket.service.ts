@@ -4,8 +4,34 @@ import { API_BASE_URL } from '../utils/api';
 class ClientSocketService {
   private socket: Socket | null = null;
   private joinedRooms: Set<string> = new Set();
+  private disabled: boolean = false;
+
+  constructor() {
+    // Disable Socket.IO in production (API Gateway/Lambda cannot serve WebSocket connections)
+    const envUrl = import.meta.env.VITE_API_BASE_URL || '';
+    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+      this.disabled = true;
+    }
+  }
 
   connect(): Socket {
+    // In production (Lambda/API Gateway), Socket.IO is not available
+    if (this.disabled) {
+      if (!this.socket) {
+        // Create a no-op socket stub so callers don't crash
+        const noopFn = (..._args: any[]) => noopSocket;
+        const noopSocket: any = new Proxy({}, {
+          get: (_target, prop) => {
+            if (prop === 'connected') return false;
+            if (prop === 'id') return 'disabled';
+            return noopFn;
+          }
+        });
+        this.socket = noopSocket as Socket;
+      }
+      return this.socket;
+    }
+
     if (!this.socket) {
       // Resolve WebSocket URL dynamically for host IP (Android Mobile support)
       let socketUrl = 'http://localhost:5000';

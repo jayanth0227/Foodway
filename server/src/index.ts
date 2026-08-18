@@ -1,5 +1,4 @@
 import express, { Request, Response } from 'express';
-import { createServer } from 'http';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -34,10 +33,6 @@ import { socketService } from './services/socket.service';
 import categoryService from './services/category.service';
 
 const app = express();
-const httpServer = createServer(app);
-socketService.initialize(httpServer);
-
-const PORT = process.env.PORT || 5000;
 
 // Enable CORS
 const clientUrl = process.env.CLIENT_URL;
@@ -97,57 +92,81 @@ app.get('/api/aws/status', (req: Request, res: Response) => {
 // Admin API Routes
 // -----------------
 
-// Platform System Settings State (Delivery Fee per KM & Base Rate)
-let platformSettings = {
+// Platform System Settings — defaults, backed by DynamoDB for Lambda persistence
+const defaultPlatformSettings = {
   deliveryFeePerKm: 15,
   baseDeliveryFee: 25,
   freeDeliveryThreshold: 0
 };
 
+// Helper: Read platform settings from DynamoDB (with in-memory cache per invocation)
+let _settingsCache: typeof defaultPlatformSettings | null = null;
+async function getPlatformSettings(): Promise<typeof defaultPlatformSettings> {
+  if (_settingsCache) return _settingsCache;
+  try {
+    if (tableName) {
+      const result = await dynamoDocClient.send(new GetCommand({ TableName: tableName, Key: { id: 'platform_settings', email: 'platform_settings' } }));
+      if (result.Item) {
+        _settingsCache = {
+          deliveryFeePerKm: result.Item.deliveryFeePerKm ?? defaultPlatformSettings.deliveryFeePerKm,
+          baseDeliveryFee: result.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee,
+          freeDeliveryThreshold: result.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold
+        };
+        return _settingsCache;
+      }
+    }
+  } catch (e) { }
+  _settingsCache = { ...defaultPlatformSettings };
+  return _settingsCache;
+}
+
 // GET Admin System Settings
-app.get('/api/admin/settings', (req: Request, res: Response) => {
-  res.json({ success: true, settings: platformSettings });
+app.get('/api/admin/settings', async (req: Request, res: Response) => {
+  const settings = await getPlatformSettings();
+  res.json({ success: true, settings });
 });
 
 // UPDATE Admin System Settings (Delivery Charge Per KM & Base Rate)
-app.put('/api/admin/settings', (req: Request, res: Response) => {
+app.put('/api/admin/settings', async (req: Request, res: Response) => {
   try {
+    const settings = await getPlatformSettings();
     const { deliveryFeePerKm, baseDeliveryFee, freeDeliveryThreshold } = req.body;
     if (typeof deliveryFeePerKm === 'number' && !isNaN(deliveryFeePerKm) && deliveryFeePerKm >= 0) {
-      platformSettings.deliveryFeePerKm = Number(deliveryFeePerKm);
+      settings.deliveryFeePerKm = Number(deliveryFeePerKm);
     }
     if (typeof baseDeliveryFee === 'number' && !isNaN(baseDeliveryFee) && baseDeliveryFee >= 0) {
-      platformSettings.baseDeliveryFee = Number(baseDeliveryFee);
+      settings.baseDeliveryFee = Number(baseDeliveryFee);
     }
     if (typeof freeDeliveryThreshold === 'number' && !isNaN(freeDeliveryThreshold) && freeDeliveryThreshold >= 0) {
-      platformSettings.freeDeliveryThreshold = Number(freeDeliveryThreshold);
+      settings.freeDeliveryThreshold = Number(freeDeliveryThreshold);
     }
+    _settingsCache = settings;
+    // Persist to DynamoDB
+    try {
+      if (tableName) {
+        await dynamoDocClient.send(new PutCommand({ TableName: tableName, Item: { id: 'platform_settings', email: 'platform_settings', ...settings, updatedAt: new Date().toISOString() } }));
+      }
+    } catch (e) { }
     res.json({
       success: true,
       message: 'Delivery fee settings updated successfully.',
-      settings: platformSettings
+      settings
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'Failed to update settings.' });
   }
 });
 
-// In-memory Multi-device Cart Store (persisted to DynamoDB user profile)
-const activeUserCarts = new Map<string, any[]>();
-
-// Fetch User Active Cart for Multi-Device Sync
+// Fetch User Active Cart — reads directly from DynamoDB user profile
 app.get('/api/cart/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    let items = activeUserCarts.get(userId);
-    if (!items && tableName) {
-      const dbUser = await userService.getUserById(userId);
-      if (dbUser && Array.isArray((dbUser as any).activeCart)) {
-        items = (dbUser as any).activeCart;
-        activeUserCarts.set(userId, items || []);
-      }
+    let items: any[] = [];
+    const dbUser = await userService.getUserById(userId);
+    if (dbUser && Array.isArray((dbUser as any).activeCart)) {
+      items = (dbUser as any).activeCart;
     }
-    res.json({ success: true, cartItems: items || [] });
+    res.json({ success: true, cartItems: items });
   } catch (e) {
     res.json({ success: true, cartItems: [] });
   }
@@ -159,12 +178,11 @@ app.put('/api/cart/:userId', async (req: Request, res: Response) => {
     const { userId } = req.params;
     const { cartItems } = req.body;
     const items = Array.isArray(cartItems) ? cartItems : [];
-    activeUserCarts.set(userId, items);
 
-    // Save to DynamoDB user record asynchronously
-    userService.updateProfile(userId, { activeCart: items } as any).catch(() => {});
+    // Save to DynamoDB user record
+    await userService.updateProfile(userId, { activeCart: items } as any).catch(() => {});
 
-    // Broadcast WebSocket event to user room
+    // Broadcast WebSocket event to user room (no-op in Lambda)
     socketService.emitCartUpdated(userId, items);
 
     res.json({ success: true, message: 'Cart synchronized across devices.', cartItems: items });
@@ -174,8 +192,9 @@ app.put('/api/cart/:userId', async (req: Request, res: Response) => {
 });
 
 // Public Endpoint to fetch Delivery Rates for Cart Calculation
-app.get('/api/settings/delivery', (req: Request, res: Response) => {
-  res.json({ success: true, ...platformSettings });
+app.get('/api/settings/delivery', async (req: Request, res: Response) => {
+  const settings = await getPlatformSettings();
+  res.json({ success: true, ...settings });
 });
 
 // Admin Login API
@@ -2180,27 +2199,4 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
   }
 });
 
-// Start the server
-httpServer.on('error', (err: any) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use (EADDRINUSE). Please kill the process using port ${PORT} or set a different PORT in .env.`);
-  } else {
-    console.error('❌ Server error:', err);
-  }
-});
-
-httpServer.listen(Number(PORT), '0.0.0.0', async () => {
-  console.log(`🚀 Foodway Secure Backend Server with Real-Time WebSockets running on http://localhost:${PORT}`);
-
-  console.log(`📦 AWS S3 client initialized (Bucket: ${bucketName || 'not set'}, Region: ${process.env.AWS_S3_REGION || 'ap-south-2'})`);
-  console.log(`🗄️ AWS DynamoDB client initialized (Table: ${tableName || 'not set'}, Region: ${process.env.AWS_DYNAMODB_REGION || 'eu-north-1'})`);
-
-    // Verify SMTP connection
-  await verifySMTP();
-  
-  // Verify or create all 6 DynamoDB tables
-  await ensureAllTablesExist();
-});
-
 export default app;
-

@@ -2976,12 +2976,12 @@ export const RestaurantDashboard: React.FC = () => {
                               </div>
 
                               {/* Special Instructions (If Any) */}
-                              {o.instructions && (
+                              {(o as any).instructions && (
                                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3.5 text-xs text-amber-300 font-semibold space-y-1">
                                   <span className="font-black text-[10px] uppercase tracking-wider block text-amber-400">
                                     Customer Instructions / Notes:
                                   </span>
-                                  <p>"{o.instructions}"</p>
+                                  <p>"{(o as any).instructions}"</p>
                                 </div>
                               )}
 

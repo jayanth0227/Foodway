@@ -698,7 +698,7 @@ export const CartPage: React.FC = () => {
                                       <span className="text-[9px] font-black text-emerald-500 uppercase">Default</span>
                                     )}
                                   </div>
-                                  <p className="font-extrabold text-text-primary truncate">{addr.fullName || user.name}</p>
+                                  <p className="font-extrabold text-text-primary truncate">{addr.fullName || user?.name}</p>
                                   <p className="text-[11px] text-text-muted leading-tight line-clamp-2">
                                     {addr.street}, {addr.city} {addr.pincode}
                                   </p>

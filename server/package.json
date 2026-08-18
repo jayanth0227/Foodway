@@ -5,8 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "start": "node dist/server.js",
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
     "setup-videos": "ts-node src/scripts/setup-videos.ts"
   },
   "keywords": [],
@@ -17,6 +17,7 @@
     "@aws-sdk/client-s3": "^3.621.0",
     "@aws-sdk/lib-dynamodb": "^3.621.0",
     "@types/socket.io": "^3.0.1",
+    "@vendia/serverless-express": "^4.12.6",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

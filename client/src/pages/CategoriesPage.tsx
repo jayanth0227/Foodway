@@ -612,7 +612,7 @@ export const CategoriesPage: React.FC = () => {
                   <MobileGridSkeleton count={8} />
                 ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                    {filteredCategories.map((category) => (
+                    {culinaryCategories.map((category: any) => (
                       <motion.div
                         key={category.id}
                         initial={false}

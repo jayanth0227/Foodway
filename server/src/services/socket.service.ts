@@ -73,7 +73,12 @@ export class SocketService {
 
   getIO(): SocketIOServer {
     if (!this.io) {
-      throw new Error('Socket.io has not been initialized!');
+      // Return a no-op proxy so callers in Lambda don't crash.
+      // All .emit(), .to(), .in() calls silently do nothing.
+      const noopProxy: any = new Proxy({}, {
+        get: () => (..._args: any[]) => noopProxy,
+      });
+      return noopProxy as SocketIOServer;
     }
     return this.io;
   }
