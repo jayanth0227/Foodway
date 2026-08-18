@@ -32,7 +32,9 @@ export const authenticate = (req: AuthenticatedRequest, res: Response, next: Nex
   }
 };
 
-export const authorize = (allowedRoles: ('ADMIN' | 'RESTAURANT' | 'USER')[]) => {
+export type AppRole = 'ADMIN' | 'SHOP' | 'RESTAURANT' | 'USER' | 'DELIVERY_PARTNER' | 'DELIVERY';
+
+export const authorize = (allowedRoles: (AppRole | string)[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
@@ -42,9 +44,15 @@ export const authorize = (allowedRoles: ('ADMIN' | 'RESTAURANT' | 'USER')[]) => 
       });
     }
 
-    const normalizedUserRole = req.user.role.toUpperCase() as 'ADMIN' | 'RESTAURANT' | 'USER';
+    const normalizedUserRole = (req.user.role || '').toUpperCase();
+    const normalizedAllowedRoles = allowedRoles.map(r => r.toUpperCase());
 
-    if (!allowedRoles.includes(normalizedUserRole)) {
+    // Super Admin / Admin bypasses role checks
+    if (normalizedUserRole === 'ADMIN') {
+      return next();
+    }
+
+    if (!normalizedAllowedRoles.includes(normalizedUserRole)) {
       return res.status(403).json({
         success: false,
         message: `Forbidden: Access restricted to [${allowedRoles.join(', ')}] roles.`,
@@ -55,3 +63,31 @@ export const authorize = (allowedRoles: ('ADMIN' | 'RESTAURANT' | 'USER')[]) => 
     next();
   };
 };
+
+/**
+ * IDOR / Resource Ownership Verification Helper
+ * Verifies that the authenticated user owns the requested resource or is an Admin.
+ */
+export const verifyOwnership = (
+  user: JwtUserPayload | undefined,
+  resourceOwnerId: string | undefined
+): boolean => {
+  if (!user) return false;
+
+  const role = (user.role || '').toUpperCase();
+  if (role === 'ADMIN') return true;
+
+  if (!resourceOwnerId) return false;
+
+  const cleanOwnerId = resourceOwnerId.trim().toLowerCase();
+  const cleanUserId = (user.id || '').trim().toLowerCase();
+  const cleanUserEmail = (user.email || '').trim().toLowerCase();
+  const cleanUserRestId = (user.restaurantId || '').trim().toLowerCase();
+
+  return Boolean(
+    cleanUserId === cleanOwnerId ||
+    cleanUserEmail === cleanOwnerId ||
+    (cleanUserRestId && cleanUserRestId === cleanOwnerId)
+  );
+};
+

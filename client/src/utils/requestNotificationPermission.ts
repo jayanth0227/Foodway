@@ -24,7 +24,7 @@ export const requestNotificationPermission = async () => {
         serviceWorkerRegistration: swRegistration,
       });
 
-      console.log("✅ FCM Token successfully generated:", token);
+      console.log("✅ FCM Push Notifications Enabled");
       return token;
     } else {
       console.warn("⚠️ Notification permission was not granted:", permission);

@@ -110,25 +110,12 @@ export async function sendNotification(
       },
     };
 
-   console.log("\n========== SEND NOTIFICATION ==========");
-console.log("Token:", token);
-console.log("Title:", notifTitle);
-console.log("Body:", notifBody);
-console.log("Data:", payloadData);
-
-const response = await getMessaging().send(message);
-
-console.log("========== FIREBASE RESPONSE ==========");
-console.log(response);
-console.log("=======================================");
-
-return response;
- } catch (error: any) {
-  console.error("========== FCM ERROR ==========");
-  console.error(error);
-  console.error("===============================");
-  return null;
-}
+    const response = await getMessaging().send(message);
+    return response;
+  } catch (error: any) {
+    console.warn("⚠️ FCM Send Notification Notice:", error?.message || error);
+    return null;
+  }
 }
 
 export default sendNotification;

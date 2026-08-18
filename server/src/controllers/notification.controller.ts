@@ -7,15 +7,9 @@ export const updateFcmToken = async (
   res: Response
 ) => {
   try {
-    console.log("========== FCM API HIT ==========");
-    console.log("User:", req.user);
-    console.log("Body:", req.body);
-
     const { fcmToken } = req.body;
 
     if (!fcmToken || typeof fcmToken !== 'string' || !fcmToken.trim()) {
-      console.log("Invalid FCM Token");
-
       return res.status(400).json({
         success: false,
         error: 'fcmToken is required and must be a non-empty string.',
@@ -24,8 +18,6 @@ export const updateFcmToken = async (
     }
 
     if (!req.user) {
-      console.log("No authenticated user");
-
       return res.status(401).json({
         success: false,
         error: 'Authentication required.',
@@ -37,9 +29,6 @@ export const updateFcmToken = async (
       req.user,
       fcmToken.trim()
     );
-
-    console.log("FCM Saved Successfully");
-    console.log(result);
 
     return res.json({
       success: true,

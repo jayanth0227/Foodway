@@ -32,12 +32,40 @@ import { generateUserId } from './utils/idGenerator';
 import { socketService } from './services/socket.service';
 import categoryService from './services/category.service';
 
+import { securityHeaders } from './middleware/security.middleware';
+import { authRateLimiter, apiRateLimiter } from './middleware/rateLimit.middleware';
+
 const app = express();
 
-// Enable CORS
+// Disable technology disclosure header
+app.disable('x-powered-by');
+
+// Enable security headers middleware
+app.use(securityHeaders);
+
+// Enable CORS (supports localhost, 127.0.0.1, local IP addresses like 192.168.x.x, and production domain)
 const clientUrl = process.env.CLIENT_URL;
 app.use(cors({
-  origin: clientUrl ? clientUrl.split(',') : true, // Set to true to dynamically reflect any requesting origin (essential for mobile/local IP testing)
+  origin: (origin, callback) => {
+    // Allow non-browser requests (mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+
+    // In development mode, dynamically reflect any requesting origin (localhost, 192.168.x.x, 10.x.x.x)
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, origin);
+    }
+
+    // In production mode, check against configured CLIENT_URL list
+    if (clientUrl) {
+      const allowedOrigins = clientUrl.split(',').map(url => url.trim());
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        return callback(null, origin);
+      }
+    }
+
+    // Default fallback
+    return callback(null, origin);
+  },
   credentials: true
 }));
 
@@ -46,6 +74,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 import shopRouter from './routes/shop.routes';
+
+// Apply Rate Limiting Policy: Strict for Auth, General for API
+app.use('/api/auth', authRateLimiter);
+app.use('/api', apiRateLimiter);
 
 // Unified Authentication & Notification API Routes
 app.use('/api/auth', authRouter);
@@ -2197,6 +2229,22 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to delete category.', details: error.message });
   }
+});
+
+// Centralized Production Error Handling Middleware
+// Masks internal stack traces and implementation details in production
+app.use((err: any, req: Request, res: Response, _next: any) => {
+  console.error('❌ Server Error:', err?.message || err);
+
+  const statusCode = err.status || err.statusCode || 500;
+  const isProd = process.env.NODE_ENV === 'production';
+
+  res.status(statusCode).json({
+    success: false,
+    error: isProd ? 'An internal server error occurred.' : (err?.message || 'Server error'),
+    code: err?.code || 'INTERNAL_SERVER_ERROR',
+    ...(isProd ? {} : { stack: err?.stack })
+  });
 });
 
 export default app;
