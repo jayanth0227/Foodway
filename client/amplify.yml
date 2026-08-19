@@ -1,25 +1,27 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - npm ci
-        - env | grep VITE_ >> .env
-    build:
-      commands:
-        - echo "===== API URL CHECK ====="
-        - echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
-        - echo "VITE_API_URL=$VITE_API_URL"
-        - npm run build
-  artifacts:
-    baseDirectory: dist
-    files:
-      - '**/*'
-  customHeaders:
-    - pattern: '**/*'
-      headers:
-        - key: 'Strict-Transport-Security'
-          value: 'max-age=31536000; includeSubDomains'
-  cache:
-    paths:
-      - node_modules/**/*
+applications:
+  - appRoot: client
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+            - env | grep VITE_ >> .env
+        build:
+          commands:
+            - echo "===== API URL CHECK ====="
+            - echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
+            - echo "VITE_API_URL=$VITE_API_URL"
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      customHeaders:
+        - pattern: '**/*'
+          headers:
+            - key: 'Strict-Transport-Security'
+              value: 'max-age=31536000; includeSubDomains'
+      cache:
+        paths:
+          - node_modules/**/*
