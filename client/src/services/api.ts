@@ -19,7 +19,13 @@ api.interceptors.request.use(
       const protocol = window.location.protocol || 'http:';
       
       // If current page is opened via local IP (e.g. 192.168.1.102) but request baseURL is localhost
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1' && config.baseURL && (config.baseURL.includes('localhost') || config.baseURL.includes('127.0.0.1'))) {
+      if (
+        import.meta.env.DEV &&
+        hostname !== 'localhost' &&
+        hostname !== '127.0.0.1' &&
+        config.baseURL &&
+        (config.baseURL.includes('localhost') || config.baseURL.includes('127.0.0.1'))
+      ) {
         config.baseURL = `${protocol}//${hostname}:5000/api`;
       }
     }
