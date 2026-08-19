@@ -4,6 +4,7 @@ frontend:
     preBuild:
       commands:
         - npm ci
+        - env | grep VITE_ >> .env
     build:
       commands:
         - echo "===== API URL CHECK ====="
