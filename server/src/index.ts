@@ -108,11 +108,13 @@ app.get('/api/health', (req: Request, res: Response) => {
 app.get('/api/aws/status', (req: Request, res: Response) => {
   const hasAccessKey = !!process.env.AWS_ACCESS_KEY_ID;
   const hasSecretKey = !!process.env.AWS_SECRET_ACCESS_KEY;
+  const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME || !!process.env.LAMBDA_TASK_ROOT;
   const s3Region = process.env.AWS_S3_REGION || 'ap-south-2';
-  const dynamoRegion = process.env.AWS_DYNAMODB_REGION || 'eu-north-1';
+  const dynamoRegion = process.env.AWS_DYNAMODB_REGION || 'ap-south-2';
 
   res.json({
-    credentialsConfigured: hasAccessKey && hasSecretKey,
+    credentialsConfigured: (hasAccessKey && hasSecretKey) || isLambda,
+    authMethod: isLambda ? 'IAM Execution Role' : (hasAccessKey ? 'Static Credentials' : 'Default SDK Chain'),
     regions: {
       s3Region,
       dynamoRegion,
@@ -214,7 +216,7 @@ app.put('/api/cart/:userId', async (req: Request, res: Response) => {
     const items = Array.isArray(cartItems) ? cartItems : [];
 
     // Save to DynamoDB user record
-    await userService.updateProfile(userId, { activeCart: items } as any).catch(() => {});
+    await userService.updateProfile(userId, { activeCart: items } as any).catch(() => { });
 
     // Broadcast WebSocket event to user room (no-op in Lambda)
     socketService.emitCartUpdated(userId, items);
@@ -1785,7 +1787,7 @@ app.put('/api/delivery-partner/duty-status', async (req: Request, res: Response)
         const items = scanResp.Items || [];
         const partners = items.filter((u: any) => u.role === 'DELIVERY_PARTNER' || u.role === 'DELIVERY' || (u.userId && u.userId.startsWith('DEL-')));
 
-        const targetUser = partners.find((u: any) => 
+        const targetUser = partners.find((u: any) =>
           (userId && (u.userId === userId || u.id === userId)) ||
           (email && u.email?.toLowerCase() === email.toLowerCase()) ||
           (name && u.name?.toLowerCase() === name.toLowerCase())
