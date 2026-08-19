@@ -1,46 +1,24 @@
 version: 1
- 
-applications:
-
-  - appRoot: client
-
-    frontend:
-
-      phases:
-
-        preBuild:
-
-          commands:
-
-            - npm ci
-
-        build:
-
-          commands:
-
-            - npm run build
-
-      artifacts:
-
-        baseDirectory: dist
-
-        files:
-
-          - '**/*'
-
-      customHeaders:
-
-        - pattern: '**/*'
-
-          headers:
-
-            - key: 'Strict-Transport-Security'
-
-              value: 'max-age=31536000; includeSubDomains'
-
-      cache:
-
-        paths:
-
-          - node_modules/**/*
- 
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - echo "===== API URL CHECK ====="
+        - echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
+        - echo "VITE_API_URL=$VITE_API_URL"
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  customHeaders:
+    - pattern: '**/*'
+      headers:
+        - key: 'Strict-Transport-Security'
+          value: 'max-age=31536000; includeSubDomains'
+  cache:
+    paths:
+      - node_modules/**/*
