@@ -17,14 +17,17 @@ import {
   Plus,
   Minus,
   UtensilsCrossed,
-  Tag
+  Tag,
+  SlidersHorizontal,
+  Filter,
+  X
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getMergedCategories, DEFAULT_CULINARY_CATEGORIES, getTranslatedCategoryName, type CategoryItem } from '../utils/categoryUtils';
-import { MobileShopCardSkeleton, MobileGridSkeleton } from '../components/common/MobileSkeletonLoader';
+import { MobileShopCardSkeleton, MobileGridSkeleton, DishCardSkeleton } from '../components/common/MobileSkeletonLoader';
 
 export const CategoriesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,8 +36,15 @@ export const CategoriesPage: React.FC = () => {
   const { t } = useLanguage();
 
   // State
-  const initialCat = searchParams.get('category') || null;
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(initialCat);
+  const getSafeCategoryFromUrl = () => {
+    try {
+      const raw = searchParams.get('category');
+      return raw ? decodeURIComponent(raw) : null;
+    } catch {
+      return searchParams.get('category') || null;
+    }
+  };
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(getSafeCategoryFromUrl());
   const [culinaryCategories, setCulinaryCategories] = useState<CategoryItem[]>(getMergedCategories([]));
   const [searchTerm, setSearchTerm] = useState('');
   const [restaurants, setRestaurants] = useState<any[]>([]);
@@ -42,6 +52,7 @@ export const CategoriesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isCategorySwitching, setIsCategorySwitching] = useState(false);
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [selectedVariantsMap, setSelectedVariantsMap] = useState<Record<string, any>>({});
 
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
@@ -60,10 +71,10 @@ export const CategoriesPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [selectedCategory]);
 
-  // Synchronize state with URL query param
+  // Synchronize state with URL query param safely
   useEffect(() => {
-    const catFromUrl = searchParams.get('category');
-    if (catFromUrl) {
+    const catFromUrl = getSafeCategoryFromUrl();
+    if (catFromUrl && catFromUrl !== selectedCategory) {
       setSelectedCategory(catFromUrl);
     }
   }, [searchParams]);
@@ -183,13 +194,13 @@ export const CategoriesPage: React.FC = () => {
               {/* Top Navigation Bar & Search & Dietary Filters */}
               <div className="shrink-0 space-y-3 pt-2 sm:pt-0 pb-3 border-b border-glass bg-bg-dark/80 backdrop-blur-md sticky top-16 z-20">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  {/* Left: Back Button + Category Breadcrumb Title */}
-                  <div className="flex items-center gap-3 shrink-0">
+                  {/* Left: Back Button & Category Name */}
+                  <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => navigate('/')}
+                      onClick={() => navigate('/categories')}
                       className="p-2.5 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95 hover:bg-glass-subtle"
-                      aria-label="Back to Home Screen"
+                      aria-label="Back to Categories"
                     >
                       <ArrowLeft size={18} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
                     </button>
@@ -208,57 +219,91 @@ export const CategoriesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Right: Search Input & Dietary Filter Chips */}
-                  <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
-                    {/* Dietary Filters */}
-                    <div className="flex items-center gap-1 bg-glass p-1 rounded-xl border border-glass">
-                      <button
-                        type="button"
-                        onClick={() => setDietaryFilter('all')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                          dietaryFilter === 'all'
-                            ? 'bg-primary text-black font-black shadow-xs'
-                            : 'text-text-muted hover:text-text-primary'
-                        }`}
-                      >
-                        All
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDietaryFilter('veg')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                          dietaryFilter === 'veg'
-                            ? 'bg-emerald-600 text-white font-black shadow-xs'
-                            : 'text-emerald-500 hover:bg-emerald-500/10'
-                        }`}
-                      >
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                        <span>Veg</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDietaryFilter('non-veg')}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                          dietaryFilter === 'non-veg'
-                            ? 'bg-rose-600 text-white font-black shadow-xs'
-                            : 'text-rose-500 hover:bg-rose-500/10'
-                        }`}
-                      >
-                        <span className="w-2 h-2 rounded-full bg-rose-400" />
-                        <span>Non-Veg</span>
-                      </button>
-                    </div>
-
-                    {/* Search Input */}
-                    <div className="relative w-full sm:w-60">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  {/* Right: Search Input + Filter Popover Button */}
+                  <div className="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+                    {/* Larger Glassmorphic Search Bar with Animated Focus Glow */}
+                    <div className="relative flex-1 sm:w-72 md:w-80">
+                      <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary shrink-0 transition-colors" />
                       <input
                         type="text"
                         placeholder={`Search ${selectedCategory}...`}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-glass border border-glass focus:border-primary/50 text-text-primary text-xs font-semibold focus:outline-none transition-all placeholder:text-text-muted shadow-sm"
+                        className="w-full pl-10 pr-9 py-2.5 sm:py-3 rounded-2xl bg-white dark:bg-bg-card border-2 border-glass/80 focus:border-primary text-text-primary text-sm font-extrabold focus:outline-none transition-all placeholder:text-text-muted shadow-md focus:shadow-luxury-hover focus:ring-4 focus:ring-primary/15"
                       />
+                      {searchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchTerm('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-text-muted/20 hover:bg-rose-500 hover:text-white text-text-muted flex items-center justify-center transition-all cursor-pointer"
+                          title="Clear search"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Icon Button beside Search Bar */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+                        className={`px-3.5 py-2.5 sm:py-3 rounded-2xl font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 border-2 ${dietaryFilter === 'veg'
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20'
+                            : dietaryFilter === 'non-veg'
+                              ? 'bg-rose-600 text-white border-rose-500 shadow-rose-500/20'
+                              : 'bg-white dark:bg-bg-card border-glass text-text-primary hover:border-primary/50'
+                          }`}
+                        title="Filter dishes by diet"
+                      >
+                        <SlidersHorizontal size={17} className="shrink-0" />
+                        <span className="hidden sm:inline uppercase text-[11px] tracking-wider">
+                          {dietaryFilter === 'all' ? 'Filter' : dietaryFilter}
+                        </span>
+                      </button>
+
+                      {/* Dropdown Popover Menu */}
+                      <AnimatePresence>
+                        {isFilterMenuOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                            className="absolute right-0 mt-2 w-40 z-30 bg-white dark:bg-bg-card border border-glass rounded-2xl shadow-xl p-1.5 space-y-1"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => { setDietaryFilter('all'); setIsFilterMenuOpen(false); }}
+                              className={`w-full px-3 py-2 rounded-xl text-xs font-black text-left flex items-center justify-between transition-all cursor-pointer ${dietaryFilter === 'all'
+                                  ? 'bg-primary/15 text-primary'
+                                  : 'text-text-primary hover:bg-glass'
+                                }`}
+                            >
+                              <span>All Items</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setDietaryFilter('veg'); setIsFilterMenuOpen(false); }}
+                              className={`w-full px-3 py-2 rounded-xl text-xs font-black text-left flex items-center justify-between transition-all cursor-pointer ${dietaryFilter === 'veg'
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                  : 'text-text-primary hover:bg-glass'
+                                }`}
+                            >
+                              <span>Pure Veg</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setDietaryFilter('non-veg'); setIsFilterMenuOpen(false); }}
+                              className={`w-full px-3 py-2 rounded-xl text-xs font-black text-left flex items-center justify-between transition-all cursor-pointer ${dietaryFilter === 'non-veg'
+                                  ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+                                  : 'text-text-primary hover:bg-glass'
+                                }`}
+                            >
+                              <span>Non-Veg</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
                 </div>
@@ -271,24 +316,26 @@ export const CategoriesPage: React.FC = () => {
                         e.currentTarget.scrollLeft += e.deltaY * 1.5;
                       }
                     }}
-                    className="flex items-center gap-3 overflow-x-auto py-2 scroll-smooth -mx-3 px-3 sm:-mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+                    className="flex items-center gap-2.5 overflow-x-auto py-2 scroll-smooth -mx-3 px-3 sm:-mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                   >
                     {culinaryCategories.map((cat) => {
-                      const active = (selectedCategory || '').toLowerCase() === cat.name.toLowerCase();
+                      const selCatLower = (selectedCategory || '').toLowerCase();
+                      const catNameLower = cat.name.toLowerCase();
+                      const catIdLower = (cat.id || '').toLowerCase();
+                      const active = selCatLower === catNameLower || selCatLower === catIdLower;
 
                       return (
                         <button
                           key={cat.id}
                           type="button"
                           onClick={() => handleSelectCategory(cat.name)}
-                          className={`flex items-center gap-2.5 px-3 py-1.5 rounded-2xl shrink-0 cursor-pointer transition-all duration-300 border ${
-                            active
-                              ? 'bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-500 text-black border-amber-400 shadow-md font-black scale-105'
-                              : 'bg-glass border-glass text-text-primary hover:border-primary/40 hover:bg-glass-subtle font-bold'
-                          }`}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full shrink-0 cursor-pointer transition-all duration-300 border snap-start ${active
+                              ? 'bg-[#C59363] text-white border-[#C59363] shadow-md font-black scale-105'
+                              : 'bg-white dark:bg-bg-card border-glass text-text-primary hover:border-primary/40 hover:bg-glass-subtle font-bold'
+                            }`}
                         >
-                          <div className="w-7 h-7 rounded-xl overflow-hidden shrink-0 shadow-xs border border-white/20">
+                          <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 shadow-xs border border-white/20">
                             <img
                               src={cat.image}
                               alt={cat.name}
@@ -305,44 +352,10 @@ export const CategoriesPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Category Header Title Banner */}
-              <div className="relative rounded-3xl overflow-hidden border border-glass bg-gradient-to-r from-bg-cardSec via-bg-dark to-bg-cardSec p-4 sm:p-6 shadow-luxury">
-                <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-black uppercase tracking-wider">
-                        Curated Cuisine
-                      </span>
-                      <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                        <Sparkles size={12} /> Live Availability
-                      </span>
-                    </div>
-                    <h1 className="text-xl sm:text-3xl font-black font-display text-text-primary tracking-tight">
-                      <span className="text-gradient-gold">{selectedCategory}</span> Specialties
-                    </h1>
-                    <p className="text-xs sm:text-sm text-text-muted font-medium max-w-xl">
-                      {currentCategoryObj.description || `Browse delicious ${selectedCategory} dishes from top local partner stores.`}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="glass-panel px-4 py-2.5 rounded-2xl border border-glass text-center">
-                      <span className="text-lg font-black font-display text-primary block leading-none">
-                        {matchingDishes.length}
-                      </span>
-                      <span className="text-[10px] font-extrabold uppercase text-text-muted tracking-wider">
-                        Dishes Available
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Category Dishes Grid Section */}
-              <div className="space-y-4">
+              <div className="space-y-4 pt-2">
                 {loading || isCategorySwitching ? (
-                  <MobileGridSkeleton count={6} />
+                  <DishCardSkeleton count={6} />
                 ) : matchingDishes.length === 0 ? (
                   <div className="py-12 text-center glass-panel border border-glass rounded-3xl p-6 max-w-md mx-auto space-y-4 shadow-sm">
                     <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
@@ -405,56 +418,64 @@ export const CategoriesPage: React.FC = () => {
                           key={dishId}
                           initial={false}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`bg-bg-cardSec border rounded-3xl overflow-hidden shadow-luxury sm:hover:shadow-luxury-hover sm:hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group relative ${
-                            !isAvailable ? 'opacity-70 border-rose-500/20 bg-bg-dark/40' : 'border-glass sm:hover:border-primary/50'
-                          }`}
+                          className={`bg-bg-card border-2 rounded-3xl overflow-hidden shadow-md hover:shadow-luxury-hover sm:hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between group relative ${!isAvailable ? 'opacity-80 border-glass' : 'border-glass hover:border-primary/60'
+                            }`}
                         >
                           <div>
-                            {/* 16:9 Food Banner Image Container */}
-                            <div className="relative aspect-[16/9] w-full overflow-hidden bg-black">
+                            {/* Clean Food Banner Image Container */}
+                            <div className="relative aspect-[16/10] w-full overflow-hidden bg-black/90">
                               <img
                                 src={dishImage}
                                 alt={dishName}
-                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${!isAvailable ? 'filter grayscale opacity-75' : ''}`}
+                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${!isAvailable ? 'grayscale brightness-90 opacity-75' : ''}`}
                               />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-90 pointer-events-none" />
 
-                              {/* Top Left Overlay: Veg/Non-Veg + Restaurant Badge */}
-                              <div className="absolute top-3 left-3 z-10 flex items-center gap-2 flex-wrap">
-                                <div className={`w-4 h-4 rounded-md border-2 p-0.5 flex items-center justify-center bg-black/70 backdrop-blur-md ${isVeg ? 'border-emerald-400' : 'border-rose-400'}`}>
-                                  <div className={`w-2 h-2 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                              {/* Diagonal Cross SOLD OUT Overlay Ribbon */}
+                              {!isAvailable && (
+                                <div className="absolute inset-0 z-20 flex items-center justify-center overflow-hidden pointer-events-none">
+                                  <div className="w-[140%] py-1.5 bg-rose-600/90 text-white font-black text-xs uppercase tracking-widest text-center shadow-lg -rotate-45 border-y border-white/20 backdrop-blur-xs">
+                                    SOLD OUT
+                                  </div>
                                 </div>
+                              )}
 
-                                <span className="px-2.5 py-1 rounded-full bg-black/80 backdrop-blur-md text-[10px] font-black text-primary border border-primary/30 uppercase tracking-wider shadow-md truncate max-w-[140px]">
-                                  {shopName}
-                                </span>
+                              {/* Top Left: Authentic FSSAI Standard Veg / Non-Veg Square Icon */}
+                              <div className="absolute top-2.5 left-2.5 z-10">
+                                <div className={`w-5 h-5 rounded-md bg-white/95 dark:bg-black/90 backdrop-blur-md border-2 flex items-center justify-center shadow-md ${isVeg ? 'border-emerald-600' : 'border-rose-600'
+                                  }`}>
+                                  <div className={`w-2.5 h-2.5 rounded-full ${isVeg ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                                </div>
                               </div>
 
-                              {/* Top Right Overlay: Rating & Prep Time */}
-                              <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5">
-                                <span className="px-2 py-0.5 rounded-full bg-emerald-600/90 text-white font-black text-[11px] backdrop-blur-md flex items-center gap-1 shadow-md border border-emerald-400/30">
+                              {/* Top Right: Rating Badge */}
+                              <div className="absolute top-2.5 right-2.5 z-10">
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-600 text-white font-black text-[11px] backdrop-blur-md flex items-center gap-0.5 shadow-md">
                                   <Star size={10} className="fill-white text-white" />
                                   <span>{dish.rating || 4.8}</span>
                                 </span>
                               </div>
-
-                              {/* Bottom Overlay: Prep time */}
-                              <div className="absolute bottom-2.5 left-3 z-10">
-                                <span className="text-[10px] font-extrabold text-white bg-black/75 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-white/10 flex items-center gap-1 shadow-sm">
-                                  <Clock size={11} className="text-primary" />
-                                  <span>{dish.prepTime || '15-20 mins'}</span>
-                                </span>
-                              </div>
                             </div>
 
-                            {/* Card Content Area */}
-                            <div className="p-4 space-y-2">
-                              {/* Dish Title */}
-                              <h3 className="text-base font-black font-display text-text-primary leading-tight line-clamp-1 group-hover:text-primary transition-colors">
+                            {/* Clean Card Content Body */}
+                            <div className="p-3.5 space-y-1.5">
+                              {/* Restaurant Subtitle & Delivery Time Row */}
+                              <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <Store size={13} className="text-primary shrink-0" />
+                                  <span className="font-extrabold text-primary truncate">{shopName}</span>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0 bg-glass px-2 py-0.5 rounded-lg border border-glass shadow-xs">
+                                  <Clock size={11} className="text-primary" />
+                                  <span className="text-[11px] font-black text-text-primary">{dish.prepTime || '15-20m'}</span>
+                                </div>
+                              </div>
+
+                              {/* Food Item Title - High Contrast Bold Typography */}
+                              <h3 className="text-base sm:text-lg font-black font-display text-text-primary leading-tight line-clamp-1 group-hover:text-primary transition-colors pt-0.5">
                                 {dishName}
                               </h3>
 
-                              {/* Dish Description */}
+                              {/* Dish Description (if present in database) */}
                               {dishDesc && (
                                 <p className="text-xs text-text-muted line-clamp-2 leading-relaxed font-medium">
                                   {dishDesc}
@@ -463,9 +484,9 @@ export const CategoriesPage: React.FC = () => {
 
                               {/* Variant Selector Pills (if multiple variants exist) */}
                               {hasVariants && (
-                                <div className="pt-2 border-t border-glass/40 space-y-1.5">
-                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-muted block">Select Variant / Portion:</span>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                <div className="pt-2 border-t border-glass/40 space-y-1">
+                                  <span className="text-[9px] font-extrabold uppercase tracking-wider text-text-muted block">Portion:</span>
+                                  <div className="flex items-center gap-1 flex-wrap">
                                     {itemVariants.map((v: any, idx: number) => {
                                       const vId = v.id || v.variantId || `v-${idx}`;
                                       const isSelected = activeVariantId === vId;
@@ -478,11 +499,10 @@ export const CategoriesPage: React.FC = () => {
                                             e.stopPropagation();
                                             setSelectedVariantsMap(prev => ({ ...prev, [dishId]: v }));
                                           }}
-                                          className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                                            isSelected
-                                              ? 'bg-primary/20 border-primary text-primary font-black shadow-xs'
-                                              : 'bg-glass border-glass text-text-secondary hover:border-primary/40'
-                                          }`}
+                                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${isSelected
+                                            ? 'bg-primary/20 border-primary text-primary font-black shadow-xs'
+                                            : 'bg-glass border-glass text-text-secondary hover:border-primary/40'
+                                            }`}
                                         >
                                           <span>{label}</span>
                                           <span className="ml-1 opacity-80 font-black">₹{v.price}</span>
@@ -495,41 +515,41 @@ export const CategoriesPage: React.FC = () => {
                             </div>
                           </div>
 
-                          {/* Card Footer: Price + Add Button */}
-                          <div className="p-4 pt-3 flex items-center justify-between border-t border-glass/60 bg-bg-dark/20 mt-1">
+                          {/* Highlighted Card Footer */}
+                          <div className="px-4 py-3 flex items-center justify-between border-t-2 border-glass bg-glass-subtle/60 backdrop-blur-xs mt-1">
                             {/* Price */}
                             <div>
-                              <span className="text-xs text-text-muted font-bold block uppercase tracking-wider">Price</span>
+                              <span className="text-[9px] text-text-muted font-extrabold uppercase tracking-wider block">PRICE</span>
                               <div className="flex items-baseline gap-1.5">
-                                <span className="text-xl font-black font-display text-primary">
+                                <span className="text-xl sm:text-2xl font-black font-display text-text-primary tracking-tight">
                                   ₹{effectivePrice}
                                 </span>
                                 {dish.discountPrice && Number(dish.discountPrice) > effectivePrice && (
-                                  <span className="text-xs text-text-muted line-through">
+                                  <span className="text-xs text-text-muted line-through font-semibold">
                                     ₹{dish.discountPrice}
                                   </span>
                                 )}
                               </div>
                             </div>
 
-                            {/* Add to Cart / Quantity Controller */}
+                            {/* ADD Button / Quantity Controller (White Rectangle with Caramel Text) */}
                             {isAvailable ? (
                               <div>
                                 {qtyInCart === 0 ? (
                                   <button
                                     type="button"
                                     onClick={() => addToCart(dishObj, activeVariant)}
-                                    className="px-4 py-2 rounded-xl bg-bg-cardSec text-primary border-2 border-primary/80 hover:border-primary font-black text-xs uppercase tracking-wider shadow-md hover:bg-primary hover:text-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
+                                    className="px-5 py-2 rounded-xl bg-white dark:bg-bg-card border border-glass text-primary font-black text-xs uppercase tracking-wider shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
                                   >
+                                    <Plus size={14} className="stroke-[3] text-primary" />
                                     <span>ADD</span>
-                                    <Plus size={13} className="stroke-[3]" />
                                   </button>
                                 ) : (
-                                  <div className="flex items-center bg-bg-cardSec text-primary rounded-xl px-2.5 py-1 shadow-md border-2 border-primary">
+                                  <div className="flex items-center bg-white dark:bg-bg-card border border-glass text-primary rounded-xl px-2 py-1 shadow-sm font-black">
                                     <button
                                       type="button"
                                       onClick={() => reduceQuantity(itemKey)}
-                                      className="w-6 h-6 rounded-lg hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                                      className="w-6 h-6 rounded-lg hover:bg-glass text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                                       title="Decrease quantity"
                                     >
                                       <Minus size={12} className="stroke-[3]" />
@@ -540,7 +560,7 @@ export const CategoriesPage: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => addToCart(dishObj, activeVariant)}
-                                      className="w-6 h-6 rounded-lg hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                                      className="w-6 h-6 rounded-lg hover:bg-glass text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                                       title="Increase quantity"
                                     >
                                       <Plus size={12} className="stroke-[3]" />
@@ -549,8 +569,8 @@ export const CategoriesPage: React.FC = () => {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[11px] font-extrabold text-rose-500 bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/20 uppercase tracking-wider">
-                                Unavailable
+                              <span className="text-xs font-black text-white bg-rose-600 px-3.5 py-1.5 rounded-xl uppercase tracking-wider shadow-sm border border-rose-500/20">
+                                Sold Out
                               </span>
                             )}
                           </div>
@@ -574,7 +594,7 @@ export const CategoriesPage: React.FC = () => {
                     {/* Standalone Back Button */}
                     <button
                       onClick={() => navigate('/')}
-                      className="p-2.5 sm:p-3 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer flex items-center justify-center"
+                      className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer flex items-center justify-center"
                       aria-label="Back to Home"
                       title="Back to Home Screen"
                     >
@@ -593,15 +613,25 @@ export const CategoriesPage: React.FC = () => {
                   </div>
 
                   {/* Right Side: Category Search Bar */}
-                  <div className="relative w-full sm:w-64 md:w-72 lg:ml-auto shrink-0">
-                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <div className="relative w-full sm:w-80 md:w-96 lg:ml-auto shrink-0">
+                    <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" />
                     <input
                       type="text"
                       placeholder={t('search_categories_dishes')}
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-glass border border-glass focus:border-primary/50 text-text-primary text-[15px] sm:text-xs font-bold focus:outline-none transition-all placeholder:text-text-muted shadow-sm"
+                      className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white dark:bg-bg-card border-2 border-glass/80 focus:border-primary text-text-primary text-sm font-extrabold focus:outline-none transition-all placeholder:text-text-muted shadow-md focus:shadow-luxury-hover focus:ring-4 focus:ring-primary/15"
                     />
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => setSearchTerm('')}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-text-muted/20 hover:bg-rose-500 hover:text-white text-text-muted flex items-center justify-center transition-all cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

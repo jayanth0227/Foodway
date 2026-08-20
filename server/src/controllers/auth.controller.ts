@@ -30,16 +30,17 @@ export const logout = async (_req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
+    const { email, phone, identifier, password } = req.body;
+    const loginIdentifier = (identifier || email || phone || '').trim();
 
-    if (!email || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
         success: false,
-        error: 'Email and password are required.'
+        error: 'Email or Mobile number and password are required.'
       });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = loginIdentifier.toLowerCase();
 
     // 1. Check Admin Credentials in process.env
     const adminEmail = (process.env.ADMIN_EMAIL || 'admin@foodway.com').toLowerCase();

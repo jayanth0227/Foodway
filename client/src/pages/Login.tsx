@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
+import { PolicyModal } from '../components/common/PolicyModal';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -40,6 +41,10 @@ export const Login: React.FC = () => {
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [policyModalState, setPolicyModalState] = useState<{ isOpen: boolean; tab: 'terms' | 'privacy' | 'cancellation' }>({
+    isOpen: false,
+    tab: 'terms'
+  });
 
   const { login, register, isLoading, isAuthenticated, role } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -293,11 +298,11 @@ export const Login: React.FC = () => {
                   <Mail size={17} />
                 </div>
                 <input
-                  type="email"
+                  type={authType === 'login' ? 'text' : 'email'}
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder={authType === 'login' ? 'e.g. 98765 43210 or email' : 'Enter your email address'}
+                  placeholder={authType === 'login' ? 'Mobile number or Email address' : 'Enter your email address'}
                   className="w-full bg-stone-50 dark:bg-[#11141B] border border-stone-200 dark:border-white/10 focus:border-[#C59363] rounded-xl py-3 pl-10 pr-4 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
                 />
               </div>
@@ -380,8 +385,21 @@ export const Login: React.FC = () => {
                 />
                 <span>
                   By signing up I agree to the{' '}
-                  <span className="text-[#C59363] font-bold hover:underline">Terms of use</span> and{' '}
-                  <span className="text-[#C59363] font-bold hover:underline">Privacy Policy</span>.
+                  <button
+                    type="button"
+                    onClick={() => setPolicyModalState({ isOpen: true, tab: 'terms' })}
+                    className="text-[#C59363] font-bold hover:underline cursor-pointer inline"
+                  >
+                    Terms of use
+                  </button>{' '}
+                  and{' '}
+                  <button
+                    type="button"
+                    onClick={() => setPolicyModalState({ isOpen: true, tab: 'privacy' })}
+                    className="text-[#C59363] font-bold hover:underline cursor-pointer inline"
+                  >
+                    Privacy Policy
+                  </button>.
                 </span>
               </label>
             </div>
@@ -528,6 +546,13 @@ export const Login: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Interactive Policy Modal for Terms & Privacy */}
+      <PolicyModal
+        isOpen={policyModalState.isOpen}
+        onClose={() => setPolicyModalState({ ...policyModalState, isOpen: false })}
+        initialTab={policyModalState.tab}
+      />
     </div>
   );
 };

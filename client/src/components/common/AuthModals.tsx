@@ -17,6 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
+import { PolicyModal } from './PolicyModal';
 
 interface AuthModalsProps {
   isOpen: boolean;
@@ -37,6 +38,10 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
   const [phone, setPhone] = useState('');
   const [agreedTerms, setAgreedTerms] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [policyModalState, setPolicyModalState] = useState<{ isOpen: boolean; tab: 'terms' | 'privacy' | 'cancellation' }>({
+    isOpen: false,
+    tab: 'terms'
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,11 +235,11 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
                       className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400"
                     />
                     <input
-                      type="email"
+                      type={type === 'login' ? 'text' : 'email'}
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder={type === 'login' ? 'e.g. 98765 43210 or email' : 'Enter your email address'}
+                      placeholder={type === 'login' ? 'Mobile number or Email address' : 'Enter your email address'}
                       className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 focus:border-[#A67C52] rounded-xl py-2.5 pl-10 pr-4 text-sm text-stone-900 dark:text-white placeholder:text-stone-400 focus:outline-none transition-all font-medium"
                     />
                   </div>
@@ -295,8 +300,8 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
                   </div>
                 )}
 
-                {/* Terms Checkbox
-                <div className="pt-1 flex flex-col space-y-1.5">
+                {/* Terms Checkbox */}
+                <div className="pt-1">
                   <label className="flex items-start gap-2 cursor-pointer text-[11px] text-stone-600 dark:text-stone-400 leading-snug">
                     <input
                       type="checkbox"
@@ -306,11 +311,24 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
                     />
                     <span>
                       By {type === 'login' ? 'signing in' : 'signing up'} I agree to the{' '}
-                      <span className="text-[#A67C52] font-bold hover:underline">Terms of use</span> and{' '}
-                      <span className="text-[#A67C52] font-bold hover:underline">Privacy Policy</span>.
+                      <button
+                        type="button"
+                        onClick={() => setPolicyModalState({ isOpen: true, tab: 'terms' })}
+                        className="text-[#A67C52] font-bold hover:underline cursor-pointer inline"
+                      >
+                        Terms of use
+                      </button>{' '}
+                      and{' '}
+                      <button
+                        type="button"
+                        onClick={() => setPolicyModalState({ isOpen: true, tab: 'privacy' })}
+                        className="text-[#A67C52] font-bold hover:underline cursor-pointer inline"
+                      >
+                        Privacy Policy
+                      </button>.
                     </span>
                   </label>
-                </div> */}
+                </div>
 
                 {/* Brown Primary CTA Button with Arrow matching screenshot */}
                 <button
@@ -440,6 +458,13 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
           </div>
         )}
       </AnimatePresence>
+
+      {/* Interactive Policy Modal */}
+      <PolicyModal
+        isOpen={policyModalState.isOpen}
+        onClose={() => setPolicyModalState({ ...policyModalState, isOpen: false })}
+        initialTab={policyModalState.tab}
+      />
     </>
   );
 };

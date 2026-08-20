@@ -138,3 +138,17 @@ export const getTranslatedCategoryName = (name: string = '', t: (key: string) =>
   if (clean.includes('north indian')) return t('cat_north_indian');
   return cleanCategoryName(name);
 };
+
+export const formatShopAddress = (addr: string = ''): string => {
+  if (!addr || !addr.trim()) return 'Local Market, Konaseema';
+  
+  const parts = addr.split(',').map(p => p.trim()).filter(Boolean);
+  const uniqueParts: string[] = [];
+  parts.forEach(part => {
+    if (!uniqueParts.some(u => u.toLowerCase() === part.toLowerCase())) {
+      uniqueParts.push(part);
+    }
+  });
+
+  return uniqueParts.join(', ') || addr;
+};

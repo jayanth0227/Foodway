@@ -53,11 +53,11 @@ export const Categories: React.FC = () => {
 
         {/* Section Header */}
         <div className="flex items-end justify-between mb-4 sm:mb-6 pb-3 border-b border-glass/40 gap-3">
-          <div className="space-y-1 text-left max-w-xl">
+          <div className="space-y-0.5 sm:space-y-1 text-left max-w-xl">
             <h2 className="text-lg sm:text-3xl md:text-4xl font-extrabold font-display text-gradient-gold tracking-tight">
               Discover Stores & Cuisines
             </h2>
-            <p className="text-xs sm:text-sm text-text-secondary font-medium leading-relaxed mt-0.5">
+            <p className="hidden sm:block text-xs sm:text-sm text-text-secondary font-medium leading-relaxed">
               Browse food, groceries, bakery, fruits, beverages, and more from trusted local partners.
             </p>
           </div>

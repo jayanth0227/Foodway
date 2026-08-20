@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, UtensilsCrossed, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check } from 'lucide-react';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
@@ -204,16 +204,38 @@ export const RestaurantDetailsPage: React.FC = () => {
 
         <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 relative z-10">
 
-          {/* Mobile-Only Shop Header Card matching User Screenshot */}
+          {/* Redesigned Integrated Mobile Shop Header Card */}
           {loading ? (
             <div className="block sm:hidden glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
           ) : restaurant && (
-            <div className="block sm:hidden glass-panel border border-glass rounded-3xl p-4 shadow-luxury bg-bg-cardSec space-y-3.5">
+            <div className="block sm:hidden glass-panel border border-glass rounded-3xl p-4 shadow-luxury bg-bg-cardSec space-y-3.5 relative overflow-hidden">
+              {/* Top Row: Back Button (Left) + Wishlist Heart (Right) */}
+              <div className="flex items-center justify-between gap-2 border-b border-glass/80 pb-2.5">
+                <button
+                  type="button"
+                  onClick={() => navigate('/shops')}
+                  className="w-8 h-8 rounded-xl bg-glass border border-glass hover:bg-glass-subtle text-text-primary flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-xs"
+                  title="Back to Stores"
+                >
+                  <ArrowLeft size={16} className="stroke-[2.5]" />
+                </button>
 
+                <button
+                  type="button"
+                  onClick={(e) => toggleFav(restaurant, e)}
+                  className={`p-1.5 rounded-xl border transition-all duration-300 active:scale-95 cursor-pointer flex items-center justify-center ${favorites[restaurant.id || id || '']
+                    ? 'bg-rose-500/15 border-rose-500/35 text-rose-500'
+                    : 'bg-glass border-glass text-text-muted hover:text-rose-400'
+                    }`}
+                  title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
+                >
+                  <Heart size={16} className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-text-muted"} />
+                </button>
+              </div>
 
-              {/* Shop Main Info Row: Logo Thumbnail + Name & Address */}
-              <div className="flex items-start gap-3.5">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0 shadow-md">
+              {/* Middle Row: Shop Logo Avatar + Name & Address */}
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0 shadow-md">
                   <img
                     src={restaurant.logo || restaurant.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400"}
                     alt={restaurant.name}
@@ -221,61 +243,47 @@ export const RestaurantDetailsPage: React.FC = () => {
                   />
                 </div>
 
-                <div className="space-y-1 text-left min-w-0 flex-1">
-                  {/* Shop Name + Wishlist (Heart) Luxury Badge on the right */}
-                  <div className="flex items-center justify-between gap-2.5 w-full">
-                    <h1 className="text-lg font-black font-display text-gradient-gold leading-snug truncate">
-                      {restaurant.name}
-                    </h1>
-
-                    <button
-                      type="button"
-                      onClick={(e) => toggleFav(restaurant, e)}
-                      className={`p-2 rounded-2xl border transition-all duration-300 active:scale-95 cursor-pointer shrink-0 ml-auto flex items-center justify-center ${favorites[restaurant.id || id || '']
-                        ? 'bg-rose-500/15 border-rose-500/35 text-rose-500'
-                        : 'bg-glass border-glass text-text-muted hover:text-rose-400 hover:border-rose-400/40'
-                        }`}
-                      title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
-                    >
-                      <Heart
-                        size={16}
-                        className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-text-muted"}
-                      />
-                    </button>
-
-                  </div>
-
-
+                <div className="space-y-0.5 text-left min-w-0 flex-1">
+                  <h1 className="text-lg font-black font-display text-text-primary leading-snug truncate">
+                    {restaurant.name}
+                  </h1>
 
                   {restaurant.address && (
-                    <p className="text-xs text-text-muted flex items-start gap-1 font-medium leading-relaxed">
-                      <MapPin size={12} className="text-primary shrink-0 mt-0.5" />
-                      <span className="line-clamp-2">{restaurant.address}</span>
+                    <p className="text-[11px] text-text-muted flex items-center gap-1 font-semibold truncate">
+                      <MapPin size={12} className="text-primary shrink-0" />
+                      <span className="truncate">{restaurant.address}</span>
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Badges Layout Row: Open for Orders & Delivery Time Side-by-Side */}
-              <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
-                <span className={`px-3 py-1 rounded-xl text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isResOpen ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/40'
+              {/* Bottom Badges Row: Open for Orders (Left) + Rating Badge (Right) */}
+              <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
+                <span className={`px-3 py-1 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isResOpen ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                   }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isResOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
                   <span>{isResOpen ? 'OPEN FOR ORDERS' : 'CLOSED NOW'}</span>
                 </span>
 
-                {restaurant.deliveryTime && (
-                  <span className="px-3 py-1 rounded-xl bg-glass border border-glass text-text-secondary text-[11px] font-bold flex items-center gap-1.5 ml-auto">
-                    <Clock size={12} className="text-primary shrink-0" />
-                    <span>{restaurant.deliveryTime}</span>
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5 ml-auto">
+                  {restaurant.deliveryTime && (
+                    <span className="px-2.5 py-1 rounded-xl bg-glass border border-glass text-text-secondary text-[10.5px] font-extrabold flex items-center gap-1">
+                      <Clock size={11} className="text-primary shrink-0" />
+                      <span>{restaurant.deliveryTime}</span>
+                    </span>
+                  )}
+
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-600 text-white text-[10.5px] font-black shrink-0 shadow-xs border border-emerald-500">
+                    <Star size={11} className="fill-white text-white shrink-0" />
+                    <span>{restaurant.rating || 4.8} Rating</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* Restructured Navigation Header Bar with Back Button & Breadcrumbs */}
-          <div className="flex items-center justify-between gap-3 bg-bg-cardSec/80 backdrop-blur-md border border-glass/80 p-2.5 sm:p-3.5 rounded-2xl shadow-luxury">
+          {/* Restructured Navigation Header Bar with Back Button & Breadcrumbs (Desktop Only) */}
+          <div className="hidden sm:flex items-center justify-between gap-3 bg-bg-cardSec/80 backdrop-blur-md border border-glass/80 p-2.5 sm:p-3.5 rounded-2xl shadow-luxury">
             <button
               onClick={() => navigate('/shops')}
               className="px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary font-black text-xs flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 transition-all group"
@@ -792,7 +800,7 @@ export const RestaurantDetailsPage: React.FC = () => {
 
       {/* Liquid Viscous SVG Gooey Popover Menu */}
       {categories.length > 1 && (
-        <div className="fixed bottom-6 right-6 z-40">
+        <div className="fixed bottom-[88px] right-4 sm:right-8 z-40">
           <GooeyPopover
             isOpen={isCategoryFabOpen}
             onOpenChange={setIsCategoryFabOpen}
@@ -803,13 +811,13 @@ export const RestaurantDetailsPage: React.FC = () => {
             align="right"
             sideOffset={18}
             speed={0.28}
-            bgClassName="bg-slate-900/95"
+            bgClassName="bg-bg-cardSec border border-glass dark:border-white/15 text-text-primary shadow-luxury"
             contentClassName="p-4"
             trigger={
-              <div className="flex items-center justify-center gap-2 px-3.5 w-full h-full rounded-full bg-gradient-to-r from-primary via-amber-400 to-amber-500 text-black font-black text-xs uppercase tracking-wider whitespace-nowrap">
-                <Utensils size={16} className="stroke-[2.5] shrink-0" />
+              <div className="flex items-center justify-center gap-2 px-3.5 w-full h-full rounded-full bg-primary text-black font-black text-xs uppercase tracking-wider whitespace-nowrap shadow-none border border-black/15 hover:scale-105 active:scale-95 transition-transform cursor-pointer">
+                <UtensilsCrossed size={16} className="stroke-[2.5] shrink-0" />
                 <span className="font-black text-xs shrink-0">MENU</span>
-                <span className="w-5 h-5 rounded-full bg-black text-amber-300 font-black text-[10px] flex items-center justify-center border border-amber-400/40 shrink-0 shadow-inner">
+                <span className="w-5 h-5 rounded-full bg-black text-primary font-black text-[10px] flex items-center justify-center border border-black/20 shrink-0 shadow-inner">
                   {categories.filter(c => c !== 'All').length}
                 </span>
               </div>
@@ -817,14 +825,14 @@ export const RestaurantDetailsPage: React.FC = () => {
           >
             <div className="space-y-3 text-left">
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+              <div className="flex items-center justify-between border-b border-glass/80 pb-2.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-amber-400 text-black flex items-center justify-center font-black shrink-0">
+                  <div className="w-7 h-7 rounded-xl bg-primary/20 text-primary border border-primary/30 flex items-center justify-center font-black shrink-0">
                     <Utensils size={14} className="stroke-[2.5]" />
                   </div>
                   <div className="text-left">
-                    <h3 className="font-black text-xs text-white uppercase tracking-wider font-display">STORE CATEGORIES</h3>
-                    <p className="text-[10px] text-amber-300/80 font-bold">{menuItems.length} Total Dishes</p>
+                    <h3 className="font-black text-xs text-text-primary uppercase tracking-wider font-display">STORE CATEGORIES</h3>
+                    <p className="text-[10px] text-text-muted font-bold">{menuItems.length} Total Dishes</p>
                   </div>
                 </div>
               </div>
@@ -843,17 +851,17 @@ export const RestaurantDetailsPage: React.FC = () => {
                         setIsCategoryFabOpen(false);
                       }}
                       className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-all duration-200 cursor-pointer ${isSelected
-                        ? 'bg-gradient-to-r from-primary via-amber-400 to-amber-500 text-black font-black shadow-lg ring-1 ring-amber-300'
-                        : 'bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-white font-bold hover:border-amber-400/40'
+                        ? 'bg-primary text-black font-black shadow-md'
+                        : 'bg-bg-dark/70 hover:bg-bg-dark border border-glass text-text-primary hover:text-primary font-bold'
                         }`}
                     >
                       <div className="flex items-center gap-2 min-w-0 pr-2 text-left">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-black' : 'bg-amber-400'}`} />
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-black' : 'bg-primary'}`} />
                         <span className="text-xs font-extrabold truncate text-left">
                           {cat === 'All' ? 'All Establishment Dishes' : removeEmojis(cat)}
                         </span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${isSelected ? 'bg-black text-amber-300' : 'bg-black/40 text-amber-300/90 border border-amber-400/30'
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${isSelected ? 'bg-black/20 text-black' : 'bg-bg-dark text-text-muted border border-glass'
                         }`}>
                         {count}
                       </span>

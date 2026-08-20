@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import { getCurrentUser } from '../../utils/auth.utils';
 
 export const FloatingCartBar: React.FC = () => {
   const { totalItemsCount, totalAmount, lastAddedItem, setCartOpen } = useCart();
@@ -18,8 +17,6 @@ export const FloatingCartBar: React.FC = () => {
     }
   }, [totalItemsCount, lastAddedItem?.timestamp]);
 
-  const currentUser = getCurrentUser();
-
   // Hide on auth (login/register), admin/restaurant/delivery portal routes, or on checkout/cart pages
   const isAuthOrPortalRoute =
     location.pathname === '/login' ||
@@ -30,8 +27,8 @@ export const FloatingCartBar: React.FC = () => {
     location.pathname === '/cart' ||
     location.pathname === '/checkout';
 
-  // Only show popup when customer is logged in, not on auth/portal pages, and cart is not empty
-  if (!currentUser || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
+  // Only show popup when not on auth/portal pages and cart is not empty
+  if (isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
     return null;
   }
 
@@ -51,12 +48,14 @@ export const FloatingCartBar: React.FC = () => {
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 80, opacity: 0, scale: 0.95 }}
         transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-        className="fixed bottom-5 left-4 right-4 sm:left-auto sm:right-6 z-[9999] sm:w-[420px]"
+        className="fixed bottom-[84px] left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 z-[99999] sm:w-[420px]"
       >
-        <div className="w-full p-3 rounded-2xl bg-gradient-to-r from-slate-900 via-zinc-900 to-black text-white shadow-[0_15px_45px_rgba(0,0,0,0.5)] border border-primary/30 flex items-center justify-between gap-3 backdrop-blur-2xl">
-          {/* Left: Thumbnail & Text Stack */}
-          <div className="flex items-center gap-3 min-w-0 pl-1">
-            <div className="relative w-11 h-11 rounded-xl overflow-hidden border border-primary/40 shrink-0 shadow-sm bg-black">
+        {/* Exact Zomato-Style Floating Cart Card */}
+        <div className="w-full bg-white dark:bg-[#181C25] backdrop-blur-2xl p-2.5 sm:p-3 rounded-[22px] shadow-[0_16px_40px_rgba(0,0,0,0.18)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.8)] border border-slate-200/90 dark:border-white/20 flex items-center justify-between gap-2 transition-all">
+          {/* Left: Circular Image + Details Stack */}
+          <div className="flex items-center gap-2.5 min-w-0 flex-1 pl-0.5">
+            {/* Circular Food/Restaurant Thumbnail */}
+            <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-slate-200 dark:border-white/15 shrink-0 bg-slate-100 dark:bg-white/5 shadow-xs">
               <img
                 src={displayImage}
                 alt={displayName}
@@ -64,34 +63,47 @@ export const FloatingCartBar: React.FC = () => {
               />
             </div>
 
-            <div className="min-w-0 text-left space-y-0.5">
-              <div className="flex items-center gap-1.5">
-                <ShoppingBag size={13} className="text-primary shrink-0" />
-                <h4 className="font-extrabold text-xs text-white truncate max-w-[140px] sm:max-w-[170px]">
-                  {displayName}
-                </h4>
+            {/* Details Stack */}
+            <div className="min-w-0 flex-1 text-left space-y-0.5 pr-0.5">
+              <h4 className="font-extrabold text-xs sm:text-sm text-slate-900 dark:text-white truncate tracking-tight">
+                {displayName}
+              </h4>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">
+                <span>{totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'}</span>
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <button
+                  type="button"
+                  onClick={handleCheckout}
+                  className="text-primary dark:text-primary-dark hover:underline font-extrabold inline-flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>View Menu</span>
+                  <span className="text-[9px]">▸</span>
+                </button>
               </div>
-              <p className="text-[11px] font-medium text-emerald-400">
-                {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'items'} in cart
-              </p>
             </div>
           </div>
 
-          {/* Right: View Cart & Checkout Button & Close Icon */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right Side: Emerald Green View Cart Pill Button + Circle Close Button */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Emerald Green Style Price + View Cart Pill Button */}
             <button
               type="button"
               onClick={handleCheckout}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-amber-500 hover:brightness-110 text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer"
+              className="px-3.5 py-1.5 sm:px-4.5 sm:py-2 rounded-[14px] sm:rounded-[16px] bg-emerald-600 hover:bg-emerald-700 text-white text-center flex flex-col items-center justify-center transition-all shadow-md shadow-emerald-600/30 active:scale-95 cursor-pointer shrink-0"
             >
-              <span>View Cart • ₹{Math.round(totalAmount)}</span>
-              <ArrowRight size={14} className="stroke-[3]" />
+              <span className="font-black text-xs sm:text-sm font-display leading-tight text-white">
+                ₹{Math.round(totalAmount)}
+              </span>
+              <span className="text-[10px] sm:text-[11px] font-bold text-white/95 leading-tight whitespace-nowrap">
+                View Cart
+              </span>
             </button>
 
+            {/* Circle Close X Button */}
             <button
               type="button"
               onClick={() => setIsDismissed(true)}
-              className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center text-text-muted hover:text-white transition-colors cursor-pointer shrink-0"
+              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-600 dark:text-slate-200 flex items-center justify-center transition-colors cursor-pointer shrink-0"
               title="Dismiss"
             >
               <X size={14} />

@@ -40,9 +40,9 @@ export class UserService {
     return userRepository.create(newUser);
   }
 
-  async authenticateUser(email: string, passwordAttempt: string): Promise<IUser | null> {
-    const cleanEmail = email.trim().toLowerCase();
-    const user = await userRepository.findByEmail(cleanEmail);
+  async authenticateUser(identifier: string, passwordAttempt: string): Promise<IUser | null> {
+    const cleanId = identifier.trim().toLowerCase();
+    const user = await userRepository.findByIdentifier(cleanId);
     if (!user) return null;
 
     const isValid = await comparePassword(passwordAttempt, user.password);

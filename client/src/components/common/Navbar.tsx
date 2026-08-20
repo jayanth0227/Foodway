@@ -344,7 +344,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                   <button
                     onClick={() => navigate('/profile')}
                     className="flex items-center space-x-2 bg-glass-subtle hover:bg-glass border border-glass hover:border-primary/40 rounded-xl px-3 py-1.5 transition-all cursor-pointer group"
-                    title="View & Edit Profile"
+                    title="View & Edit Profile Details"
                   >
                     <UserIcon size={14} className="text-primary group-hover:scale-110 transition-transform" />
                     <span className="text-xs font-bold text-text-secondary group-hover:text-primary transition-colors">
@@ -381,18 +381,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         onClose={() => setIsNotificationModalOpen(false)}
       />
 
-      {/* Fixed Solid Bottom Navigation Bar for Mobile/Tablet */}
+      {/* Fixed Edge-to-Edge Solid Bottom Navigation Bar for Mobile/Tablet */}
       {!(
         location.pathname.startsWith('/admin') ||
         location.pathname.startsWith('/restaurant') ||
         location.pathname.startsWith('/delivery') ||
         isProfileModalOpen
       ) && (
-        <div
-          className={`fixed bottom-3 inset-x-3 max-w-md mx-auto z-[99999] lg:hidden bg-white dark:bg-bg-cardSec border border-slate-200 dark:border-glass shadow-2xl rounded-2xl px-2 py-1 flex items-center justify-around overflow-visible transition-all duration-200 ${isKeyboardOpen
-            ? 'opacity-0 pointer-events-none translate-y-16'
-            : 'opacity-100 translate-y-0'
-            }`}
+        <nav
+          className="fixed bottom-0 left-0 right-0 w-full z-[999999] lg:hidden bg-white/95 dark:bg-bg-darkSec/95 border-t border-slate-200/80 dark:border-glass backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around overflow-visible shadow-[0_-4px_25px_rgba(0,0,0,0.15)]"
         >
         {/* 1. Home */}
         <button
@@ -433,14 +430,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           {/* Solid Circular FAB Button */}
           <div
             className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants')
-              ? 'bg-gradient-to-r from-primary to-amber-400 text-black ring-2 ring-primary/40'
-              : 'bg-gradient-to-r from-primary to-amber-400 text-black hover:brightness-105'
+              ? 'bg-primary text-black ring-4 ring-primary/30'
+              : 'bg-primary text-black hover:brightness-110'
               }`}
           >
             <Utensils size={20} className="stroke-[2.5]" />
           </div>
           <span
-            className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants') ? 'text-primary' : 'text-text-muted group-hover:text-text-primary'
+            className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants') ? 'text-primary font-black' : 'text-text-muted group-hover:text-text-primary'
               }`}
           >
             Shops
@@ -487,7 +484,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_cart')}</span>
           </button>
         )}
-      </div>
+      </nav>
       )}
     </>
   );

@@ -24,18 +24,7 @@ export const DeliveryProcess: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Track scroll inside the timeline container
-  const { scrollYProgress } = useScroll({
-    target: containerRef,
-    offset: ['start 80%', 'end 50%'],
-  });
 
-  // Smooth scroll progression line
-  const scaleY = useSpring(scrollYProgress, {
-    stiffness: 90,
-    damping: 25,
-    restDelta: 0.001,
-  });
 
   if (loading) return <DeliveryProcessSkeleton />;
 
@@ -57,11 +46,9 @@ export const DeliveryProcess: React.FC = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="text-center max-w-3xl mx-auto mb-16 sm:mb-24 space-y-4"
+          className="text-center max-w-3xl mx-auto mb-8 sm:mb-24 space-y-1.5 sm:space-y-3"
         >
-         
-
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-black font-display text-gradient-gold tracking-tight leading-tight">
+          <h2 className="text-2xl sm:text-4xl md:text-5xl font-black font-display text-gradient-gold tracking-tight leading-tight">
             Why Choose MK Delivery..!
           </h2>
 
@@ -72,14 +59,8 @@ export const DeliveryProcess: React.FC = () => {
 
         {/* Interactive Timeline Component Container */}
         <div className="relative mt-6 sm:mt-12 max-w-4xl mx-auto">
-          {/* Background vertical connector track */}
-          <div className="absolute left-[14px] md:left-1/2 top-4 bottom-4 w-[2px] bg-glass-subtle -translate-x-[1px] rounded-full" />
-
-          {/* Smooth Scroll Moving Line (Pure Website Primary Theme Color) */}
-          <motion.div
-            style={{ scaleY }}
-            className="absolute left-[14px] md:left-1/2 top-4 bottom-4 w-[2px] bg-primary -translate-x-[1px] origin-top z-10 shadow-[0_0_8px_var(--color-primary)] rounded-full"
-          />
+          {/* 100% Full-Height Solid Connecting Line (No Scroll Shift) */}
+          <div className="absolute left-[14px] md:left-1/2 top-4 bottom-4 w-[2.5px] bg-primary -translate-x-[1.25px] z-10 shadow-[0_0_8px_var(--color-primary)] rounded-full" />
 
           {/* Timeline Step Cards */}
           <div className="space-y-10 sm:space-y-14 relative z-20">

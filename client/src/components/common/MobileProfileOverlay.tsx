@@ -1166,7 +1166,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                                 type="text"
                                 value={addrFullName}
                                 onChange={(e) => setAddrFullName(e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass text-text-primary font-medium text-xs focus:border-primary outline-none"
+                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass dark:border-white/15 dark:bg-[#121620] text-text-primary font-medium text-xs focus:border-primary outline-none"
                                 placeholder="Receiver name"
                               />
                             </div>
@@ -1178,7 +1178,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                                 type="tel"
                                 value={addrPhone}
                                 onChange={(e) => setAddrPhone(e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass text-text-primary font-medium text-xs focus:border-primary outline-none"
+                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass dark:border-white/15 dark:bg-[#121620] text-text-primary font-medium text-xs focus:border-primary outline-none"
                                 placeholder="Phone number"
                               />
                             </div>
@@ -1194,7 +1194,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                               required
                               value={addrStreet}
                               onChange={(e) => setAddrStreet(e.target.value)}
-                              className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass text-text-primary font-medium text-xs focus:border-primary outline-none"
+                              className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass dark:border-white/15 dark:bg-[#121620] text-text-primary font-medium text-xs focus:border-primary outline-none"
                               placeholder="House No 12-3, Brodipet 4th line"
                             />
                           </div>
@@ -1209,7 +1209,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                                 type="text"
                                 value={addrArea}
                                 onChange={(e) => setAddrArea(e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass text-text-primary font-medium text-xs focus:border-primary outline-none"
+                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass dark:border-white/15 dark:bg-[#121620] text-text-primary font-medium text-xs focus:border-primary outline-none"
                                 placeholder="Area name"
                               />
                             </div>
@@ -1221,7 +1221,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                                 type="text"
                                 value={addrLandmark}
                                 onChange={(e) => setAddrLandmark(e.target.value)}
-                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass text-text-primary font-medium text-xs focus:border-primary outline-none"
+                                className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass dark:border-white/15 dark:bg-[#121620] text-text-primary font-medium text-xs focus:border-primary outline-none"
                                 placeholder="Near Water Tank"
                               />
                             </div>

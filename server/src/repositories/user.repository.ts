@@ -28,6 +28,35 @@ async findByUserId(userId: string): Promise<IUser | null> {
   }
 }
 
+  async findByIdentifier(identifier: string): Promise<IUser | null> {
+    if (!identifier || typeof identifier !== 'string' || !identifier.trim()) {
+      return null;
+    }
+    const cleanId = identifier.trim().toLowerCase();
+    const digitsOnly = cleanId.replace(/\D/g, '');
+
+    // 1. Try finding by email first
+    const byEmail = await this.findByEmail(cleanId);
+    if (byEmail) return byEmail;
+
+    // 2. Try finding by phone number matching
+    try {
+      const allUsers = await this.scan();
+      const foundByPhone = allUsers.find((u: IUser) => {
+        if (!u.phone) return false;
+        const userPhoneDigits = u.phone.replace(/\D/g, '');
+        if (digitsOnly.length >= 7 && userPhoneDigits.length >= 7) {
+          return userPhoneDigits === digitsOnly || userPhoneDigits.endsWith(digitsOnly) || digitsOnly.endsWith(userPhoneDigits);
+        }
+        return u.phone.trim().toLowerCase() === cleanId;
+      });
+      return foundByPhone || null;
+    } catch (error) {
+      console.error(`Error in UserRepository.findByIdentifier(${identifier}):`, error);
+      return null;
+    }
+  }
+
   async findByEmail(email: string): Promise<IUser | null> {
     if (!email || typeof email !== 'string' || !email.trim()) {
       return null;

@@ -27,7 +27,8 @@ import { RestaurantStatus } from './types/enums';
 import shopService, { restaurantService } from './services/restaurant.service';
 import { shopRepository } from './repositories/shop.repository';
 import { userService } from './services/user.service';
-import { hashPassword } from './utils/hash.utils';
+import { userRepository } from './repositories/user.repository';
+import { hashPassword, comparePassword } from './utils/hash.utils';
 import { generateUserId } from './utils/idGenerator';
 import { socketService } from './services/socket.service';
 import categoryService from './services/category.service';
@@ -1262,47 +1263,37 @@ app.post('/api/user/register', async (req: Request, res: Response) => {
 
 // User Login API
 app.post('/api/user/login', async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ success: false, error: 'Email and password are required.' });
-  }
-
-  const isAwsConfigured = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
-  if (!isAwsConfigured || !usersTableName) {
-    return res.status(500).json({ success: false, error: 'DynamoDB is not configured.' });
+  const { email, phone, identifier, password } = req.body;
+  const loginId = (identifier || email || phone || '').trim();
+  if (!loginId || !password) {
+    return res.status(400).json({ success: false, error: 'Email or Mobile number and password are required.' });
   }
 
   try {
-    let matchedUser = null;
-
-    // Fetch from DynamoDB
-    const getCommand = new GetCommand({
-      TableName: usersTableName,
-      Key: { email }
-    });
-    const response = await dynamoDocClient.send(getCommand);
-    if (response.Item && response.Item.password === password) {
-      matchedUser = response.Item;
+    const user = await userRepository.findByIdentifier(loginId);
+    if (!user) {
+      return res.status(401).json({ success: false, error: 'Invalid email/mobile number or password.' });
     }
 
-    if (!matchedUser) {
-      return res.status(401).json({ success: false, error: 'Invalid email or password.' });
+    const isValid = await comparePassword(password, user.password);
+    if (!isValid && user.password !== password) {
+      return res.status(401).json({ success: false, error: 'Invalid email/mobile number or password.' });
     }
 
     res.json({
       success: true,
       message: 'Logged in successfully.',
       user: {
-        id: matchedUser.id,
-        email: matchedUser.email,
-        name: matchedUser.name,
-        phone: matchedUser.phone,
-        role: matchedUser.role || 'user'
+        id: user.userId || (user as any).id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+        role: user.role || 'user'
       }
     });
   } catch (error: any) {
     console.error('Login error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error.', details: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error during login.' });
   }
 });
 

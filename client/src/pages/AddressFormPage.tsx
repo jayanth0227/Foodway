@@ -171,7 +171,7 @@ export const AddressFormPage: React.FC = () => {
               setMapPosition([latitude, longitude]);
               reverseGeocode(latitude, longitude);
             },
-            () => {},
+            () => { },
             { timeout: 5000 }
           );
         }
@@ -349,11 +349,10 @@ export const AddressFormPage: React.FC = () => {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-sm font-medium border shadow-lg ${
-                    status.type === 'success'
+                  className={`p-4 rounded-2xl flex items-center justify-between gap-3 text-sm font-medium border shadow-lg ${status.type === 'success'
                       ? 'bg-success/15 border-success/30 text-success'
                       : 'bg-error/15 border-error/30 text-error'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     {status.type === 'success' ? (
@@ -452,11 +451,10 @@ export const AddressFormPage: React.FC = () => {
                         key={item.id}
                         type="button"
                         onClick={() => setLabel(item.id as any)}
-                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                          isSelected
+                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${isSelected
                             ? 'bg-primary/15 border-primary ring-2 ring-primary/30 text-primary shadow-lg'
                             : 'bg-bg-dark/50 border-border-color text-text-secondary hover:border-primary/40 hover:text-text-primary'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between w-full mb-2">
                           <Icon className={`w-5 h-5 ${isSelected ? 'text-primary' : 'text-text-muted'}`} />
@@ -515,7 +513,7 @@ export const AddressFormPage: React.FC = () => {
                         type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                         placeholder="Full Name"
                       />
                     </div>
@@ -531,7 +529,7 @@ export const AddressFormPage: React.FC = () => {
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                         placeholder="+91 Mobile Number"
                       />
                     </div>
@@ -556,7 +554,7 @@ export const AddressFormPage: React.FC = () => {
                       type="text"
                       value={street}
                       onChange={(e) => setStreet(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                       placeholder="e.g. Flat #402, Sunshine Apartments"
                       required
                     />
@@ -574,7 +572,7 @@ export const AddressFormPage: React.FC = () => {
                       type="text"
                       value={area}
                       onChange={(e) => setArea(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                       placeholder="e.g. MG Road, Jubilee Hills"
                     />
                   </div>
@@ -590,7 +588,7 @@ export const AddressFormPage: React.FC = () => {
                       type="text"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                      className="w-full px-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                       placeholder="City Name"
                       required
                     />
@@ -604,7 +602,7 @@ export const AddressFormPage: React.FC = () => {
                       type="text"
                       value={state}
                       onChange={(e) => setState(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                      className="w-full px-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                       placeholder="State Name"
                     />
                   </div>
@@ -617,7 +615,7 @@ export const AddressFormPage: React.FC = () => {
                       type="text"
                       value={pincode}
                       onChange={(e) => setPincode(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-bg-dark/60 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
+                      className="w-full px-4 py-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-sm text-text-primary focus:outline-none focus:border-primary transition-colors"
                       placeholder="6-digit Pincode"
                       required
                     />

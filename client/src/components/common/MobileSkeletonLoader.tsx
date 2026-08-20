@@ -104,6 +104,49 @@ export const MobileGridSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) 
   );
 };
 
+export const DishCardSkeleton: React.FC<{ count?: number }> = ({ count = 6 }) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {Array.from({ length: count }).map((_, idx) => (
+        <div
+          key={idx}
+          className="bg-bg-card border-2 border-glass rounded-3xl overflow-hidden shadow-md animate-pulse flex flex-col justify-between"
+        >
+          <div>
+            {/* Food Image Banner Placeholder */}
+            <div className="relative aspect-[16/10] w-full skeleton-box">
+              {/* Top Left Veg Icon Skeleton */}
+              <div className="absolute top-2.5 left-2.5 w-5 h-5 rounded-md skeleton-box" />
+              {/* Top Right Rating Skeleton */}
+              <div className="absolute top-2.5 right-2.5 w-12 h-5 rounded-md skeleton-box" />
+            </div>
+
+            {/* Content Body Placeholder */}
+            <div className="p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="h-4 skeleton-box rounded-md w-1/3" />
+                <div className="h-4 skeleton-box rounded-md w-16" />
+              </div>
+              <div className="h-5 skeleton-box rounded-lg w-3/4" />
+              <div className="h-3.5 skeleton-box rounded-md w-full" />
+              <div className="h-3.5 skeleton-box rounded-md w-2/3" />
+            </div>
+          </div>
+
+          {/* Footer Placeholder */}
+          <div className="px-4 py-3 border-t-2 border-glass flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="h-3 skeleton-box rounded w-10" />
+              <div className="h-6 skeleton-box rounded-lg w-20" />
+            </div>
+            <div className="h-8 w-20 rounded-full skeleton-box" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const MobileMenuSkeleton: React.FC<{ count?: number }> = ({ count = 4 }) => {
   return (
     <div className="space-y-3 sm:space-y-4">

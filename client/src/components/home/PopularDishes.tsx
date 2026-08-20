@@ -267,11 +267,11 @@ export const PopularDishes: React.FC = () => {
 
         {/* Section Header - 100% identical styling with Explore Categories */}
         <div className="flex items-end justify-between mb-4 sm:mb-6 pb-3 border-b border-glass/40 gap-3">
-          <div className="space-y-1 text-left max-w-xl">
+          <div className="space-y-0.5 sm:space-y-1 text-left max-w-xl">
             <h2 className="text-lg sm:text-3xl md:text-4xl font-extrabold font-display text-gradient-gold tracking-tight">
-              Taste the Heart of Konaseema
+            Flavours of Konaseema
             </h2>
-            <p className="text-xs sm:text-sm text-text-secondary font-medium leading-relaxed mt-0.5">
+            <p className="hidden sm:block text-xs sm:text-sm text-text-secondary font-medium leading-relaxed">
               Experience traditional recipes, local ingredients, and unforgettable gourmet tastes directly from the kitchens that define Konaseema.
             </p>
           </div>
@@ -315,18 +315,6 @@ export const PopularDishes: React.FC = () => {
             {/* Desktop Grid View */}
             <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 gap-6">
               {visibleDishes.map((dish) => renderDishCard(dish))}
-            </div>
-
-            {/* Bottom See All Pill Button */}
-            <div className="flex justify-center pt-4">
-              <button
-                type="button"
-                onClick={() => navigate('/dishes')}
-                className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-primary/20 via-primary/10 to-amber-500/20 border border-primary/40 text-primary hover:bg-primary hover:text-black font-black text-xs uppercase tracking-widest shadow-luxury transition-all duration-300 backdrop-blur-md active:scale-95 flex items-center gap-2 cursor-pointer"
-              >
-                <span>See All</span>
-                <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-              </button>
             </div>
           </>
         )}

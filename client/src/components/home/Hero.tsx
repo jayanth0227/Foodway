@@ -322,7 +322,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="text-xs sm:text-sm md:text-base text-text-secondary/90 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium"
+            className="hidden sm:block text-xs sm:text-sm md:text-base text-text-secondary/90 leading-relaxed max-w-xl mx-auto lg:mx-0 font-medium"
           >
             From fresh groceries and fruits to delicious meals, sweets and everyday essentials — discover everything around you.
           </motion.p>

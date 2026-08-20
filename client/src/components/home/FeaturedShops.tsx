@@ -6,6 +6,7 @@ import axios from 'axios';
 import { API_BASE_URL } from '../../utils/api';
 import { MobileShopCardSkeleton } from '../common/MobileSkeletonLoader';
 import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
+import { formatShopAddress } from '../../utils/categoryUtils';
 
 export const FeaturedShops: React.FC = () => {
   const navigate = useNavigate();
@@ -90,7 +91,7 @@ export const FeaturedShops: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 relative z-10">
         <div className="flex items-center justify-between mb-4 sm:mb-6 md:mb-8 pb-3 sm:pb-4 border-b border-glass/40">
-          <div className="space-y-1 text-left max-w-xl">
+          <div className="space-y-0.5 sm:space-y-1 text-left max-w-xl">
             <h2 className="text-lg sm:text-2xl md:text-4xl font-extrabold font-display text-gradient-gold tracking-tight">
               Explore Shops & Supermarkets
             </h2>
@@ -178,17 +179,23 @@ export const FeaturedShops: React.FC = () => {
 
                   <div className="p-3.5 sm:p-5 flex flex-col justify-between flex-grow space-y-2.5 sm:space-y-3">
                     <div>
-                      <h3 className="text-base sm:text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white group-hover:text-primary transition-colors tracking-tight line-clamp-1">
-                        {shopName}
-                      </h3>
+                      {/* Shop Name & Rating Badge Header */}
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-base sm:text-lg md:text-xl font-bold font-display text-slate-900 dark:text-white group-hover:text-primary transition-colors tracking-tight line-clamp-1">
+                          {shopName}
+                        </h3>
+                        <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/40 shrink-0">
+                          <Star size={11} className="fill-emerald-600 text-emerald-600" />
+                          <span className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">{shopRating}</span>
+                        </div>
+                      </div>
 
-                      <div className="flex items-center gap-1.5 text-xs sm:text-sm font-extrabold mt-1">
-                        <span className="w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 shadow-sm">
-                          <Star size={9} className="fill-white text-white" strokeWidth={0} />
+                      {/* Location Icon & Address */}
+                      <div className="flex items-start gap-1.5 text-xs sm:text-sm font-medium mt-1.5 text-slate-600 dark:text-slate-300">
+                        <MapPin size={14} className="text-primary shrink-0 mt-0.5" />
+                        <span className="line-clamp-2 leading-snug break-words" title={formatShopAddress(shop.address)}>
+                          {formatShopAddress(shop.address)}
                         </span>
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{shopRating}</span>
-                        <span className="text-slate-400 dark:text-slate-500 font-bold">•</span>
-                        <span className="truncate text-slate-800 dark:text-slate-200 font-bold">{shop.address || 'Local Market'}</span>
                       </div>
                     </div>
 

@@ -304,7 +304,7 @@ export const DishesPage: React.FC = () => {
               <div className="flex items-center gap-3.5 flex-1 min-w-0">
                 <button
                   onClick={() => navigate('/')}
-                  className="p-2.5 sm:p-3 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer flex items-center justify-center"
+                  className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer flex items-center justify-center"
                   aria-label="Back to Home"
                   title="Back to Home Screen"
                 >
@@ -315,7 +315,7 @@ export const DishesPage: React.FC = () => {
                   <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black font-display text-gradient-gold leading-tight truncate">
                     Taste the Heart of Konaseema
                   </h1>
-                  <p className="text-xs sm:text-sm text-text-secondary font-medium truncate">
+                  <p className="hidden sm:block text-xs sm:text-sm text-text-secondary font-medium truncate">
                     Explore traditional recipes and gourmet dishes directly from Godavari kitchens.
                   </p>
                 </div>

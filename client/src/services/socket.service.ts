@@ -7,10 +7,12 @@ class ClientSocketService {
   private disabled: boolean = false;
 
   constructor() {
-    // Disable Socket.IO in production (API Gateway/Lambda cannot serve WebSocket connections)
-    const envUrl = import.meta.env.VITE_API_BASE_URL || '';
-    if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-      this.disabled = true;
+    // Disable Socket.IO only in production deployment (e.g. AWS Lambda / API Gateway)
+    if (!import.meta.env.DEV) {
+      const envUrl = import.meta.env.VITE_API_BASE_URL || '';
+      if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+        this.disabled = true;
+      }
     }
   }
 

@@ -125,17 +125,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const refreshAuth = async () => {
     try {
       const res = await authService.getCurrentUser();
-      if (res.success && res.user) {
+      if (res && res.success && res.user) {
         const activeToken = res.token || token || 'active_session';
         saveSession(activeToken, res.user);
         setUser(res.user);
         setRole(res.user.role);
         setToken(activeToken);
-      } else {
-        handleLogout();
       }
     } catch (e) {
-      handleLogout();
+      // Preserve existing authenticated session on network or API error
     }
   };
 

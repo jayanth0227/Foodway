@@ -157,10 +157,13 @@ export const CartSidebar: React.FC = () => {
                           </p>
                         </div>
                         <button
-                          onClick={() => setCartOpen(false)}
-                          className="btn-secondary font-bold text-xs px-5 py-2.5 rounded-lg"
+                          onClick={() => {
+                            setCartOpen(false);
+                            navigate('/shops');
+                          }}
+                          className="btn-secondary font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer"
                         >
-                          Explore Cuisines
+                         Explore Everything Near You
                         </button>
                       </div>
                     ) : (
