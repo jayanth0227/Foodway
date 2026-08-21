@@ -288,7 +288,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
               )}
             </button>
 
-            {/* Cart Button - Desktop Only */}
+            {/* Cart Button - Desktop Only (Always visible on consumer pages for logged-in & logged-out users) */}
             {!location.pathname.startsWith('/admin') && (
               <button
                 onClick={() => navigate('/cart')}

@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, MapPin, ArrowRight, Store, Clock, Star, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_BASE_URL } from '../../utils/api';
+import shopService from '../../services/shop.service';
 import { MobileShopCardSkeleton } from '../common/MobileSkeletonLoader';
 import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
 import { formatShopAddress } from '../../utils/categoryUtils';
@@ -20,27 +19,24 @@ export const FeaturedShops: React.FC = () => {
   });
 
   useEffect(() => {
-    const fetchShops = async (isInitial = false) => {
-      if (isInitial) setLoading(true);
+    let isMounted = true;
+    const fetchShops = async (force = false) => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/public/restaurants`);
-        const dataList = response.data.shops || response.data.restaurants;
-        if (response.data.success && Array.isArray(dataList)) {
+        const dataList = await shopService.getPublicRestaurants(force);
+        if (isMounted) {
           setShops(dataList);
         }
       } catch (err) {
         console.warn('Error fetching shops from DB:', err);
       } finally {
-        if (isInitial) setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    fetchShops(true);
+    fetchShops(false);
 
-    const pollInterval = setInterval(() => fetchShops(false), 4000);
-    const handleStatusUpdate = () => fetchShops(false);
+    const handleStatusUpdate = () => fetchShops(true);
     window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
-    window.addEventListener('storage', handleStatusUpdate);
 
     const syncWishlist = () => {
       const list = getWishlist();
@@ -51,9 +47,8 @@ export const FeaturedShops: React.FC = () => {
 
     window.addEventListener('foodway_wishlist_updated', syncWishlist);
     return () => {
-      clearInterval(pollInterval);
+      isMounted = false;
       window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
-      window.removeEventListener('storage', handleStatusUpdate);
       window.removeEventListener('foodway_wishlist_updated', syncWishlist);
     };
   }, []);

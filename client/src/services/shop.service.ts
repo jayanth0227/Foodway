@@ -1,7 +1,38 @@
+import axios from 'axios';
 import api from './api';
 import type { ShopItem, MarketplaceItem, ShopType } from '../utils/mockData';
+import { API_BASE_URL } from '../utils/api';
 
 export class ShopService {
+  private publicRestaurantsPromise: Promise<any[]> | null = null;
+  private cachedPublicRestaurants: any[] | null = null;
+
+  async getPublicRestaurants(forceRefresh = false): Promise<any[]> {
+    if (!forceRefresh && this.cachedPublicRestaurants) {
+      return this.cachedPublicRestaurants;
+    }
+    if (!forceRefresh && this.publicRestaurantsPromise) {
+      return this.publicRestaurantsPromise;
+    }
+
+    this.publicRestaurantsPromise = (async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/public/restaurants`);
+        const dataList = response.data?.shops || response.data?.restaurants || (Array.isArray(response.data) ? response.data : []);
+        this.cachedPublicRestaurants = Array.isArray(dataList) ? dataList : [];
+        return this.cachedPublicRestaurants;
+      } catch (error) {
+        console.warn('Error fetching public restaurants:', error);
+        if (this.cachedPublicRestaurants) return this.cachedPublicRestaurants;
+        return [];
+      } finally {
+        this.publicRestaurantsPromise = null;
+      }
+    })();
+
+    return this.publicRestaurantsPromise;
+  }
+
   async getAllShops(type?: ShopType): Promise<ShopItem[]> {
     try {
       const url = type ? `/shops?type=${type}` : '/shops';

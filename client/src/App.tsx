@@ -27,16 +27,22 @@ import { WishlistPage } from './pages/WishlistPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { AddressFormPage } from './pages/AddressFormPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
+import { PublicCustomerRoute } from './components/auth/PublicCustomerRoute';
 import { OfflineDetector } from './components/common/OfflineDetector';
 
 
 import { requestNotificationPermission } from "./utils/requestNotificationPermission";
 import { setupForegroundMessageListener } from "./utils/onForegroundMessage";
+import { QueryProvider } from './context/QueryContext';
+import { useRealtimeSync } from './hooks/useRealtimeSync';
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const lenisRef = React.useRef<Lenis | null>(null);
+
+  // Mount Global Real-Time Socket & TanStack Query Synchronization Hook
+  useRealtimeSync();
 
   // Lenis Smooth Scroll Initialization & Browser Scroll Restoration Config
   useEffect(() => {
@@ -104,16 +110,16 @@ const AppContent: React.FC = () => {
       {/* Main Page Content */}
       <main className="relative z-10">
         <Routes>
-          <Route path="/" element={<Home onOpenAuth={openAuthModal} />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/dishes" element={<DishesPage />} />
-          <Route path="/items" element={<DishesPage />} />
-          <Route path="/restaurants" element={<ShopsPage />} />
-          <Route path="/shops" element={<ShopsPage />} />
-          <Route path="/restaurants/:id" element={<ShopDetailsPage />} />
-          <Route path="/shops/:id" element={<ShopDetailsPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/wishlist" element={<WishlistPage />} />
+          <Route path="/" element={<PublicCustomerRoute><Home onOpenAuth={openAuthModal} /></PublicCustomerRoute>} />
+          <Route path="/categories" element={<PublicCustomerRoute><CategoriesPage /></PublicCustomerRoute>} />
+          <Route path="/dishes" element={<PublicCustomerRoute><DishesPage /></PublicCustomerRoute>} />
+          <Route path="/items" element={<PublicCustomerRoute><DishesPage /></PublicCustomerRoute>} />
+          <Route path="/restaurants" element={<PublicCustomerRoute><ShopsPage /></PublicCustomerRoute>} />
+          <Route path="/shops" element={<PublicCustomerRoute><ShopsPage /></PublicCustomerRoute>} />
+          <Route path="/restaurants/:id" element={<PublicCustomerRoute><ShopDetailsPage /></PublicCustomerRoute>} />
+          <Route path="/shops/:id" element={<PublicCustomerRoute><ShopDetailsPage /></PublicCustomerRoute>} />
+          <Route path="/cart" element={<PublicCustomerRoute><CartPage /></PublicCustomerRoute>} />
+          <Route path="/wishlist" element={<PublicCustomerRoute><WishlistPage /></PublicCustomerRoute>} />
           <Route path="/orders" element={<CustomerOrdersPage />} />
           <Route
             path="/profile"
@@ -234,19 +240,21 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <HelmetProvider>
-      <ThemeProvider>
-        <LanguageProvider>
-          <AuthProvider>
-            <CartProvider>
-              <Router>
-                <AppContent />
-              </Router>
-            </CartProvider>
-          </AuthProvider>
-        </LanguageProvider>
-      </ThemeProvider>
-    </HelmetProvider>
+    <QueryProvider>
+      <HelmetProvider>
+        <ThemeProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <CartProvider>
+                <Router>
+                  <AppContent />
+                </Router>
+              </CartProvider>
+            </AuthProvider>
+          </LanguageProvider>
+        </ThemeProvider>
+      </HelmetProvider>
+    </QueryProvider>
   );
 };
 

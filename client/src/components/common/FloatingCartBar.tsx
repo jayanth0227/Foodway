@@ -3,9 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../hooks/useAuth';
 
 export const FloatingCartBar: React.FC = () => {
   const { totalItemsCount, totalAmount, lastAddedItem, setCartOpen } = useCart();
+  const { user, isAuthenticated } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
@@ -27,8 +29,8 @@ export const FloatingCartBar: React.FC = () => {
     location.pathname === '/cart' ||
     location.pathname === '/checkout';
 
-  // Only show popup when not on auth/portal pages and cart is not empty
-  if (isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
+  // Only show popup when user is logged in, not on auth/portal pages, and cart is not empty
+  if (!isAuthenticated || !user || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
     return null;
   }
 

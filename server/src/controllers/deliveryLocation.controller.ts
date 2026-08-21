@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import deliveryLocationRepository from '../repositories/deliveryLocation.repository';
 import { CreateDeliveryLocationDTO, UpdateDeliveryLocationDTO, DeliveryLocationStatus } from '../types/deliveryLocation.types';
+import socketService from '../services/socket.service';
 
 export class DeliveryLocationController {
   // GET /api/delivery-locations (Public user home page endpoint)
@@ -131,6 +132,7 @@ export class DeliveryLocationController {
       };
 
       const created = await deliveryLocationRepository.create(dto);
+      if (socketService) socketService.emitLocationUpdated(created);
 
       res.status(201).json({
         success: true,
@@ -177,6 +179,8 @@ export class DeliveryLocationController {
         return;
       }
 
+      if (socketService) socketService.emitLocationUpdated(updated);
+
       res.json({
         success: true,
         message: `${updated.name} location updated successfully.`,
@@ -221,6 +225,8 @@ export class DeliveryLocationController {
         return;
       }
 
+      if (socketService) socketService.emitLocationUpdated(updated);
+
       res.json({
         success: true,
         message: `${updated.name} is now ${status === 'ACTIVE' ? 'activated' : 'deactivated'}.`,
@@ -256,6 +262,7 @@ export class DeliveryLocationController {
       }
 
       await deliveryLocationRepository.delete(id);
+      if (socketService) socketService.emitLocationUpdated({ locationId: id, deleted: true });
 
       res.json({
         success: true,

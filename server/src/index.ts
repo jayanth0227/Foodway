@@ -347,6 +347,10 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
       } catch (e) { }
     }
 
+    if (socketService) {
+      socketService.emitShopStatusUpdated(resId, isOpen, nextStatus);
+    }
+
     res.json({ success: true, message: `Restaurant status updated to ${nextStatus}.`, isOpen, status: nextStatus });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to update restaurant status.', details: error.message });
@@ -361,6 +365,7 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
       const isClosed = r.isOpen === false || r.isOpen === 'false' || r.status === 'closed' || r.status === 'inactive' || r.status === 'INACTIVE' || r.status === 'OFFLINE' || r.status === 'offline' || r.status === 'CLOSED';
       const resId = r.shopId || r.restaurantId || r.id;
       const resName = r.shopName || r.restaurantName || r.name;
+      const dietaryType = r.dietaryType || (r.isVegOnly ? 'PURE_VEG' : 'BOTH');
       return {
         id: resId,
         shopId: resId,
@@ -376,7 +381,9 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
         status: isClosed ? 'closed' : 'active',
         address: r.address || '',
         phone: r.phone || '',
-        description: r.description || ''
+        description: r.description || '',
+        dietaryType,
+        isVegOnly: dietaryType === 'PURE_VEG'
       };
     });
     res.json({ success: true, restaurants: mapped });
@@ -1097,6 +1104,10 @@ app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
     });
 
     const saved = result.shop || (result as any).restaurant;
+
+    if (socketService) {
+      socketService.emitShopCreated(saved);
+    }
 
     return res.json({
       success: true,
@@ -1889,6 +1900,10 @@ app.put('/api/restaurant/profile/:restaurantId', async (req: Request, res: Respo
     const profileUpdates = req.body;
 
     const updated = await restaurantService.updateProfile(restaurantId, profileUpdates);
+
+    if (socketService) {
+      socketService.emitShopUpdated(updated || profileUpdates);
+    }
 
     res.json({
       success: true,

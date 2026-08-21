@@ -9,13 +9,16 @@ export class ShopRepository {
     const shopName = item.shopName || item.restaurantName || '';
     const shopType = item.shopType || 'FOOD';
 
+    const dietaryType = item.dietaryType || (item.isVegOnly ? 'PURE_VEG' : 'BOTH');
+
     return {
       ...item,
       shopId,
       restaurantId: shopId,
       shopName,
       restaurantName: shopName,
-      shopType
+      shopType,
+      dietaryType
     };
   }
 

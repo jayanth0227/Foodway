@@ -31,6 +31,11 @@ export const createRateLimiter = (
   message: string = 'Too many requests from this IP, please try again later.'
 ) => {
   return (req: Request, res: Response, next: NextFunction) => {
+    // Session check endpoint (/api/auth/me) must never be blocked by strict 429 login rate limiters
+    if (req.path === '/me' || req.path === '/api/auth/me' || req.originalUrl?.includes('/api/auth/me')) {
+      return next();
+    }
+
     // Determine client IP
     const clientIp =
       (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||

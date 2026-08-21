@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { X, Trash2, Plus, Minus, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import axios from 'axios';
 import { API_BASE_URL } from '../../utils/api';
 
 export const CartSidebar: React.FC = () => {
+  const navigate = useNavigate();
   const {
     cartItems,
     addToCart,
@@ -167,10 +169,10 @@ export const CartSidebar: React.FC = () => {
                         </button>
                       </div>
                     ) : (
-                      cartItems.map((item) => {
+                      cartItems.map((item, idx) => {
                         const variantPrice = item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price);
                         const variantLabel = item.selectedVariant ? (item.selectedVariant.label || `${item.selectedVariant.quantity} ${item.selectedVariant.unit}`) : null;
-                        const key = item.itemKey || item.dish.id;
+                        const key = item.itemKey || item.dish?.id || `cart-item-${idx}`;
 
                         return (
                           <div

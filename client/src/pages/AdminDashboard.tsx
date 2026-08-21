@@ -357,6 +357,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     }
 
     setAdminEmail(user.email);
+    // Join Admin Socket Room
+    socketService.joinAdmin();
+
     // Load original AWS & Admin API data
     fetchAWSStatus();
     fetchDBItems();
@@ -365,14 +368,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     fetchAdminOrders();
     fetchDeliveryPartners();
 
-    // Auto-refresh restaurant status & live orders every 5s for real-time accuracy
-    const interval = setInterval(() => {
-      fetchAdminRestaurants();
-      fetchAdminOrders();
-      fetchDeliveryPartners();
-    }, 5000);
-
     // Real-Time Socket Subscriptions for Admin Dashboard
+    const unsubscribeShopCreated = socketService.onShopCreated(() => {
+      fetchAdminRestaurants();
+    });
+
+    const unsubscribeShopUpdated = socketService.onShopUpdated(() => {
+      fetchAdminRestaurants();
+    });
+
+    const unsubscribeShopStatus = socketService.onShopStatusUpdated((data: any) => {
+      if (data && data.shopId) {
+        setRestaurants(prev => prev.map(r => {
+          if (r.id === data.shopId || r.shopId === data.shopId || r.restaurantId === data.shopId) {
+            return { ...r, isOpen: data.isOpen, status: data.status };
+          }
+          return r;
+        }));
+      } else {
+        fetchAdminRestaurants();
+      }
+    });
+
+    const unsubscribeOrderCreated = socketService.onOrderCreated((newOrder: any) => {
+      fetchAdminOrders();
+    });
+
+    const unsubscribeOrderAssigned = socketService.onOrderAssigned(() => {
+      fetchAdminOrders();
+    });
+
     const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
       const targetId = updatedOrder.orderId || updatedOrder.id;
       const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
@@ -415,7 +440,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
           const matches = (dEmail && pEmail === dEmail) || 
                           (dId && (pId === dId || pId.includes(dId) || dId.includes(pId))) ||
                           (dName && (pName === dName || pName.includes(dName))) ||
-                          (prev.length === 1); // Fallback if single partner registered
+                          (prev.length === 1);
 
           if (matches) {
             return { ...p, dutyStatus: targetDuty };
@@ -428,7 +453,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     socket.on('partner_duty_updated', handleDutyUpdate);
 
     return () => {
-      clearInterval(interval);
+      unsubscribeShopCreated();
+      unsubscribeShopUpdated();
+      unsubscribeShopStatus();
+      unsubscribeOrderCreated();
+      unsubscribeOrderAssigned();
       unsubscribeStatus();
       unsubscribeRider();
       socket.off('partner_duty_updated', handleDutyUpdate);

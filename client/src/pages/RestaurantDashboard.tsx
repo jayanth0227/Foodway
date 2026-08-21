@@ -326,7 +326,8 @@ export const RestaurantDashboard: React.FC = () => {
     closingTime: '11:00 PM',
     image: '',
     description: '',
-    cuisine: 'Multi-Cuisine'
+    cuisine: 'Multi-Cuisine',
+    dietaryType: 'BOTH' as 'PURE_VEG' | 'BOTH'
   });
 
   const [showProfilePassword, setShowProfilePassword] = useState(false);
@@ -525,7 +526,8 @@ export const RestaurantDashboard: React.FC = () => {
           closingTime: fetchedShop.closingTime || prev.closingTime,
           image: fetchedShop.logo || fetchedShop.bannerImage || fetchedShop.image || prev.image,
           description: fetchedShop.description || prev.description,
-          cuisine: fetchedShop.cuisine || prev.cuisine
+          cuisine: fetchedShop.cuisine || prev.cuisine,
+          dietaryType: fetchedShop.dietaryType || (fetchedShop.isVegOnly ? 'PURE_VEG' : 'BOTH')
         }));
         if (fetchedShop.latitude && fetchedShop.longitude) {
           setVendorLat(fetchedShop.latitude);
@@ -1387,6 +1389,8 @@ export const RestaurantDashboard: React.FC = () => {
       image: profileForm.image,
       description: profileForm.description.trim(),
       cuisine: profileForm.cuisine.trim(),
+      dietaryType: profileForm.dietaryType,
+      isVegOnly: profileForm.dietaryType === 'PURE_VEG',
       latitude: finalLat ?? undefined,
       longitude: finalLng ?? undefined,
       ...(profileForm.password ? { password: profileForm.password } : {})
@@ -2275,13 +2279,21 @@ export const RestaurantDashboard: React.FC = () => {
                     <div>
                       <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Dietary Type *</label>
                       <select
-                        value={foodForm.isVeg ? 'veg' : 'non-veg'}
+                        value={profileForm.dietaryType === 'PURE_VEG' ? 'veg' : (foodForm.isVeg ? 'veg' : 'non-veg')}
+                        disabled={profileForm.dietaryType === 'PURE_VEG'}
                         onChange={(e) => setFoodForm({ ...foodForm, isVeg: e.target.value === 'veg' })}
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all font-bold text-sm"
+                        className={`w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all font-bold text-sm ${profileForm.dietaryType === 'PURE_VEG' ? 'opacity-70 cursor-not-allowed' : ''}`}
                       >
                         <option value="veg">Vegetarian (Veg)</option>
-                        <option value="non-veg">Non-Vegetarian (Non-Veg)</option>
+                        {profileForm.dietaryType !== 'PURE_VEG' && (
+                          <option value="non-veg">Non-Vegetarian (Non-Veg)</option>
+                        )}
                       </select>
+                      {profileForm.dietaryType === 'PURE_VEG' && (
+                        <p className="text-[11px] text-emerald-400 font-semibold mt-1">
+                          ✓ Locked to Vegetarian (Store is configured as Pure Veg).
+                        </p>
+                      )}
                     </div>
 
                     <div className="flex items-center pt-6">
@@ -3178,6 +3190,27 @@ export const RestaurantDashboard: React.FC = () => {
                       />
                     </div>
                   </div>
+                </div>
+
+                {/* Store Dietary Classification */}
+                <div className="bg-bg-dark/40 border border-glass p-4 rounded-xl">
+                  <label className="block text-[11px] font-bold text-text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                    Store Dietary Classification *
+                  </label>
+                  <select
+                    value={profileForm.dietaryType}
+                    onChange={(e) => setProfileForm({ ...profileForm, dietaryType: e.target.value as any })}
+                    className="w-full bg-bg-dark border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all font-bold text-sm"
+                  >
+                    <option value="PURE_VEG">Pure Vegetarian / Vegetables Only (Veg Only)</option>
+                    <option value="BOTH">Vegetarian & Non-Vegetarian Items (Both)</option>
+                  </select>
+                  <p className="text-[11px] text-text-muted mt-2">
+                    {profileForm.dietaryType === 'PURE_VEG'
+                      ? '✓ Pure Veg stores display clean Pure Veg badges on customer pages and lock menu items to Vegetarian.'
+                      : 'Store sells both Veg and Non-Veg items with full customer filter options.'}
+                  </p>
                 </div>
 
                 {/* 4. Timings Section */}

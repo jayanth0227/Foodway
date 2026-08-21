@@ -3,6 +3,7 @@ import type { DishItem } from '../utils/mockData';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { getCurrentUser } from '../utils/auth.utils';
+import { useAuth } from '../hooks/useAuth';
 import socketService from '../services/socket.service';
 
 export interface CartItem {
@@ -32,14 +33,20 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isRemoteSyncingRef = useRef(false);
+  const { user, isAuthenticated } = useAuth();
+  const userId = user?.id || (user as any)?.userId || user?.email;
 
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
-      const savedCart = localStorage.getItem('mk_cart');
-      if (savedCart) {
-        const parsed = JSON.parse(savedCart);
-        if (Array.isArray(parsed)) {
-          return parsed;
+      const activeUser = user || getCurrentUser();
+      const activeId = activeUser?.id || (activeUser as any)?.userId || activeUser?.email;
+      if (activeId) {
+        const savedCart = localStorage.getItem(`mk_cart_${activeId}`);
+        if (savedCart) {
+          const parsed = JSON.parse(savedCart);
+          if (Array.isArray(parsed)) {
+            return parsed;
+          }
         }
       }
     } catch (e) {
@@ -51,23 +58,52 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCartOpen, setCartOpen] = useState(false);
   const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number; variantLabel?: string; timestamp?: number } | null>(null);
 
-  // Sync with Backend & WebSockets on user auth/mount
+  // React to User Auth State Changes (Login / Logout / Refresh)
   useEffect(() => {
-    const user = getCurrentUser();
-    const userId = user?.id || (user as any)?.userId;
-    if (!userId) return;
+    // Case 1: User logged out / no active user session -> Clear active memory cart
+    if (!isAuthenticated || !userId) {
+      setCartItems([]);
+      setLastAddedItem(null);
+      setCartOpen(false);
+      return;
+    }
+
+    // Case 2: User logged in -> Restore user-scoped cart from localStorage
+    try {
+      const savedUserCart = localStorage.getItem(`mk_cart_${userId}`);
+      if (savedUserCart) {
+        const parsed = JSON.parse(savedUserCart);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCartItems(parsed);
+        }
+      }
+    } catch (e) { }
 
     // Join Customer Socket Room
     socketService.joinCustomer(userId);
 
-    // Initial Fetch of User Active Cart from DB / Backend
+    // Fetch User Active Cart from DB / Backend
     axios.get(`${API_BASE_URL}/cart/${userId}`)
       .then(res => {
         if (res.data && res.data.success && Array.isArray(res.data.cartItems)) {
-          if (res.data.cartItems.length > 0 || cartItems.length === 0) {
+          if (res.data.cartItems.length > 0) {
             isRemoteSyncingRef.current = true;
             setCartItems(res.data.cartItems);
+            try {
+              localStorage.setItem(`mk_cart_${userId}`, JSON.stringify(res.data.cartItems));
+            } catch (e) { }
             setTimeout(() => { isRemoteSyncingRef.current = false; }, 250);
+          } else {
+            // Local cart has items but server cart is empty: sync local cart up to server
+            const savedUserCart = localStorage.getItem(`mk_cart_${userId}`);
+            if (savedUserCart) {
+              try {
+                const parsed = JSON.parse(savedUserCart);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  axios.put(`${API_BASE_URL}/cart/${userId}`, { cartItems: parsed }).catch(() => {});
+                }
+              } catch (e) { }
+            }
           }
         }
       })
@@ -78,6 +114,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.userId === userId && Array.isArray(data.cartItems)) {
         isRemoteSyncingRef.current = true;
         setCartItems(data.cartItems);
+        try {
+          localStorage.setItem(`mk_cart_${userId}`, JSON.stringify(data.cartItems));
+        } catch (e) { }
         setTimeout(() => { isRemoteSyncingRef.current = false; }, 250);
       }
     });
@@ -85,23 +124,23 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [userId, isAuthenticated]);
 
-  // Save cart to localStorage & sync to Backend whenever cartItems changes
+  // Save cart to user-scoped localStorage & sync to Backend whenever cartItems changes
   useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+
     try {
-      localStorage.setItem('mk_cart', JSON.stringify(cartItems));
+      localStorage.setItem(`mk_cart_${userId}`, JSON.stringify(cartItems));
     } catch (e) {
       console.error('Error saving cart to localStorage', e);
     }
 
-    const user = getCurrentUser();
-    const userId = user?.id || (user as any)?.userId;
-    if (userId && !isRemoteSyncingRef.current) {
+    if (!isRemoteSyncingRef.current) {
       axios.put(`${API_BASE_URL}/cart/${userId}`, { cartItems })
         .catch(err => console.warn('Cart push sync warning:', err));
     }
-  }, [cartItems]);
+  }, [cartItems, userId, isAuthenticated]);
 
   const getItemKey = (dishId: string, variantId?: string) => {
     return variantId ? `${dishId}-${variantId}` : dishId;

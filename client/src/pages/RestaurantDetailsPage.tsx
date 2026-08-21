@@ -10,6 +10,7 @@ import { MobileMenuSkeleton } from '../components/common/MobileSkeletonLoader';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
 import socketService from '../services/socket.service';
 import GooeyPopover from '../components/GooeyPopover';
+import shopService from '../services/shop.service';
 
 const removeEmojis = (str: string) => {
   if (!str) return '';
@@ -44,8 +45,6 @@ export const RestaurantDetailsPage: React.FC = () => {
       // Join Restaurant Socket Room for real-time menu updates
       socketService.joinRestaurant(id);
 
-      // Real-time status poll every 4s
-      const pollInterval = setInterval(() => fetchRestaurantDetails(id, false), 4000);
       const handleStatusUpdate = () => fetchRestaurantDetails(id, false);
 
       const unsubscribeMenu = socketService.onMenuUpdated((data) => {
@@ -55,7 +54,6 @@ export const RestaurantDetailsPage: React.FC = () => {
       });
 
       window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
-      window.addEventListener('storage', handleStatusUpdate);
 
       const syncWishlist = () => {
         const list = getWishlist();
@@ -66,10 +64,8 @@ export const RestaurantDetailsPage: React.FC = () => {
 
       window.addEventListener('foodway_wishlist_updated', syncWishlist);
       return () => {
-        clearInterval(pollInterval);
         unsubscribeMenu();
         window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
-        window.removeEventListener('storage', handleStatusUpdate);
         window.removeEventListener('foodway_wishlist_updated', syncWishlist);
       };
     }
@@ -109,14 +105,12 @@ export const RestaurantDetailsPage: React.FC = () => {
       // 2. Try fetching from public restaurants endpoint if direct lookup failed
       if (!foundRes) {
         try {
-          const resResponse = await axios.get(`${API_BASE_URL}/public/restaurants`);
-          if (resResponse.data.success && Array.isArray(resResponse.data.restaurants)) {
-            foundRes = resResponse.data.restaurants.find((r: any) =>
-              r.id === resId || r.restaurantId === resId || r.shopId === resId ||
-              (r.name && r.name.toLowerCase() === resId.toLowerCase()) ||
-              (r.shopName && r.shopName.toLowerCase() === resId.toLowerCase())
-            );
-          }
+          const list = await shopService.getPublicRestaurants();
+          foundRes = list.find((r: any) =>
+            r.id === resId || r.restaurantId === resId || r.shopId === resId ||
+            (r.name && r.name.toLowerCase() === resId.toLowerCase()) ||
+            (r.shopName && r.shopName.toLowerCase() === resId.toLowerCase())
+          );
         } catch (e) { }
       }
 
@@ -388,11 +382,11 @@ export const RestaurantDetailsPage: React.FC = () => {
 
                       {/* Dynamic Categories List Badges */}
                       <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                        {(categories.filter(c => c !== 'All').length > 0
-                          ? categories.filter(c => c !== 'All')
+                        {(categories.filter(c => c && c.trim() !== '' && c !== 'All').length > 0
+                          ? categories.filter(c => c && c.trim() !== '' && c !== 'All')
                           : [restaurant.cuisine || 'Multi-Cuisine']
-                        ).map((catName) => (
-                          <span key={catName} className="px-2.5 py-0.5 rounded-lg bg-primary/20 text-primary text-[10px] sm:text-xs font-black uppercase tracking-wider border border-primary/30 backdrop-blur-sm">
+                        ).map((catName, idx) => (
+                          <span key={catName || `cat-${idx}`} className="px-2.5 py-0.5 rounded-lg bg-primary/20 text-primary text-[10px] sm:text-xs font-black uppercase tracking-wider border border-primary/30 backdrop-blur-sm">
                             {removeEmojis(catName)}
                           </span>
                         ))}
@@ -421,39 +415,46 @@ export const RestaurantDetailsPage: React.FC = () => {
                 />
               </div>
 
-              {/* 2. Swiggy Horizontal Filter Bar (Veg / Non-Veg Toggle Chips + Categories) */}
-              <div className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                {/* Veg Filter Chip */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedDietary(selectedDietary === 'Veg' ? 'All' : 'Veg')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Veg'
-                    ? 'bg-emerald-600 text-white shadow-md border border-emerald-400'
-                    : 'bg-glass hover:bg-glass-subtle border border-emerald-500/30 text-emerald-400'
-                    }`}
-                >
-                  <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                  </div>
-                  <span>Veg</span>
-                </button>
+              {/* 2. Swiggy Horizontal Filter Bar (Dynamic Veg / Non-Veg Toggle Chips + Categories) */}
+              {(() => {
+                const hasNonVegItems = menuItems.some((d: any) => d.isVeg === false || d.type === 'non-veg' || d.type === 'nonveg');
+                const isPureVegShop = (restaurant as any)?.dietaryType === 'PURE_VEG' || (restaurant as any)?.isVegOnly === true || (!hasNonVegItems && menuItems.length > 0);
 
-                {/* Non-Veg Filter Chip */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedDietary(selectedDietary === 'Non-Veg' ? 'All' : 'Non-Veg')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Non-Veg'
-                    ? 'bg-rose-600 text-white shadow-md border border-rose-400'
-                    : 'bg-glass hover:bg-glass-subtle border border-rose-500/30 text-rose-400'
-                    }`}
-                >
-                  <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
-                    <div className="w-1.5 h-1.5 rounded-full bg-current" />
-                  </div>
-                  <span>Non-Veg</span>
-                </button>
+                return (
+                  <div className="flex items-center gap-2 overflow-x-auto py-1 scroll-smooth [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+                    {/* Veg Filter Chip */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDietary(selectedDietary === 'Veg' ? 'All' : 'Veg')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Veg'
+                        ? 'bg-emerald-600 text-white shadow-md border border-emerald-400'
+                        : 'bg-glass hover:bg-glass-subtle border border-emerald-500/30 text-emerald-400'
+                        }`}
+                    >
+                      <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                      </div>
+                      <span>{isPureVegShop ? 'Pure Veg' : 'Veg'}</span>
+                    </button>
 
-                <div className="h-4 w-px bg-glass shrink-0 mx-1" />
+                    {/* Non-Veg Filter Chip (Only rendered if store has Non-Veg items) */}
+                    {!isPureVegShop && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDietary(selectedDietary === 'Non-Veg' ? 'All' : 'Non-Veg')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Non-Veg'
+                          ? 'bg-rose-600 text-white shadow-md border border-rose-400'
+                          : 'bg-glass hover:bg-glass-subtle border border-rose-500/30 text-rose-400'
+                          }`}
+                      >
+                        <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                        </div>
+                        <span>Non-Veg</span>
+                      </button>
+                    )}
+
+                    <div className="h-4 w-px bg-glass shrink-0 mx-1" />
 
                 {/* Category Drawer Trigger Button */}
                 <button
@@ -477,6 +478,8 @@ export const RestaurantDetailsPage: React.FC = () => {
                   </button>
                 )}
               </div>
+                );
+              })()}
             </div>
           </div>
 

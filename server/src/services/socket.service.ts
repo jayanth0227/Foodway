@@ -1,5 +1,13 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
+
+export interface SocketUser {
+  userId: string;
+  role: string;
+  email?: string;
+  shopId?: string;
+}
 
 export class SocketService {
   private io: SocketIOServer | null = null;
@@ -15,49 +23,99 @@ export class SocketService {
       pingInterval: 25000
     });
 
+    // Production Socket Middleware: Authenticate JWT on handshake (if token present)
+    this.io.use((socket: Socket, next) => {
+      try {
+        const token =
+          socket.handshake.auth?.token ||
+          socket.handshake.headers?.authorization?.replace('Bearer ', '');
+
+        if (token) {
+          const decoded = verifyToken(token);
+          if (decoded && (decoded.id || decoded.email)) {
+            const socketUser: SocketUser = {
+              userId: decoded.id,
+              role: decoded.role || 'USER',
+              email: decoded.email,
+              shopId: decoded.shopId || decoded.restaurantId
+            };
+            (socket as any).user = socketUser;
+          }
+        }
+      } catch (err) {
+        console.warn(`⚠️ Socket connection authentication warning for ${socket.id}:`, (err as any)?.message);
+      }
+      next();
+    });
+
     this.io.on('connection', (socket: Socket) => {
-      console.log(`🔌 [Socket.io Connected]: ${socket.id}`);
+      const socketUser: SocketUser | undefined = (socket as any).user;
+      console.log(`🔌 [Socket.io Connected]: ${socket.id} (User: ${socketUser?.userId || 'Anonymous'}, Role: ${socketUser?.role || 'Guest'})`);
 
-      // Room Joining Events with duplicate check
+      // Admin Room (Authorized for ADMIN only)
+      socket.on('join_admin', () => {
+        if (socketUser?.role === 'ADMIN') {
+          socket.join('admin');
+          console.log(`🛡️ Socket [${socket.id}] joined room: admin`);
+        }
+      });
+
+      // Shop / Restaurant Room Authorization
       socket.on('join_restaurant', (restaurantId: string) => {
-        if (restaurantId) {
-          const room = `restaurant_${restaurantId}`;
-          if (!socket.rooms.has(room)) {
-            socket.join(room);
-            console.log(`🏬 Socket [${socket.id}] joined room: ${room}`);
-          }
+        if (!restaurantId) return;
+        const cleanId = String(restaurantId).trim();
+        const room = `restaurant_${cleanId}`;
+        const isAuthorized =
+          socketUser?.role === 'ADMIN' ||
+          !socketUser || // Allow public guests to view store updates
+          socketUser?.shopId === cleanId;
+
+        if (isAuthorized && !socket.rooms.has(room)) {
+          socket.join(room);
+          console.log(`🏬 Socket [${socket.id}] joined room: ${room}`);
         }
       });
 
+      // Customer Room Authorization
       socket.on('join_customer', (customerId: string) => {
-        if (customerId) {
-          const room = `user_${customerId}`;
-          if (!socket.rooms.has(room)) {
-            socket.join(room);
-            console.log(`👤 Socket [${socket.id}] joined room: ${room}`);
-          }
+        if (!customerId) return;
+        const cleanId = String(customerId).trim();
+        const room = `user_${cleanId}`;
+        const isAuthorized =
+          socketUser?.role === 'ADMIN' ||
+          !socketUser ||
+          socketUser?.userId === cleanId;
+
+        if (isAuthorized && !socket.rooms.has(room)) {
+          socket.join(room);
+          console.log(`👤 Socket [${socket.id}] joined room: ${room}`);
         }
       });
 
+      // Order Room Authorization
       socket.on('join_order', (orderId: string) => {
-        if (orderId) {
-          const room = `order_${orderId}`;
-          if (!socket.rooms.has(room)) {
-            socket.join(room);
-            console.log(`📋 Socket [${socket.id}] joined room: ${room}`);
-          }
+        if (!orderId) return;
+        const cleanId = String(orderId).trim();
+        const room = `order_${cleanId}`;
+        if (!socket.rooms.has(room)) {
+          socket.join(room);
+          console.log(`📋 Socket [${socket.id}] joined room: ${room}`);
         }
       });
 
-      socket.on('join_delivery', (deliveryId: string) => {
-        if (!socket.rooms.has('delivery_riders')) {
-          socket.join('delivery_riders');
-        }
-        if (deliveryId) {
-          const room = `delivery_${deliveryId}`;
-          if (!socket.rooms.has(room)) {
-            socket.join(room);
-            console.log(`🛵 Socket [${socket.id}] joined rooms: delivery_riders and ${room}`);
+      // Delivery Partner Room Authorization
+      socket.on('join_delivery', (deliveryId?: string) => {
+        const isDeliveryPartner = socketUser?.role === 'DELIVERY_PARTNER' || socketUser?.role === 'ADMIN' || !socketUser;
+        if (isDeliveryPartner) {
+          if (!socket.rooms.has('delivery_riders')) {
+            socket.join('delivery_riders');
+          }
+          if (deliveryId) {
+            const room = `delivery_${deliveryId}`;
+            if (!socket.rooms.has(room)) {
+              socket.join(room);
+              console.log(`🛵 Socket [${socket.id}] joined rooms: delivery_riders and ${room}`);
+            }
           }
         }
       });
@@ -67,14 +125,12 @@ export class SocketService {
       });
     });
 
-    console.log('⚡ Socket.io Server Initialized Successfully');
+    console.log('⚡ Socket.io Server Initialized Successfully with JWT Authentication & Room Authorization');
     return this.io;
   }
 
   getIO(): SocketIOServer {
     if (!this.io) {
-      // Return a no-op proxy so callers in Lambda don't crash.
-      // All .emit(), .to(), .in() calls silently do nothing.
       const noopProxy: any = new Proxy({}, {
         get: () => (..._args: any[]) => noopProxy,
       });
@@ -83,15 +139,54 @@ export class SocketService {
     return this.io;
   }
 
-  // Phase 1: Customer places order -> Emit to Merchant room
-  emitOrderCreated(order: any): void {
+  // --- REAL-TIME BROADCAST EVENT METHODS ---
+
+  // Admin -> Shop / Public: New Shop Created
+  emitShopCreated(shop: any): void {
     if (!this.io) return;
-    const room = `restaurant_${order.restaurantId}`;
-    console.log(`📡 [Socket Emit: ORDER_CREATED] -> Room [${room}] Order #${order.orderId}`);
-    this.io.to(room).emit('order_created', order);
+    const shopId = shop.id || shop.shopId || shop.restaurantId;
+    console.log(`📡 [Socket Emit: SHOP_CREATED] -> Shop #${shopId}`);
+    this.io.to('admin').emit('shop_created', shop);
+    this.io.emit('shop_created', shop);
   }
 
-  // Phase 2: Merchant updates status -> Emit to Customer & Order rooms
+  // Admin / Merchant -> Public / Dashboards: Shop Profile Updated
+  emitShopUpdated(shop: any): void {
+    if (!this.io) return;
+    const shopId = shop.id || shop.shopId || shop.restaurantId;
+    console.log(`📡 [Socket Emit: SHOP_UPDATED] -> Shop #${shopId}`);
+    this.io.to('admin').to(`restaurant_${shopId}`).emit('shop_updated', shop);
+    this.io.emit('shop_updated', shop);
+  }
+
+  // Admin / Merchant -> Public: Shop Open/Close Status Updated
+  emitShopStatusUpdated(shopId: string, isOpen: boolean, status: string): void {
+    if (!this.io || !shopId) return;
+    console.log(`📡 [Socket Emit: SHOP_STATUS_UPDATED] -> Shop #${shopId} Open: ${isOpen}`);
+    const payload = { shopId, restaurantId: shopId, isOpen, status };
+    this.io.to('admin').to(`restaurant_${shopId}`).emit('foodway_restaurant_status_updated', payload);
+    this.io.emit('foodway_restaurant_status_updated', payload);
+  }
+
+  // Merchant -> Public / Menu: Item Created / Updated / Deleted
+  emitMenuUpdated(restaurantId: string, item?: any): void {
+    if (!this.io || !restaurantId) return;
+    console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}]`);
+    this.io.to(`restaurant_${restaurantId}`).emit('menu_updated', { restaurantId, item });
+    this.io.emit('menu_updated', { restaurantId, item });
+  }
+
+  // Customer -> Merchant & Admin: New Order Created
+  emitOrderCreated(order: any): void {
+    if (!this.io) return;
+    const restRoom = `restaurant_${order.restaurantId}`;
+    const userRoom = `user_${order.customerId}`;
+    console.log(`📡 [Socket Emit: ORDER_CREATED] -> Room [${restRoom}] Order #${order.orderId}`);
+    this.io.to('admin').to(restRoom).to(userRoom).emit('order_created', order);
+    this.io.emit('order_created', order);
+  }
+
+  // Merchant / Admin / Rider -> Customer & Merchant: Order Status Updated
   emitOrderStatusUpdated(order: any): void {
     if (!this.io) return;
     const userRoom = `user_${order.customerId}`;
@@ -99,17 +194,19 @@ export class SocketService {
     const restRoom = `restaurant_${order.restaurantId}`;
 
     console.log(`📡 [Socket Emit: ORDER_STATUS_UPDATED] -> Order #${order.orderId} Status: ${order.status}`);
-    this.io.to(userRoom).to(orderRoom).to(restRoom).emit('order_status_updated', order);
+    this.io.to('admin').to(userRoom).to(orderRoom).to(restRoom).emit('order_status_updated', order);
+    this.io.emit('order_status_updated', order);
   }
 
-  // Phase 3: Merchant marks READY -> Emit to Delivery Partner broadcast
+  // Merchant -> Delivery Partner Broadcast: Order Ready for Pickup
   emitOrderReadyForPickup(order: any): void {
     if (!this.io) return;
     console.log(`📡 [Socket Emit: ORDER_READY_PICKUP] -> Room [delivery_riders] Order #${order.orderId}`);
-    this.io.to('delivery_riders').emit('order_ready_pickup', order);
+    this.io.to('admin').to('delivery_riders').emit('order_ready_pickup', order);
+    this.io.emit('order_ready_pickup', order);
   }
 
-  // Phase 4: Rider updates status -> Emit to Customer & Merchant
+  // Rider -> Customer & Merchant & Admin: Rider Status Updated
   emitRiderStatusUpdated(order: any): void {
     if (!this.io) return;
     const userRoom = `user_${order.customerId}`;
@@ -117,10 +214,32 @@ export class SocketService {
     const orderRoom = `order_${order.orderId}`;
 
     console.log(`📡 [Socket Emit: RIDER_STATUS_UPDATED] -> Order #${order.orderId} Rider Status: ${order.status}`);
-    this.io.to(userRoom).to(restRoom).to(orderRoom).emit('rider_status_updated', order);
+    this.io.to('admin').to(userRoom).to(restRoom).to(orderRoom).emit('rider_status_updated', order);
+    this.io.emit('rider_status_updated', order);
   }
 
-  // Multi-device Real-Time Cart Synchronization
+  // Admin -> Delivery Partner / Customer / Merchant: Order Assigned to Delivery Agent
+  emitOrderAssigned(order: any): void {
+    if (!this.io) return;
+    const userRoom = `user_${order.customerId}`;
+    const restRoom = `restaurant_${order.restaurantId}`;
+    const orderRoom = `order_${order.orderId}`;
+    const deliveryRoom = `delivery_${order.deliveryUserId}`;
+
+    console.log(`📡 [Socket Emit: ORDER_ASSIGNED] -> Order #${order.orderId} assigned to Rider #${order.deliveryUserId}`);
+    this.io.to('admin').to(deliveryRoom).to('delivery_riders').to(userRoom).to(restRoom).to(orderRoom).emit('order_assigned', order);
+    this.io.emit('order_assigned', order);
+  }
+
+  // Delivery Partner -> Admin / Riders: Duty Status Updated
+  emitDeliveryDutyUpdated(partner: any): void {
+    if (!this.io) return;
+    console.log(`📡 [Socket Emit: PARTNER_DUTY_UPDATED] -> Partner #${partner.userId} OnDuty: ${partner.isOnDuty}`);
+    this.io.to('admin').to('delivery_riders').emit('partner_duty_updated', partner);
+    this.io.emit('partner_duty_updated', partner);
+  }
+
+  // Multi-device Cart Synchronization
   emitCartUpdated(userId: string, cartItems: any[]): void {
     if (!this.io || !userId) return;
     const userRoom = `user_${userId}`;
@@ -128,11 +247,12 @@ export class SocketService {
     this.io.to(userRoom).emit('cart_updated', { userId, cartItems });
   }
 
-  // Real-Time Menu & Catalog Synchronization
-  emitMenuUpdated(restaurantId: string, item?: any): void {
-    if (!this.io || !restaurantId) return;
-    console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}]`);
-    this.io.emit('menu_updated', { restaurantId, item });
+  // Delivery Locations Updated
+  emitLocationUpdated(location: any): void {
+    if (!this.io) return;
+    console.log(`📡 [Socket Emit: LOCATION_UPDATED] -> Location #${location.locationId}`);
+    this.io.to('admin').emit('location_updated', location);
+    this.io.emit('location_updated', location);
   }
 }
 

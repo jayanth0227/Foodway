@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Role, AuthState } from '../types/auth.types';
-import { saveSession, clearSession, cleanupObsoleteStorage, setCurrentUser, setToken as setInMemoryToken } from '../utils/auth.utils';
+import { saveSession, clearSession, cleanupObsoleteStorage, setCurrentUser, setToken as setInMemoryToken, getToken, getCurrentUser } from '../utils/auth.utils';
 import authService from '../services/auth.service';
 import notificationService from '../services/notification.service';
 
@@ -29,10 +29,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Purge obsolete sensitive credentials from localStorage/sessionStorage
       cleanupObsoleteStorage();
 
+      // Immediately restore stored session from persistent storage
+      const storedToken = getToken();
+      const storedUser = getCurrentUser();
+
+      if (storedUser) {
+        setUser(storedUser);
+        setRole(storedUser.role);
+        setToken(storedToken || 'active_session');
+      }
+
       try {
         const res = await authService.getCurrentUser();
         if (res && res.success && res.user) {
-          const activeToken = res.token || 'active_session';
+          const activeToken = res.token || storedToken || 'active_session';
           saveSession(activeToken, res.user);
           setUser(res.user);
           setRole(res.user.role);
@@ -40,17 +50,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // Asynchronously sync FCM push notification token post-restoration
           notificationService.syncFcmTokenAfterLogin();
-        } else {
+        } else if (!storedUser) {
           clearSession();
           setUser(null);
           setRole(null);
           setToken(null);
         }
       } catch (error) {
-        clearSession();
-        setUser(null);
-        setRole(null);
-        setToken(null);
+        const status = (error as any)?.response?.status;
+        // Only clear session if explicitly unauthenticated (401 / 403)
+        if (status === 401 || status === 403) {
+          clearSession();
+          setUser(null);
+          setRole(null);
+          setToken(null);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -189,3 +203,5 @@ export const useAuthContext = () => {
   }
   return context;
 };
+
+export const useAuth = useAuthContext;
