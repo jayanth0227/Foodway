@@ -150,13 +150,16 @@ export class SocketService {
     this.io.emit('shop_created', shop);
   }
 
-  // Admin / Merchant -> Public / Dashboards: Shop Profile Updated
+  // Admin / Merchant -> Public / Dashboards: Shop Profile & Location Updated
   emitShopUpdated(shop: any): void {
     if (!this.io) return;
     const shopId = shop.id || shop.shopId || shop.restaurantId;
-    console.log(`📡 [Socket Emit: SHOP_UPDATED] -> Shop #${shopId}`);
+    console.log(`📡 [Socket Emit: SHOP_UPDATED & LOCATION_UPDATED] -> Shop #${shopId}`, shop);
     this.io.to('admin').to(`restaurant_${shopId}`).emit('shop_updated', shop);
     this.io.emit('shop_updated', shop);
+    this.io.emit('foodway_restaurant_updated', shop);
+    this.io.emit('restaurant_profile_updated', shop);
+    this.io.emit('location_updated', shop);
   }
 
   // Admin / Merchant -> Public: Shop Open/Close Status Updated
@@ -166,14 +169,20 @@ export class SocketService {
     const payload = { shopId, restaurantId: shopId, isOpen, status };
     this.io.to('admin').to(`restaurant_${shopId}`).emit('foodway_restaurant_status_updated', payload);
     this.io.emit('foodway_restaurant_status_updated', payload);
+    this.io.emit('shop_status_updated', payload);
+    this.io.emit('restaurant_status_updated', payload);
+    this.io.emit('shop_updated', payload);
   }
 
   // Merchant -> Public / Menu: Item Created / Updated / Deleted
   emitMenuUpdated(restaurantId: string, item?: any): void {
     if (!this.io || !restaurantId) return;
-    console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}]`);
-    this.io.to(`restaurant_${restaurantId}`).emit('menu_updated', { restaurantId, item });
-    this.io.emit('menu_updated', { restaurantId, item });
+    console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}] Item:`, item);
+    const payload = { restaurantId, shopId: restaurantId, item, dish: item };
+    this.io.to(`restaurant_${restaurantId}`).emit('menu_updated', payload);
+    this.io.emit('menu_updated', payload);
+    this.io.emit('foodway_menu_updated', payload);
+    this.io.emit('menu_item_updated', payload);
   }
 
   // Customer -> Merchant & Admin: New Order Created
@@ -253,6 +262,14 @@ export class SocketService {
     console.log(`📡 [Socket Emit: LOCATION_UPDATED] -> Location #${location.locationId}`);
     this.io.to('admin').emit('location_updated', location);
     this.io.emit('location_updated', location);
+  }
+
+  // Real-Time Delivery Settings & Rates Broadcast
+  emitDeliverySettingsUpdated(settings: any): void {
+    if (!this.io) return;
+    console.log(`📡 [Socket Emit: DELIVERY_SETTINGS_UPDATED] -> Rates updated live!`, settings);
+    this.io.emit('delivery_settings_updated', settings);
+    this.io.emit('foodway_delivery_settings_updated', settings);
   }
 }
 

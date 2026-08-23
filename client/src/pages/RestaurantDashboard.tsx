@@ -150,11 +150,38 @@ export const RestaurantDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
-  const { logout: authLogout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout: authLogout } = useAuth();
 
   // Auth & Restaurant Profile state
   const [restaurant, setRestaurant] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'profile' | 'settings'>('dashboard');
+
+  const getInitialVendorTab = (): 'dashboard' | 'menu' | 'orders' | 'profile' | 'settings' => {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryTab = searchParams.get('tab');
+      const validTabs = ['dashboard', 'menu', 'orders', 'profile', 'settings'];
+      if (queryTab && validTabs.includes(queryTab)) {
+        return queryTab as any;
+      }
+      const savedTab = localStorage.getItem('vendor_active_tab');
+      if (savedTab && validTabs.includes(savedTab)) {
+        return savedTab as any;
+      }
+    } catch (e) {}
+    return 'dashboard';
+  };
+
+  const [activeTab, setActiveTabState] = useState<'dashboard' | 'menu' | 'orders' | 'profile' | 'settings'>(getInitialVendorTab);
+
+  const setActiveTab = (tab: 'dashboard' | 'menu' | 'orders' | 'profile' | 'settings') => {
+    setActiveTabState(tab);
+    localStorage.setItem('vendor_active_tab', tab);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {}
+  };
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [incomingOrderPopup, setIncomingOrderPopup] = useState<OrderItem | null>(null);
@@ -453,10 +480,11 @@ export const RestaurantDashboard: React.FC = () => {
 
   // 1. Initial Load & Auth check
   useEffect(() => {
-    const user = getCurrentUser();
-    const uRole = (user?.role || '').toUpperCase();
+    if (isLoading) return;
+    const activeUser = user || getCurrentUser();
+    const uRole = (activeUser?.role || '').toUpperCase();
     const isVendor = ['RESTAURANT', 'SHOP', 'VENDOR', 'ADMIN'].includes(uRole);
-    if (!user || !isVendor) {
+    if (!activeUser || !isVendor) {
       navigate('/login', { replace: true });
       return;
     }
@@ -472,10 +500,10 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (!restProfile) {
       restProfile = {
-        id: user.restaurantId || user.id,
-        name: user.name,
-        email: user.email,
-        ownerName: user.name
+        id: activeUser.restaurantId || activeUser.id,
+        name: activeUser.name,
+        email: activeUser.email,
+        ownerName: activeUser.name
       };
     }
 
@@ -502,7 +530,7 @@ export const RestaurantDashboard: React.FC = () => {
     if (typeof restProfile.isOpen === 'boolean') {
       setIsRestaurantOpen(restProfile.isOpen);
     }
-    loadRestaurantData(restProfile.id || user.id);
+    loadRestaurantData(restProfile.id || activeUser.id);
   }, []);
 
   // Load Menu, Categories, Orders and Restaurant Status
@@ -660,11 +688,19 @@ export const RestaurantDashboard: React.FC = () => {
     const unsubscribeCreated = socketService.onOrderCreated((newOrder: any) => {
       console.log('⚡ [Real-Time Socket Event: ORDER_CREATED] Received:', newOrder);
 
-      const targetResId = (restaurant?.id || '').toLowerCase();
-      const orderResId = (newOrder.restaurantId || '').toLowerCase();
+      const vendorIds = [
+        restaurant?.id,
+        restaurant?.shopId,
+        restaurant?.restaurantId,
+        restaurant?.ownerUserId,
+        user?.id,
+        user?.restaurantId
+      ].filter(Boolean).map(id => String(id).toLowerCase());
+
+      const orderResId = (newOrder.restaurantId || newOrder.shopId || '').toLowerCase();
 
       // Guard: strictly ignore orders belonging to other vendors!
-      if (targetResId && orderResId && orderResId !== targetResId) {
+      if (vendorIds.length > 0 && orderResId && !vendorIds.includes(orderResId)) {
         return;
       }
 
@@ -1374,8 +1410,10 @@ export const RestaurantDashboard: React.FC = () => {
 
     setIsProfileSaving(true);
 
-    const finalLat = vendorLat ?? restaurant?.latitude;
-    const finalLng = vendorLng ?? restaurant?.longitude;
+    const rawLat = vendorLat ?? restaurant?.latitude ?? restaurant?.lat;
+    const rawLng = vendorLng ?? restaurant?.longitude ?? restaurant?.lng;
+    const finalLat = rawLat !== undefined && rawLat !== null && !isNaN(Number(rawLat)) ? Number(rawLat) : undefined;
+    const finalLng = rawLng !== undefined && rawLng !== null && !isNaN(Number(rawLng)) ? Number(rawLng) : undefined;
 
     const updatedRes = {
       ...restaurant,
@@ -1391,8 +1429,10 @@ export const RestaurantDashboard: React.FC = () => {
       cuisine: profileForm.cuisine.trim(),
       dietaryType: profileForm.dietaryType,
       isVegOnly: profileForm.dietaryType === 'PURE_VEG',
-      latitude: finalLat ?? undefined,
-      longitude: finalLng ?? undefined,
+      latitude: finalLat,
+      longitude: finalLng,
+      lat: finalLat,
+      lng: finalLng,
       ...(profileForm.password ? { password: profileForm.password } : {})
     };
 

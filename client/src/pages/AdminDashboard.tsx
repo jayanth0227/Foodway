@@ -37,6 +37,7 @@ import {
   Mail,
   MapPin,
   Eye,
+  EyeOff,
   Phone,
   Lock,
   ShieldCheck,
@@ -79,14 +80,43 @@ interface AdminDashboardProps {
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, toggleTheme } = useTheme();
 
-  // Navigation & UI States
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings'>(
-    (location.state as any)?.activeTab || initialTab || 'dashboard'
-  );
+  // Helper to extract tab from URL query params or localStorage
+  const getInitialTab = (): 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings' => {
+    const searchParams = new URLSearchParams(location.search);
+    const queryTab = searchParams.get('tab');
+    const validTabs = ['dashboard', 'restaurants', 'orders', 'delivery', 'locations', 'settings'];
+    if (queryTab && validTabs.includes(queryTab)) {
+      return queryTab as any;
+    }
+    const stateTab = (location.state as any)?.activeTab;
+    if (stateTab && validTabs.includes(stateTab)) {
+      return stateTab;
+    }
+    if (initialTab && validTabs.includes(initialTab)) {
+      return initialTab as any;
+    }
+    const savedTab = localStorage.getItem('admin_active_tab');
+    if (savedTab && validTabs.includes(savedTab)) {
+      return savedTab as any;
+    }
+    return 'dashboard';
+  };
+
+  const [activeTab, setActiveTabState] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings'>(getInitialTab);
+
+  const setActiveTab = (tab: 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings') => {
+    setActiveTabState(tab);
+    localStorage.setItem('admin_active_tab', tab);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState({}, '', url.toString());
+    } catch (e) {}
+  };
 
   useEffect(() => {
     if ((location.state as any)?.activeTab) {
@@ -216,6 +246,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     closingTime: '11:00 PM',
     image: ''
   });
+  const [showResPassword, setShowResPassword] = useState(false);
   const [resFormError, setResFormError] = useState<string | null>(null);
 
   // Settings state
@@ -256,7 +287,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         baseDeliveryFee: Number(baseDeliveryFee)
       });
       if (res.data.success) {
-        setDeliverySettingsStatus({ type: 'success', message: 'Delivery charge per kilometer updated successfully!' });
+        if (res.data.settings) {
+          if (typeof res.data.settings.deliveryFeePerKm === 'number') {
+            setDeliveryFeePerKm(res.data.settings.deliveryFeePerKm);
+          }
+          if (typeof res.data.settings.baseDeliveryFee === 'number') {
+            setBaseDeliveryFee(res.data.settings.baseDeliveryFee);
+          }
+        }
+        setDeliverySettingsStatus({ type: 'success', message: 'Delivery rate settings updated and saved to DynamoDB successfully!' });
       } else {
         setDeliverySettingsStatus({ type: 'error', message: res.data.error || 'Failed to update settings.' });
       }
@@ -349,14 +388,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   }, [activities]);
 
   useEffect(() => {
+    if (isLoading) return;
     // Check credentials using unified auth utility
-    const user = getCurrentUser();
-    if (!user || user.role !== 'ADMIN') {
+    const activeUser = user || getCurrentUser();
+    if (!activeUser || activeUser.role !== 'ADMIN') {
       navigate('/login', { replace: true });
       return;
     }
 
-    setAdminEmail(user.email);
+    setAdminEmail(activeUser.email || '');
     // Join Admin Socket Room
     socketService.joinAdmin();
 
@@ -367,6 +407,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     fetchAdminRestaurants();
     fetchAdminOrders();
     fetchDeliveryPartners();
+    fetchDeliverySettings();
 
     // Real-Time Socket Subscriptions for Admin Dashboard
     const unsubscribeShopCreated = socketService.onShopCreated(() => {
@@ -779,6 +820,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
       try {
         await axios.post(`${API_BASE_URL}/admin/restaurant`, updatedRes);
+        showToast('success', `Updated shop "${name}" details in DynamoDB.`);
       } catch (err) {
         console.warn('Could not persist updated restaurant to DynamoDB API:', err);
       }
@@ -1695,14 +1737,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                     {!editingRes ? (
                       <div>
                         <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Access Password *</label>
-                        <input
-                          type="password"
-                          required
-                          value={resForm.password}
-                          onChange={(e) => setResForm({ ...resForm, password: e.target.value })}
-                          placeholder="••••••••"
-                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                        />
+                        <div className="relative">
+                          <input
+                            type={showResPassword ? 'text' : 'password'}
+                            required
+                            value={resForm.password}
+                            onChange={(e) => setResForm({ ...resForm, password: e.target.value })}
+                            placeholder="••••••••"
+                            className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 pr-10 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowResPassword(!showResPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors cursor-pointer"
+                          >
+                            {showResPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
                       </div>
                     ) : null}
 

@@ -13,7 +13,7 @@ import { MobileOrderCardSkeleton } from '../components/common/MobileSkeletonLoad
 
 export const CustomerOrdersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const { addToCart } = useCart();
   const { t } = useLanguage();
 
@@ -158,6 +158,15 @@ export const CustomerOrdersPage: React.FC = () => {
       navigate('/cart');
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-bg-dark flex flex-col items-center justify-center space-y-3">
+        <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <span className="text-xs font-bold text-text-muted uppercase tracking-widest">Restoring Session...</span>
+      </div>
+    );
+  }
 
   if (!isAuthenticated || !user) {
     return (

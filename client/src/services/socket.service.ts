@@ -138,20 +138,53 @@ class ClientSocketService {
 
   onShopUpdated(callback: (shop: any) => void): () => void {
     const socket = this.connect();
-    socket.on('shop_updated', callback);
-    return () => { socket.off('shop_updated', callback); };
+    const handler1 = (shop: any) => callback(shop);
+    const handler2 = (shop: any) => callback(shop);
+    const handler3 = (shop: any) => callback(shop);
+    const handler4 = (shop: any) => callback(shop);
+    socket.on('shop_updated', handler1);
+    socket.on('foodway_restaurant_updated', handler2);
+    socket.on('restaurant_profile_updated', handler3);
+    socket.on('location_updated', handler4);
+    return () => {
+      socket.off('shop_updated', handler1);
+      socket.off('foodway_restaurant_updated', handler2);
+      socket.off('restaurant_profile_updated', handler3);
+      socket.off('location_updated', handler4);
+    };
   }
 
   onShopStatusUpdated(callback: (data: any) => void): () => void {
     const socket = this.connect();
-    socket.on('foodway_restaurant_status_updated', callback);
-    return () => { socket.off('foodway_restaurant_status_updated', callback); };
+    const handler1 = (data: any) => callback(data);
+    const handler2 = (data: any) => callback(data);
+    const handler3 = (data: any) => callback(data);
+    const handler4 = (data: any) => callback(data);
+    socket.on('foodway_restaurant_status_updated', handler1);
+    socket.on('shop_status_updated', handler2);
+    socket.on('restaurant_status_updated', handler3);
+    socket.on('shop_updated', handler4);
+    return () => {
+      socket.off('foodway_restaurant_status_updated', handler1);
+      socket.off('shop_status_updated', handler2);
+      socket.off('restaurant_status_updated', handler3);
+      socket.off('shop_updated', handler4);
+    };
   }
 
-  onMenuUpdated(callback: (data: { restaurantId: string; item?: any }) => void): () => void {
+  onMenuUpdated(callback: (data: any) => void): () => void {
     const socket = this.connect();
-    socket.on('menu_updated', callback);
-    return () => { socket.off('menu_updated', callback); };
+    const handler1 = (data: any) => callback(data);
+    const handler2 = (data: any) => callback(data);
+    const handler3 = (data: any) => callback(data);
+    socket.on('menu_updated', handler1);
+    socket.on('foodway_menu_updated', handler2);
+    socket.on('menu_item_updated', handler3);
+    return () => {
+      socket.off('menu_updated', handler1);
+      socket.off('foodway_menu_updated', handler2);
+      socket.off('menu_item_updated', handler3);
+    };
   }
 
   onOrderCreated(callback: (order: any) => void): () => void {
@@ -176,6 +209,18 @@ class ClientSocketService {
     const socket = this.connect();
     socket.on('order_assigned', callback);
     return () => { socket.off('order_assigned', callback); };
+  }
+
+  onDeliverySettingsUpdated(callback: (settings: any) => void): () => void {
+    const socket = this.connect();
+    const handler1 = (settings: any) => callback(settings);
+    const handler2 = (settings: any) => callback(settings);
+    socket.on('delivery_settings_updated', handler1);
+    socket.on('foodway_delivery_settings_updated', handler2);
+    return () => {
+      socket.off('delivery_settings_updated', handler1);
+      socket.off('foodway_delivery_settings_updated', handler2);
+    };
   }
 
   onRiderStatusUpdated(callback: (order: any) => void): () => void {

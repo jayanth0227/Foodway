@@ -11,6 +11,11 @@ export class ShopRepository {
 
     const dietaryType = item.dietaryType || (item.isVegOnly ? 'PURE_VEG' : 'BOTH');
 
+    const latRaw = item.latitude !== undefined ? item.latitude : item.lat;
+    const lngRaw = item.longitude !== undefined ? item.longitude : item.lng;
+    const latitude = latRaw !== undefined && latRaw !== null && !isNaN(Number(latRaw)) ? Number(latRaw) : undefined;
+    const longitude = lngRaw !== undefined && lngRaw !== null && !isNaN(Number(lngRaw)) ? Number(lngRaw) : undefined;
+
     return {
       ...item,
       shopId,
@@ -18,7 +23,9 @@ export class ShopRepository {
       shopName,
       restaurantName: shopName,
       shopType,
-      dietaryType
+      dietaryType,
+      ...(latitude !== undefined ? { latitude } : {}),
+      ...(longitude !== undefined ? { longitude } : {})
     };
   }
 
@@ -128,6 +135,11 @@ export class ShopRepository {
 
     const shopName = (updates as any).name || updates.shopName || updates.restaurantName || existing.shopName;
 
+    const reqLat = updates.latitude !== undefined ? updates.latitude : (updates as any).lat;
+    const reqLng = updates.longitude !== undefined ? updates.longitude : (updates as any).lng;
+    const finalLat = reqLat !== undefined && reqLat !== null && !isNaN(Number(reqLat)) ? Number(reqLat) : existing.latitude;
+    const finalLng = reqLng !== undefined && reqLng !== null && !isNaN(Number(reqLng)) ? Number(reqLng) : existing.longitude;
+
     const updated: IShop = {
       ...existing,
       ...updates,
@@ -135,8 +147,8 @@ export class ShopRepository {
       restaurantId: shopId,
       shopName: shopName,
       restaurantName: shopName,
-      latitude: updates.latitude !== undefined ? updates.latitude : existing.latitude,
-      longitude: updates.longitude !== undefined ? updates.longitude : existing.longitude,
+      latitude: finalLat,
+      longitude: finalLng,
       updatedAt: new Date().toISOString()
     };
 

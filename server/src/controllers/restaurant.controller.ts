@@ -3,6 +3,7 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client, bucketName } from '../config/aws';
 import { restaurantService, RestaurantService } from '../services/restaurant.service';
 import { menuService } from '../services/menu.service';
+import { socketService } from '../services/socket.service';
 
 export class RestaurantController {
   private service: RestaurantService;
@@ -107,6 +108,10 @@ export class RestaurantController {
         price: 0,
         isAvailable: !!isAvailable
       });
+
+      if (updated && socketService) {
+        socketService.emitMenuUpdated(updated.restaurantId || updated.shopId || 'RES-001', updated);
+      }
 
       return res.json({
         success: true,

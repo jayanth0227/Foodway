@@ -47,9 +47,41 @@ export const RestaurantDetailsPage: React.FC = () => {
 
       const handleStatusUpdate = () => fetchRestaurantDetails(id, false);
 
-      const unsubscribeMenu = socketService.onMenuUpdated((data) => {
-        if (data && (data.restaurantId === id || data.restaurantId === restaurant?.id)) {
-          fetchRestaurantDetails(id, false);
+      const unsubscribeMenu = socketService.onMenuUpdated((data: any) => {
+        console.log('⚡ [Live Socket Event: MENU_UPDATED] Received in RestaurantDetailsPage:', data);
+        const updatedItem = data?.item || data?.dish || data;
+        if (!updatedItem) return;
+
+        const targetResId = String(id || restaurant?.id || restaurant?.shopId || '').toLowerCase();
+        const eventResId = String(data.restaurantId || data.shopId || updatedItem.restaurantId || updatedItem.shopId || '').toLowerCase();
+
+        if (!eventResId || !targetResId || eventResId === targetResId || targetResId.includes(eventResId) || eventResId.includes(targetResId)) {
+          const targetItemId = String(updatedItem.id || updatedItem.itemId || updatedItem.menuItemId || data.deletedId || '').toLowerCase();
+
+          setMenuItems(prevItems => {
+            if (data.deletedId) {
+              return prevItems.filter(item => String(item.id || item.itemId || item.menuItemId || '').toLowerCase() !== targetItemId);
+            }
+
+            const existingIndex = prevItems.findIndex(item => String(item.id || item.itemId || item.menuItemId || '').toLowerCase() === targetItemId);
+
+            if (existingIndex >= 0) {
+              const updated = [...prevItems];
+              updated[existingIndex] = {
+                ...updated[existingIndex],
+                ...updatedItem,
+                price: typeof updatedItem.price === 'number' ? updatedItem.price : updated[existingIndex].price,
+                name: updatedItem.name || updatedItem.foodName || updated[existingIndex].name,
+                foodName: updatedItem.foodName || updatedItem.name || updated[existingIndex].foodName,
+                isAvailable: updatedItem.isAvailable !== undefined ? updatedItem.isAvailable : updated[existingIndex].isAvailable,
+                variants: updatedItem.variants || updated[existingIndex].variants || []
+              };
+              return updated;
+            } else if (updatedItem.name || updatedItem.foodName) {
+              return [updatedItem, ...prevItems];
+            }
+            return prevItems;
+          });
         }
       });
 

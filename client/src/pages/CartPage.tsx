@@ -20,7 +20,9 @@ import {
   Briefcase,
   Navigation,
   CheckCircle2,
-  IndianRupee
+  IndianRupee,
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -28,6 +30,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../hooks/useAuth';
 import { API_BASE_URL } from '../utils/api';
 import { getCurrentUser, getToken, saveSession } from '../utils/auth.utils';
+import socketService from '../services/socket.service';
 import authService from '../services/auth.service';
 import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
 import type { Address } from '../types/auth.types';
@@ -143,7 +146,21 @@ export const CartPage: React.FC = () => {
   const [storeLng, setStoreLng] = useState<number | undefined>(undefined);
   const [calculatedDistanceKm, setCalculatedDistanceKm] = useState<number | null>(null);
 
-  // Fetch Delivery Rates Config from Admin Settings API
+  // Store Open / Closed State & Unavailable Items tracking
+  const [isStoreClosed, setIsStoreClosed] = useState<boolean>(false);
+  const [closedStoreName, setClosedStoreName] = useState<string>('');
+
+  const unavailableCartItems = React.useMemo(() => {
+    return cartItems.filter(item => item.dish.isAvailable === false || (item.dish as any).isAvailable === 'false');
+  }, [cartItems]);
+
+  const handleRemoveUnavailableItems = () => {
+    unavailableCartItems.forEach(item => {
+      removeFromCart(item.itemKey);
+    });
+  };
+
+  // Fetch & Subscribe to Live Delivery Rates Config from Admin Settings API & Real-Time Sockets
   useEffect(() => {
     const fetchDeliveryConfig = async () => {
       try {
@@ -160,37 +177,125 @@ export const CartPage: React.FC = () => {
       }
     };
     fetchDeliveryConfig();
+
+    const unsubscribeDelivery = socketService.onDeliverySettingsUpdated((settings) => {
+      console.log('⚡ [Live Socket Event: DELIVERY_SETTINGS_UPDATED] Received in Cart:', settings);
+      const rate = settings?.deliveryFeePerKm ?? settings?.settings?.deliveryFeePerKm;
+      const base = settings?.baseDeliveryFee ?? settings?.settings?.baseDeliveryFee;
+      if (typeof rate === 'number' && !isNaN(rate)) {
+        setDeliveryFeePerKm(rate);
+      }
+      if (typeof base === 'number' && !isNaN(base)) {
+        setBaseDeliveryFee(base);
+      }
+    });
+
+    return () => {
+      unsubscribeDelivery();
+    };
   }, []);
 
-  // Fetch Store / Restaurant Coordinates
+  // Fetch Store / Restaurant Coordinates & Store Status
   useEffect(() => {
     if (cartItems.length > 0) {
       const firstDish = cartItems[0]?.dish;
       const targetResId = (firstDish as any)?.restaurantId || (firstDish as any)?.shopId;
 
-      if ((firstDish as any)?.restaurantLatitude && (firstDish as any)?.restaurantLongitude) {
-        setStoreLat(Number((firstDish as any).restaurantLatitude));
-        setStoreLng(Number((firstDish as any).restaurantLongitude));
-      } else if (targetResId) {
+      const resLat = (firstDish as any)?.restaurantLatitude ?? (firstDish as any)?.latitude ?? (firstDish as any)?.lat;
+      const resLng = (firstDish as any)?.restaurantLongitude ?? (firstDish as any)?.longitude ?? (firstDish as any)?.lng;
+
+      if (resLat && resLng && !isNaN(Number(resLat)) && !isNaN(Number(resLng))) {
+        setStoreLat(Number(resLat));
+        setStoreLng(Number(resLng));
+      }
+
+      if (targetResId) {
         axios.get(`${API_BASE_URL}/shops/${targetResId}`)
           .then(res => {
             const shop = res.data?.shop || res.data?.restaurant || res.data;
-            if (shop?.latitude && shop?.longitude) {
-              setStoreLat(Number(shop.latitude));
-              setStoreLng(Number(shop.longitude));
-            } else {
+            const shopLat = shop?.latitude ?? shop?.lat;
+            const shopLng = shop?.longitude ?? shop?.lng;
+            const isClosed = shop?.isOpen === false || shop?.isOpen === 'false' || shop?.status === 'closed' || shop?.status === 'inactive' || shop?.status === 'offline';
+            setIsStoreClosed(isClosed);
+            setClosedStoreName(shop?.name || shop?.shopName || shop?.restaurantName || (firstDish as any)?.restaurantName || 'Store');
+
+            if (shopLat && shopLng && !isNaN(Number(shopLat)) && !isNaN(Number(shopLng))) {
+              setStoreLat(Number(shopLat));
+              setStoreLng(Number(shopLng));
+            } else if (!resLat || !resLng) {
               setStoreLat(17.3616);
               setStoreLng(78.4850);
             }
           })
           .catch(() => {
-            setStoreLat(17.3616);
-            setStoreLng(78.4850);
+            if (!resLat || !resLng) {
+              setStoreLat(17.3616);
+              setStoreLng(78.4850);
+            }
           });
       } else {
-        setStoreLat(17.3616);
-        setStoreLng(78.4850);
+        if (!resLat || !resLng) {
+          setStoreLat(17.3616);
+          setStoreLng(78.4850);
+        }
       }
+    } else {
+      setIsStoreClosed(false);
+    }
+  }, [cartItems]);
+
+  // Real-Time Socket Subscription for Live Store Open/Closed Status Updates
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      const firstDish = cartItems[0]?.dish;
+      const targetResId = String((firstDish as any)?.restaurantId || (firstDish as any)?.shopId || '').toLowerCase();
+
+      const unsubscribeStatus = socketService.onShopStatusUpdated((data: any) => {
+        if (!data) return;
+        const eventResId = String(data.shopId || data.restaurantId || '').toLowerCase();
+        console.log('⚡ [Live Socket Event: SHOP_STATUS_UPDATED] Received in Cart:', data);
+
+        if (!targetResId || !eventResId || eventResId === targetResId || targetResId.includes(eventResId) || eventResId.includes(targetResId)) {
+          const isClosed = data.isOpen === false || data.isOpen === 'false' || data.status === 'closed' || data.status === 'inactive' || data.status === 'offline';
+          setIsStoreClosed(isClosed);
+          if (data.name || data.restaurantName || data.shopName) {
+            setClosedStoreName(data.name || data.restaurantName || data.shopName);
+          }
+        }
+      });
+
+      return () => {
+        unsubscribeStatus();
+      };
+    }
+  }, [cartItems]);
+
+  // Real-Time Socket Subscription for Live Vendor Location & Address Updates
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      const firstDish = cartItems[0]?.dish;
+      const targetResId = String((firstDish as any)?.restaurantId || (firstDish as any)?.shopId || '').toLowerCase();
+
+      const unsubscribeShop = socketService.onShopUpdated((updatedShop: any) => {
+        if (!updatedShop) return;
+        const uId = String(updatedShop.id || updatedShop.shopId || updatedShop.restaurantId || '').toLowerCase();
+        console.log('⚡ [Live Socket Event: SHOP_UPDATED] Received in Cart:', updatedShop);
+
+        if (!targetResId || !uId || uId === targetResId || targetResId.includes(uId) || uId.includes(targetResId)) {
+          const newLat = updatedShop.latitude ?? updatedShop.lat;
+          const newLng = updatedShop.longitude ?? updatedShop.lng;
+
+          if (newLat !== undefined && newLng !== undefined && !isNaN(Number(newLat)) && !isNaN(Number(newLng))) {
+            console.log(`📍 [Cart Live Location Sync] Store Coordinates Updated: Lat=${newLat}, Lng=${newLng}`);
+            setStoreLat(Number(newLat));
+            setStoreLng(Number(newLng));
+          }
+        }
+      });
+
+      return () => {
+        unsubscribeShop();
+      };
     }
   }, [cartItems]);
 
@@ -238,7 +343,7 @@ export const CartPage: React.FC = () => {
           console.warn('OSRM road routing fallback:', e);
         }
 
-        // Fallback: Haversine Geodesic Distance * 1.25 (Road curve factor)
+        // Fallback: Haversine Geodesic Distance * 1.3 (Road curve factor)
         if (!isCancelled) {
           const R = 6371; // Earth radius in KM
           const dLat = (selectedLat - storeLat) * (Math.PI / 180);
@@ -249,7 +354,7 @@ export const CartPage: React.FC = () => {
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
           const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           const directKm = R * c;
-          const roadKm = Math.round((directKm * 1.25) * 10) / 10;
+          const roadKm = Math.round((directKm * 1.3) * 10) / 10;
           setCalculatedDistanceKm(roadKm > 0.1 ? roadKm : 1.5);
         }
       };
@@ -263,9 +368,10 @@ export const CartPage: React.FC = () => {
     }
   }, [storeLat, storeLng, selectedLat, selectedLng]);
 
-  // Delivery Fee Calculation (Strictly Distance in KM * Price per KM set by Admin)
+  // Delivery Fee Calculation (Strictly Distance in KM * Price per KM set by Admin, respecting Base Minimum Fee)
   const effectiveDistance = calculatedDistanceKm ?? 2.0;
-  const deliveryFee = Math.round(effectiveDistance * deliveryFeePerKm);
+  const rawCalculatedFee = Math.round(effectiveDistance * deliveryFeePerKm);
+  const deliveryFee = baseDeliveryFee ? Math.max(baseDeliveryFee, rawCalculatedFee) : rawCalculatedFee;
   const grandTotal = Math.max(0, totalAmount + deliveryFee);
 
   // Handle Order Submission
@@ -279,6 +385,16 @@ export const CartPage: React.FC = () => {
 
     if (!customerName.trim() || !customerPhone.trim() || !deliveryAddress.trim()) {
       alert('Please select or fill in your delivery name, phone number, and address.');
+      return;
+    }
+
+    if (isStoreClosed) {
+      alert(`Order cannot be placed: ${closedStoreName || 'The store'} is currently closed.`);
+      return;
+    }
+
+    if (unavailableCartItems.length > 0) {
+      alert(`Order cannot be placed: Cart contains ${unavailableCartItems.length} unavailable item(s). Please remove them to proceed.`);
       return;
     }
 
@@ -498,55 +614,107 @@ export const CartPage: React.FC = () => {
             </div>
           ) : (
             /* MAIN CART & CHECKOUT GRID */
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            <div className="space-y-6">
+              {/* Live Store Closed Warning Banner */}
+              {isStoreClosed && (
+                <div className="bg-rose-500/15 border border-rose-500/30 rounded-2xl p-4 sm:p-5 flex items-center justify-between text-rose-500 shadow-luxury">
+                  <div className="flex items-start sm:items-center gap-3.5">
+                    <AlertTriangle size={24} className="shrink-0 mt-0.5 sm:mt-0 text-rose-500" />
+                    <div>
+                      <h4 className="font-extrabold text-xs sm:text-sm uppercase tracking-wider">Store Currently Closed</h4>
+                      <p className="text-[11px] sm:text-xs text-text-secondary dark:text-text-muted mt-0.5">
+                        <strong>{closedStoreName || 'The store'}</strong> is currently closed and not accepting online orders right now.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              {/* LEFT COLUMN: Cart Items List (7 cols) */}
-              <div className={`lg:col-span-7 space-y-6 ${mobileStep === 2 ? 'hidden lg:block' : 'block'}`}>
+              {/* Live Unavailable Items Warning Banner */}
+              {unavailableCartItems.length > 0 && (
+                <div className="bg-amber-500/15 border border-amber-500/30 rounded-2xl p-4 sm:p-5 text-amber-500 space-y-3 shadow-luxury">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <AlertCircle size={24} className="shrink-0 mt-0.5 sm:mt-0 text-amber-500" />
+                      <div>
+                        <h4 className="font-extrabold text-xs sm:text-sm uppercase tracking-wider">Unavailable Item(s) in Cart</h4>
+                        <p className="text-[11px] sm:text-xs text-text-secondary dark:text-text-muted mt-0.5">
+                          The store marked <strong>{unavailableCartItems.length} item(s)</strong> as currently unavailable. Please remove unavailable items to place your order.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveUnavailableItems}
+                      className="self-start sm:self-auto px-4 py-2 rounded-xl bg-amber-500 text-black font-black text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-md hover:scale-105 transition-all shrink-0"
+                    >
+                      <Trash2 size={14} />
+                      <span>Remove {unavailableCartItems.length} Unavailable Item{unavailableCartItems.length > 1 ? 's' : ''}</span>
+                    </button>
+                  </div>
+                  <ul className="text-[11px] font-semibold text-text-secondary dark:text-text-muted pl-9 list-disc space-y-0.5">
+                    {unavailableCartItems.map(i => (
+                      <li key={i.itemKey}>{i.dish.name || (i.dish as any).foodName}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
-                {/* Cart Items Cards (Scrollable List when many items added) */}
-                <div className="space-y-4 max-h-[58vh] sm:max-h-[62vh] lg:max-h-[70vh] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-border-color/80">
-                  {cartItems.map((item) => {
-                    const unitPrice = item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price);
-                    const itemSubtotal = unitPrice * item.quantity;
-                    const itemKey = item.itemKey || item.dish.id;
-                    const isVeg = (item.dish as any).isVeg ?? true;
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-                    return (
-                      <motion.div
-                        key={itemKey}
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="bg-white dark:bg-bg-card border border-glass hover:border-primary/40 rounded-2xl p-4 sm:p-5 transition-all space-y-3.5 group shadow-sm"
-                      >
-                        {/* Top: Image, Title, Category & Unit Price */}
-                        <div className="flex items-start gap-3.5 sm:gap-4">
-                          {/* Dish Image */}
-                          <div className="relative w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl overflow-hidden border border-glass shrink-0 bg-bg-dark">
-                            <img
-                              src={item.dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
-                              alt={item.dish.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-                          </div>
+                {/* LEFT COLUMN: Cart Items List (7 cols) */}
+                <div className={`lg:col-span-7 space-y-6 ${mobileStep === 2 ? 'hidden lg:block' : 'block'}`}>
 
-                          {/* Details Stack */}
-                          <div className="flex-1 min-w-0 space-y-1">
-                            {/* 1. Category & Variant Badges + Remove Button */}
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-1.5 min-w-0">
-                                {item.dish.category && (
-                                  <span className="inline-block text-[10px] font-bold text-text-secondary dark:text-text-muted bg-glass-subtle px-2 py-0.5 rounded-md border border-glass">
-                                    {item.dish.category}
-                                  </span>
-                                )}
-                                {item.selectedVariant && item.selectedVariant.name && (
-                                  <span className="inline-block text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
-                                    {item.selectedVariant.name}
-                                  </span>
-                                )}
-                              </div>
+                  {/* Cart Items Cards (Scrollable List when many items added) */}
+                  <div className="space-y-4 max-h-[58vh] sm:max-h-[62vh] lg:max-h-[70vh] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-border-color/80">
+                    {cartItems.map((item) => {
+                      const unitPrice = item.selectedVariant ? Number(item.selectedVariant.price) : Number(item.dish.price);
+                      const itemSubtotal = unitPrice * item.quantity;
+                      const itemKey = item.itemKey || item.dish.id;
+                      const isVeg = (item.dish as any).isVeg ?? true;
+                      const isItemUnavailable = item.dish.isAvailable === false || (item.dish as any).isAvailable === 'false';
+
+                      return (
+                        <motion.div
+                          key={itemKey}
+                          layout
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          className={`bg-white dark:bg-bg-card border rounded-2xl p-4 sm:p-5 transition-all space-y-3.5 group shadow-sm ${isItemUnavailable ? 'border-amber-500/50 bg-amber-500/5' : 'border-glass hover:border-primary/40'}`}
+                        >
+                          {/* Top: Image, Title, Category & Unit Price */}
+                          <div className="flex items-start gap-3.5 sm:gap-4">
+                            {/* Dish Image */}
+                            <div className="relative w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl overflow-hidden border border-glass shrink-0 bg-bg-dark">
+                              <img
+                                src={item.dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
+                                alt={item.dish.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+
+                            {/* Details Stack */}
+                            <div className="flex-1 min-w-0 space-y-1">
+                              {/* 1. Category & Variant Badges + Remove Button */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                  {isItemUnavailable && (
+                                    <span className="inline-block text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 uppercase tracking-wider">
+                                      UNAVAILABLE AT STORE
+                                    </span>
+                                  )}
+                                  {item.dish.category && (
+                                    <span className="inline-block text-[10px] font-bold text-text-secondary dark:text-text-muted bg-glass-subtle px-2 py-0.5 rounded-md border border-glass">
+                                      {item.dish.category}
+                                    </span>
+                                  )}
+                                  {item.selectedVariant && item.selectedVariant.name && (
+                                    <span className="inline-block text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
+                                      {item.selectedVariant.name}
+                                    </span>
+                                  )}
+                                </div>
 
                               {/* Remove Item Trash Button */}
                               <button
@@ -876,11 +1044,36 @@ export const CartPage: React.FC = () => {
                       ) : (
                         <button
                           type="submit"
-                          disabled={isPlacingOrder}
-                          className="w-full py-4 rounded-2xl bg-primary hover:bg-primary-dark text-white font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-98 shadow-md"
+                          disabled={isPlacingOrder || isStoreClosed || unavailableCartItems.length > 0}
+                          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                            isStoreClosed
+                              ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 cursor-not-allowed'
+                              : unavailableCartItems.length > 0
+                              ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 cursor-not-allowed'
+                              : 'bg-primary hover:bg-primary-dark text-white active:scale-98'
+                          }`}
                         >
-                          <ShieldCheck className="w-5 h-5" />
-                          <span>{isPlacingOrder ? 'Dispatching Order...' : 'Place Order Now'}</span>
+                          {isPlacingOrder ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              <span>Dispatching Order...</span>
+                            </>
+                          ) : isStoreClosed ? (
+                            <>
+                              <AlertTriangle className="w-5 h-5 text-rose-500" />
+                              <span>Store Closed — Cannot Place Order</span>
+                            </>
+                          ) : unavailableCartItems.length > 0 ? (
+                            <>
+                              <AlertCircle className="w-5 h-5 text-amber-500" />
+                              <span>Remove Unavailable Items To Proceed</span>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck className="w-5 h-5" />
+                              <span>Place Order Now</span>
+                            </>
+                          )}
                         </button>
                       )}
                     </div>
@@ -890,6 +1083,7 @@ export const CartPage: React.FC = () => {
               </div>
 
             </div>
+          </div>
           )}
 
         </div>

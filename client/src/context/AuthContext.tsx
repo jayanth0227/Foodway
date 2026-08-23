@@ -29,6 +29,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Purge obsolete sensitive credentials from localStorage/sessionStorage
       cleanupObsoleteStorage();
 
+      // Guard: If user explicitly logged out, DO NOT restore old session automatically
+      const isLoggedOut = typeof window !== 'undefined' && localStorage.getItem('foodway_explicit_logout') === 'true';
+      if (isLoggedOut) {
+        setUser(null);
+        setRole(null);
+        setToken(null);
+        setIsLoading(false);
+        return;
+      }
+
       // Immediately restore stored session from persistent storage
       const storedToken = getToken();
       const storedUser = getCurrentUser();
@@ -41,7 +51,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       try {
         const res = await authService.getCurrentUser();
-        if (res && res.success && res.user) {
+        if (res && res.success && res.user && localStorage.getItem('foodway_explicit_logout') !== 'true') {
           const activeToken = res.token || storedToken || 'active_session';
           saveSession(activeToken, res.user);
           setUser(res.user);
@@ -50,21 +60,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           // Asynchronously sync FCM push notification token post-restoration
           notificationService.syncFcmTokenAfterLogin();
-        } else if (!storedUser) {
+        } else {
           clearSession();
           setUser(null);
           setRole(null);
           setToken(null);
         }
       } catch (error) {
-        const status = (error as any)?.response?.status;
-        // Only clear session if explicitly unauthenticated (401 / 403)
-        if (status === 401 || status === 403) {
-          clearSession();
-          setUser(null);
-          setRole(null);
-          setToken(null);
-        }
+        clearSession();
+        setUser(null);
+        setRole(null);
+        setToken(null);
       } finally {
         setIsLoading(false);
       }
@@ -101,13 +107,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const handleLogout = async () => {
-    try {
-      await authService.logout();
-    } catch (e) {}
     clearSession();
     setUser(null);
     setRole(null);
     setToken(null);
+    try {
+      await authService.logout();
+    } catch (e) {}
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   };
 
   const handleRegister = async (name: string, email: string, password?: string, phone?: string) => {

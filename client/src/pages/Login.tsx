@@ -459,11 +459,18 @@ export const Login: React.FC = () => {
       {/* Access Alert Modal Popup */}
       <AnimatePresence>
         {errorMessage && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div
+            onClick={() => {
+              setErrorMessage(null);
+              setPassword('');
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
+              onClick={(e) => e.stopPropagation()}
               className="bg-white dark:bg-[#181C25] border border-stone-200 dark:border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center space-y-4 relative"
             >
               <div className="w-14 h-14 rounded-full bg-rose-500/10 text-rose-500 mx-auto flex items-center justify-center">
@@ -471,17 +478,21 @@ export const Login: React.FC = () => {
               </div>
               <div className="space-y-1.5">
                 <h3 className="text-lg font-bold text-[#1A1A1A] dark:text-white tracking-tight font-display">
-                  Notice
+                  Invalid Credentials
                 </h3>
                 <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed font-medium">
                   {errorMessage}
                 </p>
               </div>
               <button
-                onClick={() => setErrorMessage(null)}
+                type="button"
+                onClick={() => {
+                  setErrorMessage(null);
+                  setPassword('');
+                }}
                 className="w-full py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-sm active:scale-95 cursor-pointer"
               >
-                Close
+                OK
               </button>
             </motion.div>
           </div>

@@ -40,7 +40,8 @@ export class ShopService {
     bannerImage?: string;
   }): Promise<{ shop: IShop; ownerUser: IUser }> {
     const cleanEmail = data.email.trim().toLowerCase();
-    const hashedPassword = await hashPassword(data.password || 'shop123');
+    const hasNewPassword = !!(data.password && data.password.trim());
+    const hashedPassword = hasNewPassword ? await hashPassword(data.password!.trim()) : null;
     const now = new Date().toISOString();
     const nameToUse = data.shopName || data.restaurantName || 'New Shop';
 
@@ -48,31 +49,36 @@ export class ShopService {
     let ownerUser = await userRepository.findByEmail(cleanEmail);
     if (!ownerUser) {
       const ownerUserId = generateUserId('SHOP');
+      const finalHashedPass = hashedPassword || (await hashPassword('shop123'));
       ownerUser = await userRepository.create({
         userId: ownerUserId,
         role: 'SHOP',
         name: data.ownerName || nameToUse,
         email: cleanEmail,
         phone: data.phone || '',
-        password: hashedPassword,
+        password: finalHashedPass,
         status: 'ACTIVE',
         createdAt: now,
         updatedAt: now
       });
     } else {
-      ownerUser = (await userRepository.update(ownerUser.userId, {
+      const userUpdates: any = {
         name: data.ownerName || nameToUse,
         phone: data.phone || ownerUser.phone,
-        password: hashedPassword,
         role: 'SHOP',
         status: 'ACTIVE'
-      })) || ownerUser;
+      };
+      if (hashedPassword) {
+        userUpdates.password = hashedPassword;
+      }
+      ownerUser = (await userRepository.update(ownerUser.userId, userUpdates)) || ownerUser;
     }
 
     // 2. Find or Create Shop
-    let shop = await shopRepository.findByOwnerUserId(ownerUser.userId);
+    let shop = (await shopRepository.findByOwnerUserId(ownerUser.userId)) || (await shopRepository.findByEmail(cleanEmail));
     if (!shop) {
       const shopId = generateShopId();
+      const finalHashedPass = hashedPassword || (await hashPassword('shop123'));
       shop = await shopRepository.create({
         shopId,
         restaurantId: shopId,
@@ -83,6 +89,7 @@ export class ShopService {
         description: data.description || 'Quality local products and quick delivery.',
         phone: data.phone || ownerUser.phone || '',
         email: cleanEmail,
+        password: finalHashedPass,
         address: data.address || '',
         openingTime: data.openingTime || '09:00 AM',
         closingTime: data.closingTime || '10:00 PM',
@@ -94,9 +101,9 @@ export class ShopService {
         cuisine: data.cuisine || '',
         createdAt: now,
         updatedAt: now
-      });
+      } as any);
     } else {
-      shop = (await shopRepository.update(shop.shopId, {
+      const shopUpdates: any = {
         shopName: nameToUse,
         restaurantName: nameToUse,
         shopType: data.shopType || shop.shopType || 'FOOD',
@@ -107,7 +114,12 @@ export class ShopService {
         logo: data.logo || shop.logo,
         bannerImage: data.bannerImage || shop.bannerImage,
         cuisine: data.cuisine || shop.cuisine
-      })) || shop;
+      };
+      if (hashedPassword) {
+        shopUpdates.password = hashedPassword;
+        (shopUpdates as any).vendorPassword = data.password;
+      }
+      shop = (await shopRepository.update(shop.shopId, shopUpdates)) || shop;
     }
 
     return { shop, ownerUser };

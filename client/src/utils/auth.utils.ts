@@ -60,6 +60,7 @@ export const saveSession = (
   };
 
   try {
+    localStorage.removeItem('foodway_explicit_logout');
     localStorage.setItem('foodway_session_token', token);
     localStorage.setItem('foodway_session_user', JSON.stringify(inMemoryUser));
   } catch (e) { }
@@ -76,8 +77,11 @@ export const clearSession = (): void => {
   inMemoryUser = null;
 
   try {
+    localStorage.setItem('foodway_explicit_logout', 'true');
     localStorage.removeItem('foodway_session_token');
     localStorage.removeItem('foodway_session_user');
+    localStorage.removeItem('vendor_active_tab');
+    localStorage.removeItem('admin_active_tab');
   } catch (e) { }
 
   cleanupObsoleteStorage();

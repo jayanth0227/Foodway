@@ -309,6 +309,23 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
     setIsSavingAddress(true);
     setAddressStatus(null);
 
+    let finalLat = addrLat;
+    let finalLng = addrLng;
+
+    if (!finalLat || !finalLng) {
+      try {
+        const fullAddrStr = [addrStreet, addrArea, addrCity, addrState, addrPincode].filter(Boolean).join(', ');
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddrStr)}&limit=1`);
+        const data = await resp.json();
+        if (data && data[0] && data[0].lat && data[0].lon) {
+          finalLat = parseFloat(data[0].lat);
+          finalLng = parseFloat(data[0].lon);
+          setAddrLat(finalLat);
+          setAddrLng(finalLng);
+        }
+      } catch (e) {}
+    }
+
     let updatedAddresses: Address[] = [...addresses];
 
     if (editingAddressId) {
@@ -327,8 +344,8 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
             pincode: addrPincode.trim(),
             landmark: addrLandmark.trim(),
             isDefault: addrIsDefault,
-            latitude: addrLat,
-            longitude: addrLng
+            latitude: finalLat,
+            longitude: finalLng
           };
         }
         return addrIsDefault ? { ...a, isDefault: false } : a;
@@ -347,8 +364,8 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
         pincode: addrPincode.trim(),
         landmark: addrLandmark.trim(),
         isDefault: addrIsDefault || addresses.length === 0,
-        latitude: addrLat,
-        longitude: addrLng
+        latitude: finalLat,
+        longitude: finalLng
       };
 
       if (newAddress.isDefault) {
