@@ -50,15 +50,11 @@ export const AdminOrderDetailsPage: React.FC = () => {
     fetchDeliveryPartners();
   }, [orderId]);
 
-  const allRiderOptions = Array.from(new Set([
-    ...dbPartners.map(p => p.name),
-    'Rider Sai Kumar',
-    'Rider Ramesh',
-    'Rider Shiva',
-    'Rider Rajesh',
-    'Rider Mahesh',
-    'Rider Venkatesh'
-  ]));
+  const allRiderOptions = Array.from(new Set(
+    dbPartners
+      .map(p => p.name || p.email)
+      .filter((name): name is string => Boolean(name && name.trim()))
+  ));
 
   const fetchOrderDetails = async (id: string) => {
     setLoading(true);

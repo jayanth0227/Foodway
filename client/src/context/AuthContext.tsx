@@ -115,6 +115,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       await authService.logout();
     } catch (e) {}
     if (typeof window !== 'undefined') {
+      localStorage.setItem('foodway_explicit_logout', 'true');
       window.location.href = '/login';
     }
   };

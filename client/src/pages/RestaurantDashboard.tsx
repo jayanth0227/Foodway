@@ -46,7 +46,9 @@ import {
   ShoppingBag,
   Layers,
   Crosshair,
-  Loader2
+  Loader2,
+  Package,
+  CheckCircle2
 } from 'lucide-react';
 import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
@@ -301,7 +303,7 @@ export const RestaurantDashboard: React.FC = () => {
   // Orders State
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [orderSearch, setOrderSearch] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState('Pending');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('All');
   const [isNotificationOpen, setIsNotificationOpen] = useState<boolean>(false);
   const [expandedOrdersMap, setExpandedOrdersMap] = useState<Record<string, boolean>>({});
 
@@ -622,35 +624,49 @@ export const RestaurantDashboard: React.FC = () => {
     }
   };
 
-  // Helper: Play Loud Synthesizer Buzz Alarm & HTML5 Chime Sound
+  // Helper: Play Loud Synthesizer Beep Alarm & Audio Sound Alert
   const playOrderBuzzSound = () => {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        const playTones = (freq: number, start: number, dur: number) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const audioCtx = new AudioContextClass();
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        
+        const playBeep = (freq: number, startTime: number, duration: number) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          
           osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          gain.gain.setValueAtTime(0.45, ctx.currentTime + start);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+          osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
+          
+          gain.gain.setValueAtTime(0.5, audioCtx.currentTime + startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration);
+          
           osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(ctx.currentTime + start);
-          osc.stop(ctx.currentTime + start + dur);
+          gain.connect(audioCtx.destination);
+          
+          osc.start(audioCtx.currentTime + startTime);
+          osc.stop(audioCtx.currentTime + startTime + duration);
         };
-        // 3 loud buzz alarm chirps (Ding-Dong-Ding alert tone)
-        playTones(784, 0, 0.3);       // G5
-        playTones(1046.5, 0.3, 0.4);  // C6
-        playTones(1567.98, 0.7, 0.55); // G6
+
+        // 4 Loud Rapid Beep Chirps (880Hz -> 1046Hz -> 1318Hz -> 1760Hz)
+        playBeep(880, 0.0, 0.18);
+        playBeep(1046.5, 0.22, 0.18);
+        playBeep(1318.5, 0.44, 0.18);
+        playBeep(1760.0, 0.66, 0.35);
       }
-    } catch (e) { }
+    } catch (e) {
+      console.warn('Web Audio beep synth error:', e);
+    }
 
     try {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(() => { });
-    } catch (e) { }
+      audio.play().catch(err => {
+        console.warn('HTML5 Audio playback prevented by browser autoplay policy:', err);
+      });
+    } catch (e) {}
   };
 
   // Helper: Trigger Native Browser Push Notification
@@ -1196,7 +1212,7 @@ export const RestaurantDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Accepted')}
-            className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Accept Order"
           >
             <Check size={14} />
@@ -1221,7 +1237,7 @@ export const RestaurantDashboard: React.FC = () => {
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Preparing')}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Start Preparing Food in Kitchen"
           >
             <ChefHat size={14} />
@@ -1241,11 +1257,11 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'preparing') {
       return (
-        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
+        <div className="flex items-center gap-2 justify-end whitespace-nowrap shrink-0">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Ready')}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             title="Mark Food Ready for Pickup / Delivery"
           >
             <CheckCircle size={14} />
@@ -1258,15 +1274,26 @@ export const RestaurantDashboard: React.FC = () => {
     if (status === 'ready') {
       return (
         <div className="flex items-center justify-end whitespace-nowrap shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 uppercase whitespace-nowrap shrink-0">
-            <Clock size={13} className="shrink-0" />
-            <span>Food Ready (Awaiting Courier)</span>
+          <span className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-amber-500/15 text-amber-500 border border-amber-500/30 uppercase whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-xs">
+            <Package size={14} className="shrink-0 text-amber-500 animate-pulse" />
+            <span>Food Ready (Awaiting Delivery Partner)</span>
           </span>
         </div>
       );
     }
 
-    if (status === 'rejected') {
+    if (status === 'out_for_delivery' || status === 'out for delivery') {
+      return (
+        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
+          <span className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-indigo-500/15 text-indigo-500 dark:text-indigo-400 border border-indigo-500/30 uppercase whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-xs">
+            <Package size={14} className="shrink-0 text-indigo-500" />
+            <span>Out for Delivery</span>
+          </span>
+        </div>
+      );
+    }
+
+    if (status === 'rejected' || status === 'cancelled') {
       return (
         <div className="flex items-center justify-end whitespace-nowrap shrink-0">
           <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase whitespace-nowrap shrink-0">
@@ -1304,7 +1331,21 @@ export const RestaurantDashboard: React.FC = () => {
     );
   };
 
-  // Filtered Orders (Case-insensitive status matching with synonyms)
+  const isTodayOrder = (o: any) => {
+    if (!o) return false;
+    const dateVal = o.createdAt || o.orderedAt || o.date;
+    if (!dateVal) return true;
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return true;
+    const today = new Date();
+    return (
+      d.getDate() === today.getDate() &&
+      d.getMonth() === today.getMonth() &&
+      d.getFullYear() === today.getFullYear()
+    );
+  };
+
+  // Filtered Orders for the 4 simplified tabs: 'All', 'Completed', 'Rejected', 'Order History'
   const filteredOrders = orders.filter(o => {
     const q = orderSearch.toLowerCase().trim();
     const matchesSearch =
@@ -1315,20 +1356,65 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (!matchesSearch) return false;
 
-    if (orderStatusFilter === 'All') return true;
-
-    const filterLower = orderStatusFilter.toLowerCase();
     const statusLower = (o.orderStatus || (o as any).status || '').toString().toLowerCase();
+    const isToday = isTodayOrder(o);
 
-    if (filterLower === 'pending') return statusLower === 'pending';
-    if (filterLower === 'accepted') return statusLower === 'accepted';
-    if (filterLower === 'preparing') return statusLower === 'preparing' || statusLower === 'accepted';
-    if (filterLower === 'ready') return statusLower === 'ready';
-    if (filterLower === 'completed') return statusLower === 'completed' || statusLower === 'delivered';
-    if (filterLower === 'rejected') return statusLower === 'rejected' || statusLower === 'cancelled';
+    if (orderStatusFilter === 'All') {
+      // Today's active in-progress orders (Pending, Accepted, Preparing, Ready, Out for Delivery)
+      return isToday && (
+        statusLower === 'pending' ||
+        statusLower === 'accepted' ||
+        statusLower === 'preparing' ||
+        statusLower === 'ready' ||
+        statusLower === 'out_for_delivery'
+      );
+    }
 
-    return statusLower === filterLower;
+    if (orderStatusFilter === 'Completed') {
+      // Today's completed orders
+      return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+    }
+
+    if (orderStatusFilter === 'Rejected') {
+      // Today's rejected orders
+      return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+    }
+
+    if (orderStatusFilter === 'Order History') {
+      // All past and historical orders across all dates & statuses
+      return true;
+    }
+
+    return true;
   });
+
+  // Count helper for order status tabs
+  const getTabOrderCount = (st: string) => {
+    return orders.filter(o => {
+      const statusLower = (o.orderStatus || (o as any).status || '').toString().toLowerCase();
+      const isToday = isTodayOrder(o);
+
+      if (st === 'All') {
+        return isToday && (
+          statusLower === 'pending' ||
+          statusLower === 'accepted' ||
+          statusLower === 'preparing' ||
+          statusLower === 'ready' ||
+          statusLower === 'out_for_delivery'
+        );
+      }
+      if (st === 'Completed') {
+        return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+      }
+      if (st === 'Rejected') {
+        return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+      }
+      if (st === 'Order History') {
+        return true;
+      }
+      return true;
+    }).length;
+  };
 
   // Today Stats Calculations (Case-insensitive status check)
   const todayOrdersCount = orders.length;
@@ -2755,16 +2841,26 @@ export const RestaurantDashboard: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1.5 sm:pb-0 scrollbar-none">
-                {['All', 'Pending', 'Accepted', 'Preparing', 'Ready', 'Completed', 'Rejected'].map(st => (
-                  <button
-                    key={st}
-                    onClick={() => setOrderStatusFilter(st)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer ${orderStatusFilter === st ? 'bg-primary text-black font-black shadow-sm' : 'bg-glass text-text-secondary hover:text-primary border border-glass/60'
-                      }`}
-                  >
-                    {st}
-                  </button>
-                ))}
+                {['All', 'Completed', 'Rejected', 'Order History'].map(st => {
+                  const count = getTabOrderCount(st);
+                  const isActive = orderStatusFilter === st;
+                  return (
+                    <button
+                      key={st}
+                      onClick={() => setOrderStatusFilter(st)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${isActive
+                        ? 'bg-primary text-black font-black shadow-sm'
+                        : 'bg-glass text-text-secondary hover:text-primary border border-glass/60'
+                        }`}
+                    >
+                      <span>{st}</span>
+                      <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${isActive ? 'bg-black/20 text-black' : 'bg-primary/20 text-primary'
+                        }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

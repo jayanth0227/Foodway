@@ -1203,6 +1203,11 @@ app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Missing required restaurant parameters.' });
     }
 
+    const isNew = !data.id && !data.restaurantId && !data.shopId;
+    if (isNew && (!data.password || !data.password.trim())) {
+      return res.status(400).json({ success: false, error: 'Password is required to create a new vendor account.' });
+    }
+
     const result = await restaurantService.registerRestaurant({
       restaurantName: name,
       ownerName: data.ownerName || name,
@@ -2388,52 +2393,12 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
   }
 });
 
-// Admin Endpoint: Reset/Seed default password ("shop123") for all merchant shops in DynamoDB
+// Admin Endpoint: Reset/Seed default password (DISABLED)
 app.post('/api/admin/seed-shop-passwords', async (_req: Request, res: Response) => {
-  try {
-    const defaultHashedPass = await hashPassword('shop123');
-    const allShops = await restaurantService.getAllRestaurants();
-    let updatedCount = 0;
-
-    for (const shop of allShops) {
-      const shopId = shop.shopId || shop.restaurantId || (shop as any).id;
-      const cleanEmail = (shop.email || '').trim().toLowerCase();
-
-      if (shopId) {
-        try {
-          await shopRepository.update(shopId, {
-            password: defaultHashedPass,
-            vendorPassword: 'shop123'
-          } as any);
-          updatedCount++;
-        } catch (e) {}
-      }
-
-      if (cleanEmail) {
-        try {
-          let ownerUser = await userRepository.findByEmail(cleanEmail);
-          if (ownerUser) {
-            await userRepository.update(ownerUser.userId, {
-              password: defaultHashedPass,
-              role: 'SHOP'
-            });
-          }
-        } catch (e) {}
-      }
-    }
-
-    return res.json({
-      success: true,
-      message: `Successfully set default password "shop123" for ${updatedCount} merchant shops in DynamoDB!`,
-      defaultPassword: 'shop123'
-    });
-  } catch (error: any) {
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to seed shop passwords in DynamoDB.',
-      details: error.message
-    });
-  }
+  return res.status(400).json({
+    success: false,
+    error: 'Default password seeding has been disabled. Vendor passwords must be set during registration or updated in profile settings.'
+  });
 });
 
 // Centralized Production Error Handling Middleware

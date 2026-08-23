@@ -45,7 +45,8 @@ export const CartPage: React.FC = () => {
 
   // Delivery & Contact State
   const [savedAddresses, setSavedAddresses] = useState<Address[]>(() => {
-    return user?.addresses || getCurrentUser()?.addresses || [];
+    if (!isAuthenticated || !user) return [];
+    return user.addresses || [];
   });
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
@@ -67,46 +68,52 @@ export const CartPage: React.FC = () => {
     window.scrollTo(0, 0);
   }, []);
 
-  // 2. Pre-fill Customer details and default saved address from profile + fetch fresh backend addresses
+  // 2. Pre-fill Customer details and default saved address strictly for logged in users
   useEffect(() => {
     const syncUserAddresses = async () => {
-      const activeUser = user || getCurrentUser();
-      if (activeUser) {
-        setCustomerName(activeUser.name || '');
-        setCustomerPhone(activeUser.phone || '');
+      if (!isAuthenticated || !user) {
+        setSavedAddresses([]);
+        setSelectedAddressId('');
+        setCustomerName('');
+        setCustomerPhone('');
+        setDeliveryAddress('');
+        return;
+      }
 
-        const userAddresses: Address[] = activeUser.addresses || [];
-        if (userAddresses.length > 0) {
-          setSavedAddresses(userAddresses);
-          const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
-          setSelectedAddressId(defaultAddr.id);
-          applyAddress(defaultAddr);
-        } else if ((activeUser as any).address) {
-          setDeliveryAddress((activeUser as any).address);
-        }
+      setCustomerName(user.name || '');
+      setCustomerPhone(user.phone || '');
 
-        // Fetch fresh user profile & addresses from backend API silently
-        try {
-          const res = await authService.getCurrentUser();
-          if (res && res.success && res.user && Array.isArray(res.user.addresses)) {
-            const token = getToken() || 'active_session';
-            saveSession(token, res.user);
-            const freshAddresses: Address[] = res.user.addresses;
-            if (freshAddresses.length > 0) {
-              setSavedAddresses(freshAddresses);
-              const defaultAddr = freshAddresses.find(a => a.isDefault) || freshAddresses[0];
-              setSelectedAddressId(defaultAddr.id);
-              applyAddress(defaultAddr);
-            }
+      const userAddresses: Address[] = user.addresses || [];
+      if (userAddresses.length > 0) {
+        setSavedAddresses(userAddresses);
+        const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
+        setSelectedAddressId(defaultAddr.id);
+        applyAddress(defaultAddr);
+      } else if ((user as any).address) {
+        setDeliveryAddress((user as any).address);
+      }
+
+      // Fetch fresh user profile & addresses from backend API silently
+      try {
+        const res = await authService.getCurrentUser();
+        if (res && res.success && res.user && Array.isArray(res.user.addresses)) {
+          const token = getToken() || 'active_session';
+          saveSession(token, res.user);
+          const freshAddresses: Address[] = res.user.addresses;
+          if (freshAddresses.length > 0) {
+            setSavedAddresses(freshAddresses);
+            const defaultAddr = freshAddresses.find(a => a.isDefault) || freshAddresses[0];
+            setSelectedAddressId(defaultAddr.id);
+            applyAddress(defaultAddr);
           }
-        } catch (e) {
-          console.warn('Silent user address sync warning:', e);
         }
+      } catch (e) {
+        console.warn('Silent user address sync warning:', e);
       }
     };
 
     syncUserAddresses();
-  }, [user]);
+  }, [user, isAuthenticated]);
 
   // 3. Synchronize loading timer with user & address resolution to prevent layout shift
   useEffect(() => {

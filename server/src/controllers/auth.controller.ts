@@ -101,10 +101,8 @@ export const login = async (req: Request, res: Response) => {
     const shopMatch = await restaurantRepository.findByEmail(cleanEmail);
     let ownerUser = await userRepository.findByEmail(cleanEmail);
 
-    const isDefaultShopPass = (password === 'shop123' || password === 'vendor123' || password === 'restaurant123');
-
     if (shopMatch || (ownerUser && ['SHOP', 'RESTAURANT', 'VENDOR'].includes((ownerUser.role || '').toUpperCase()))) {
-      let isPassValid = isDefaultShopPass;
+      let isPassValid = false;
 
       if (!isPassValid && ownerUser && ownerUser.password) {
         try {
@@ -369,14 +367,22 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
     if (req.body.password && req.body.password.trim()) {
       const newHashedPass = await hashPassword(req.body.password.trim());
       updates.password = newHashedPass;
-      if (req.user.restaurantId) {
-        try {
-          await restaurantRepository.update(req.user.restaurantId, {
+      
+      try {
+        let shopToUpdate = req.user.restaurantId ? await restaurantRepository.findByShopId(req.user.restaurantId) : null;
+        if (!shopToUpdate) {
+          shopToUpdate = await restaurantRepository.findByOwnerUserId(userId);
+        }
+        if (!shopToUpdate && existingUser.email) {
+          shopToUpdate = await restaurantRepository.findByEmail(existingUser.email);
+        }
+        if (shopToUpdate) {
+          await restaurantRepository.update(shopToUpdate.shopId, {
             password: newHashedPass,
             vendorPassword: req.body.password.trim()
           } as any);
-        } catch (e) {}
-      }
+        }
+      } catch (e) {}
     }
 
     if (email && email.trim().toLowerCase() !== existingUser.email.toLowerCase()) {

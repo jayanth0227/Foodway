@@ -245,11 +245,11 @@ export const App: React.FC = () => {
         <ThemeProvider>
           <LanguageProvider>
             <AuthProvider>
-              <CartProvider>
-                <Router>
+              <Router>
+                <CartProvider>
                   <AppContent />
-                </Router>
-              </CartProvider>
+                </CartProvider>
+              </Router>
             </AuthProvider>
           </LanguageProvider>
         </ThemeProvider>

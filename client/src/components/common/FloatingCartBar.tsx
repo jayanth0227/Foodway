@@ -19,18 +19,24 @@ export const FloatingCartBar: React.FC = () => {
     }
   }, [totalItemsCount, lastAddedItem?.timestamp]);
 
-  // Hide on auth (login/register), admin/restaurant/delivery portal routes, or on checkout/cart pages
+  // Check if current user is vendor, shop owner, admin, or delivery driver
+  const userRole = (user?.role || '').toUpperCase();
+  const isVendorOrAdminRole = ['SHOP', 'RESTAURANT', 'VENDOR', 'ADMIN', 'DELIVERY', 'DRIVER'].includes(userRole);
+
+  // Hide on auth (login/register), vendor/shop/admin/restaurant/delivery portal routes, or on checkout/cart pages
   const isAuthOrPortalRoute =
     location.pathname === '/login' ||
     location.pathname === '/register' ||
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/restaurant') ||
+    location.pathname.startsWith('/shop') ||
+    location.pathname.startsWith('/vendor') ||
     location.pathname.startsWith('/delivery') ||
     location.pathname === '/cart' ||
     location.pathname === '/checkout';
 
-  // Only show popup when user is logged in, not on auth/portal pages, and cart is not empty
-  if (!isAuthenticated || !user || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
+  // Only show popup for regular customer users on customer pages when cart is not empty
+  if (!isAuthenticated || !user || isVendorOrAdminRole || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
     return null;
   }
 

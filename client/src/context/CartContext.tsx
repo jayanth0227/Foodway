@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Lock, LogIn, X, ShoppingBag, ArrowRight, ShieldCheck, Zap, Tag } from 'lucide-react';
 import type { DishItem } from '../utils/mockData';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
@@ -27,6 +29,8 @@ interface CartContextType {
   setCartOpen: (open: boolean) => void;
   lastAddedItem: { name: string; quantity: number; image: string; price: number; variantLabel?: string; timestamp?: number } | null;
   dismissToast: () => void;
+  showAuthModal: boolean;
+  setShowAuthModal: (open: boolean) => void;
 }
 
 const mergeCartItems = (cartA: CartItem[], cartB: CartItem[]): CartItem[] => {
@@ -56,27 +60,27 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isRemoteSyncingRef = useRef(false);
   const { user, isAuthenticated } = useAuth();
   const userId = user?.id || (user as any)?.userId || user?.email;
+  let navigate: any;
+  try {
+    navigate = useNavigate();
+  } catch (e) {
+    // Fallback if rendered outside router context
+  }
+
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
+      if (!isAuthenticated && !user && !getCurrentUser()) return [];
       const activeUser = user || getCurrentUser();
       const activeId = activeUser?.id || (activeUser as any)?.userId || activeUser?.email;
-      let loaded: CartItem[] = [];
-      const guestCartStr = localStorage.getItem('mk_cart_guest');
-      if (guestCartStr) {
-        const parsedGuest = JSON.parse(guestCartStr);
-        if (Array.isArray(parsedGuest)) loaded = parsedGuest;
-      }
       if (activeId) {
         const userCartStr = localStorage.getItem(`mk_cart_${activeId}`);
         if (userCartStr) {
           const parsedUser = JSON.parse(userCartStr);
-          if (Array.isArray(parsedUser) && parsedUser.length > 0) {
-            loaded = mergeCartItems(loaded, parsedUser);
-          }
+          if (Array.isArray(parsedUser)) return parsedUser;
         }
       }
-      return loaded;
     } catch (e) {
       console.error('Error loading cart from localStorage on init', e);
     }
@@ -88,25 +92,22 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // React to User Auth State Changes & Sync Active Cart Across Local Storage & DB
   useEffect(() => {
-    const activeUserId = userId || (getCurrentUser() as any)?.id || (getCurrentUser() as any)?.email;
+    const activeUser = user || getCurrentUser();
+    const activeUserId = isAuthenticated && activeUser ? (userId || activeUser?.id || (activeUser as any)?.userId || activeUser?.email) : null;
 
     if (activeUserId) {
       // Join Customer Socket Room
       socketService.joinCustomer(activeUserId);
 
-      // Load local guest cart and user cart
-      let localGuestItems: CartItem[] = [];
+      // Load user cart from localStorage
       let localUserItems: CartItem[] = [];
       try {
-        const gStr = localStorage.getItem('mk_cart_guest');
-        if (gStr) localGuestItems = JSON.parse(gStr) || [];
         const uStr = localStorage.getItem(`mk_cart_${activeUserId}`);
         if (uStr) localUserItems = JSON.parse(uStr) || [];
       } catch (e) { }
 
-      const mergedLocal = mergeCartItems(localUserItems, localGuestItems);
-      if (mergedLocal.length > 0) {
-        setCartItems(mergedLocal);
+      if (localUserItems.length > 0) {
+        setCartItems(localUserItems);
       }
 
       // Fetch User Active Cart from DB / Backend
@@ -114,14 +115,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .then(res => {
           if (res.data && res.data.success && Array.isArray(res.data.cartItems)) {
             const dbItems: CartItem[] = res.data.cartItems;
-            const finalMerged = mergeCartItems(mergedLocal.length > 0 ? mergedLocal : cartItems, dbItems);
+            const finalMerged = mergeCartItems(localUserItems.length > 0 ? localUserItems : cartItems, dbItems);
 
             isRemoteSyncingRef.current = true;
             setCartItems(finalMerged);
 
             try {
               localStorage.setItem(`mk_cart_${activeUserId}`, JSON.stringify(finalMerged));
-              localStorage.setItem('mk_cart_guest', JSON.stringify(finalMerged));
             } catch (e) { }
 
             // Sync merged cart back up to server if new local items were merged
@@ -141,7 +141,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCartItems(data.cartItems);
           try {
             localStorage.setItem(`mk_cart_${activeUserId}`, JSON.stringify(data.cartItems));
-            localStorage.setItem('mk_cart_guest', JSON.stringify(data.cartItems));
           } catch (e) { }
           setTimeout(() => { isRemoteSyncingRef.current = false; }, 250);
         }
@@ -207,28 +206,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubscribeMenu();
       };
     } else {
-      // User is logged out / guest -> Restore guest cart from localStorage so items are NEVER lost on logout!
+      // User is logged out / unauthenticated -> Clear in-memory cart and remove guest cart keys
+      setCartItems([]);
       try {
-        const guestSaved = localStorage.getItem('mk_cart_guest');
-        if (guestSaved) {
-          const parsed = JSON.parse(guestSaved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCartItems(parsed);
-          }
-        }
+        localStorage.removeItem('mk_cart_guest');
       } catch (e) { }
     }
   }, [userId, isAuthenticated]);
 
   // Save cart to user-scoped localStorage & sync to Backend whenever cartItems changes
   useEffect(() => {
-    const activeUserId = userId || (getCurrentUser() as any)?.id || (getCurrentUser() as any)?.email;
+    const activeUser = user || getCurrentUser();
+    const activeUserId = isAuthenticated && activeUser ? (userId || activeUser?.id || (activeUser as any)?.userId || activeUser?.email) : null;
+
+    if (!activeUserId) {
+      if (cartItems.length > 0) {
+        setCartItems([]);
+      }
+      return;
+    }
 
     try {
-      localStorage.setItem('mk_cart_guest', JSON.stringify(cartItems));
-      if (activeUserId) {
-        localStorage.setItem(`mk_cart_${activeUserId}`, JSON.stringify(cartItems));
-      }
+      localStorage.setItem(`mk_cart_${activeUserId}`, JSON.stringify(cartItems));
     } catch (e) {
       console.error('Error saving cart to localStorage', e);
     }
@@ -250,6 +249,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addToCart = (dish: DishItem, selectedVariant?: any) => {
+    const activeUser = user || getCurrentUser();
+    if (!activeUser || (!activeUser.id && !(activeUser as any).userId && !activeUser.email)) {
+      setShowAuthModal(true);
+      return;
+    }
+
     if (dish.isAvailable === false || (dish as any).isOpen === false || (dish as any).restaurantIsOpen === false) {
       alert('This shop is currently closed or offline and not accepting orders.');
       return;
@@ -289,6 +294,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const incrementQuantity = (itemKeyOrDishId: string) => {
+    const activeUser = user || getCurrentUser();
+    if (!activeUser || (!activeUser.id && !(activeUser as any).userId && !activeUser.email)) {
+      setShowAuthModal(true);
+      return;
+    }
+
     setCartItems((prevItems) => {
       const existingItem = prevItems.find((item) => item.itemKey === itemKeyOrDishId || item.dish.id === itemKeyOrDishId);
       if (existingItem) {
@@ -387,9 +398,100 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCartOpen,
         lastAddedItem,
         dismissToast,
+        showAuthModal,
+        setShowAuthModal,
       }}
     >
       {children}
+
+      {/* Redesigned Premium Login Required Popup Modal (Light & Dark Adaptive) */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/70 dark:bg-black/85 backdrop-blur-xl animate-fade-in">
+          <div className="bg-white/95 dark:bg-[#151921]/95 border border-amber-200/80 dark:border-white/10 p-7 sm:p-9 rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.18)] dark:shadow-[0_25px_70px_rgba(0,0,0,0.7)] max-w-md w-full text-center relative overflow-hidden transform transition-all animate-scale-up">
+            {/* Multi-layered Glowing Background Orbs */}
+            <div className="absolute -top-20 -right-20 w-44 h-44 bg-amber-400/25 dark:bg-[#C59363]/25 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-44 h-44 bg-orange-400/15 dark:bg-[#9D6A43]/20 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Glowing Icon Header */}
+            <div className="relative mx-auto mb-5 w-20 h-20 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-[#C59363] via-[#D0A67F] to-[#9D6A43] opacity-30 blur-md animate-pulse" />
+              <div className="relative w-full h-full rounded-3xl bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-[#1E232E] dark:via-[#151921] dark:to-[#1E232E] border border-amber-300/80 dark:border-primary/40 flex items-center justify-center text-[#9D6A43] dark:text-[#D0A67F] shadow-lg">
+                <ShoppingBag size={34} className="text-[#9D6A43] dark:text-[#D0A67F]" />
+                <div className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-gradient-to-r from-[#B87C44] to-[#9D6A43] dark:bg-[#C59363] text-white dark:text-black shadow-md border-2 border-white dark:border-[#151921]">
+                  <Lock size={13} strokeWidth={3} />
+                </div>
+              </div>
+            </div>
+
+            {/* Top Pill Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100/90 dark:bg-primary/15 border border-amber-300/90 dark:border-primary/30 text-amber-900 dark:text-primary-dark text-[11px] font-black uppercase tracking-wider mb-3 shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-600 dark:bg-primary animate-ping" />
+              Authentication Required
+            </div>
+
+            {/* Title & Body Description */}
+            <h3 className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight mb-2.5">
+              Log In to Order Food
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-gray-300 font-medium leading-relaxed mb-6 px-1">
+              Please log in or create an account to add your favorite gourmet dishes to your cart and place instant orders.
+            </p>
+
+            {/* Value Perk Badges */}
+            <div className="grid grid-cols-3 gap-2 mb-7">
+              <div className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-amber-50/70 dark:bg-white/[0.04] border border-amber-200/80 dark:border-white/10 text-center shadow-xs">
+                <Zap size={16} className="text-amber-600 dark:text-amber-400" />
+                <span className="text-[11px] font-bold text-slate-800 dark:text-gray-200">Fast Delivery</span>
+              </div>
+              <div className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-amber-50/70 dark:bg-white/[0.04] border border-amber-200/80 dark:border-white/10 text-center shadow-xs">
+                <Tag size={16} className="text-[#B87C44] dark:text-primary" />
+                <span className="text-[11px] font-bold text-slate-800 dark:text-gray-200">Best Offers</span>
+              </div>
+              <div className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-amber-50/70 dark:bg-white/[0.04] border border-amber-200/80 dark:border-white/10 text-center shadow-xs">
+                <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
+                <span className="text-[11px] font-bold text-slate-800 dark:text-gray-200">Secure Pay</span>
+              </div>
+            </div>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  setShowAuthModal(false);
+                  if (navigate) {
+                    try {
+                      navigate('/login', { state: { from: window.location.pathname } });
+                      return;
+                    } catch (e) {}
+                  }
+                  window.location.href = '/login';
+                }}
+                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-[#B87C44] via-[#C59363] to-[#9D6A43] hover:from-[#A76D38] hover:to-[#865731] text-white font-extrabold text-sm sm:text-base shadow-xl shadow-[#C59363]/30 hover:shadow-[#C59363]/50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 flex items-center justify-center gap-2.5 group cursor-pointer"
+              >
+                <LogIn size={20} className="group-hover:scale-110 transition-transform" />
+                <span>Log In / Register Now</span>
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+
+              <button
+                onClick={() => setShowAuthModal(false)}
+                className="w-full py-3.5 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200/80 border border-slate-300/80 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-gray-300 dark:hover:text-white font-bold text-sm transition-all duration-200 cursor-pointer"
+              >
+                Continue Browsing
+              </button>
+            </div>
+
+            {/* Top Right Close Button */}
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 p-2 rounded-2xl text-slate-400 hover:text-slate-900 hover:bg-slate-200/60 border border-transparent hover:border-slate-300/60 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/10 dark:hover:border-white/10 transition-all duration-200 cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
     </CartContext.Provider>
   );
 };

@@ -60,6 +60,8 @@ export interface IShop {
   categories?: string[];
   fcmToken?: string;
   lastTokenUpdatedAt?: string;
+  password?: string;
+  vendorPassword?: string;
   createdAt: string;
   updatedAt: string;
 }

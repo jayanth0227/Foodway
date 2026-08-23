@@ -70,18 +70,48 @@ export const saveSession = (
 };
 
 /**
- * Clear in-memory session and persistent storage
+ * Clear in-memory session and persistent storage thoroughly
  */
 export const clearSession = (): void => {
   inMemoryAccessToken = null;
   inMemoryUser = null;
 
   try {
-    localStorage.setItem('foodway_explicit_logout', 'true');
-    localStorage.removeItem('foodway_session_token');
-    localStorage.removeItem('foodway_session_user');
-    localStorage.removeItem('vendor_active_tab');
-    localStorage.removeItem('admin_active_tab');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('foodway_explicit_logout', 'true');
+
+      const allAuthKeys = [
+        'foodway_session_token',
+        'foodway_session_user',
+        'foodway_auth_token',
+        'mk_auth_token',
+        'restaurantAuth',
+        'adminAuth',
+        'userAuth',
+        'currentUser',
+        'vendor_active_tab',
+        'admin_active_tab',
+        'foodway_jwt_token',
+        'foodway_user_id',
+        'foodway_user_role',
+        'foodway_user_name',
+        'foodway_user_email',
+        'foodway_user_phone',
+        'foodway_user_addresses',
+        'foodway_restaurant_id',
+        'foodway_token_expiry',
+        'foodway_status_changed_at'
+      ];
+
+      allAuthKeys.forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+
+      try {
+        sessionStorage.clear();
+      } catch (e) {}
+    }
   } catch (e) { }
 
   cleanupObsoleteStorage();
@@ -120,6 +150,10 @@ export const setToken = (token: string | null): void => {
  * Get Current Authenticated User object
  */
 export const getCurrentUser = (): User | null => {
+  if (typeof window !== 'undefined' && localStorage.getItem('foodway_explicit_logout') === 'true') {
+    inMemoryUser = null;
+    return null;
+  }
   if (inMemoryUser) return inMemoryUser;
   try {
     const savedUser = localStorage.getItem('foodway_session_user');
