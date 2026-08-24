@@ -3,6 +3,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
 import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
 import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { apiGatewayWS } from './api-gateway-websocket.service';
 
 export interface SocketUser {
   userId: string;
@@ -54,7 +55,6 @@ export class SocketService {
       const socketUser: SocketUser | undefined = (socket as any).user;
       console.log(`🔌 [Socket.io Connected]: ${socket.id} (User: ${socketUser?.userId || 'Anonymous'}, Role: ${socketUser?.role || 'Guest'})`);
 
-      // Store Connection ID in Existing Users Table (Option 1 - Zero New Tables)
       if (socketUser && socketUser.userId) {
         this.registerUserSocketId(socketUser.userId, socket.id).catch(() => {});
       }
@@ -136,11 +136,10 @@ export class SocketService {
     return this.io;
   }
 
-  // --- OPTION 1: STORE CONNECTION ID IN EXISTING TABLES ---
+  // --- REGISTER WEBSOCKET CONNECTION ID IN EXISTING TABLES ---
   public async registerUserSocketId(userId: string, connectionId: string, orderId?: string): Promise<void> {
     if (!userId) return;
     try {
-      // 1. Update socketConnectionId directly inside existing foodway-users table!
       await dynamoDocClient.send(
         new UpdateCommand({
           TableName: usersTableName,
@@ -154,7 +153,6 @@ export class SocketService {
       );
       console.log(`💾 Saved ConnectionId [${connectionId}] in existing users table for User #${userId}`);
 
-      // 2. If orderId is provided, also store customerSocketConnectionId in existing foodway-orders table!
       if (orderId) {
         await dynamoDocClient.send(
           new UpdateCommand({
@@ -168,7 +166,7 @@ export class SocketService {
         );
       }
     } catch (err) {
-      console.warn(`⚠️ Option 1 DynamoDB connection save warning for User #${userId}:`, (err as any)?.message);
+      console.warn(`⚠️ DynamoDB connection save warning for User #${userId}:`, (err as any)?.message);
     }
   }
 
@@ -182,137 +180,160 @@ export class SocketService {
     return this.io;
   }
 
-  // --- REAL-TIME BROADCAST EVENT METHODS ---
+  // Helper to dispatch event to both Socket.IO (Local Dev) & API Gateway WebSocket (AWS Lambda Production)
+  private async dispatchEvent(room: string, eventName: string, payload: any): Promise<void> {
+    // 1. Local Dev: Socket.IO
+    if (this.io) {
+      if (room === 'public') {
+        this.io.emit(eventName, payload);
+      } else {
+        this.io.to(room).emit(eventName, payload);
+      }
+    }
+
+    // 2. AWS Lambda Production: API Gateway WebSockets via PostToConnection
+    try {
+      await apiGatewayWS.broadcastToRoom(room, eventName, payload);
+    } catch (err) {
+      console.warn(`⚠️ API Gateway broadcast error for event [${eventName}] in room [${room}]:`, err);
+    }
+  }
+
+  // --- REAL-TIME BROADCAST EVENT METHODS (Preserved Exact Public Interface) ---
 
   // Admin -> Shop / Public: New Shop Created
   emitShopCreated(shop: any): void {
-    if (!this.io) return;
     const shopId = shop.id || shop.shopId || shop.restaurantId;
     console.log(`📡 [Socket Emit: SHOP_CREATED] -> Shop #${shopId}`);
-    this.io.to('admin').emit('shop_created', shop);
-    this.io.emit('shop_created', shop);
+    this.dispatchEvent('admin', 'shop_created', shop);
+    this.dispatchEvent('public', 'shop_created', shop);
   }
 
   // Admin / Merchant -> Public / Dashboards: Shop Profile & Location Updated
   emitShopUpdated(shop: any): void {
-    if (!this.io) return;
     const shopId = shop.id || shop.shopId || shop.restaurantId;
     console.log(`📡 [Socket Emit: SHOP_UPDATED & LOCATION_UPDATED] -> Shop #${shopId}`, shop);
-    this.io.to('admin').to(`restaurant_${shopId}`).emit('shop_updated', shop);
-    this.io.emit('shop_updated', shop);
-    this.io.emit('foodway_restaurant_updated', shop);
-    this.io.emit('restaurant_profile_updated', shop);
-    this.io.emit('location_updated', shop);
+    this.dispatchEvent('admin', 'shop_updated', shop);
+    this.dispatchEvent(`restaurant_${shopId}`, 'shop_updated', shop);
+    this.dispatchEvent('public', 'shop_updated', shop);
+    this.dispatchEvent('public', 'foodway_restaurant_updated', shop);
+    this.dispatchEvent('public', 'restaurant_profile_updated', shop);
+    this.dispatchEvent('public', 'location_updated', shop);
   }
 
   // Admin / Merchant -> Public: Shop Open/Close Status Updated
   emitShopStatusUpdated(shopId: string, isOpen: boolean, status: string): void {
-    if (!this.io || !shopId) return;
+    if (!shopId) return;
     console.log(`📡 [Socket Emit: SHOP_STATUS_UPDATED] -> Shop #${shopId} Open: ${isOpen}`);
     const payload = { shopId, restaurantId: shopId, isOpen, status };
-    this.io.to('admin').to(`restaurant_${shopId}`).emit('foodway_restaurant_status_updated', payload);
-    this.io.emit('foodway_restaurant_status_updated', payload);
-    this.io.emit('shop_status_updated', payload);
-    this.io.emit('restaurant_status_updated', payload);
-    this.io.emit('shop_updated', payload);
+    this.dispatchEvent('admin', 'foodway_restaurant_status_updated', payload);
+    this.dispatchEvent(`restaurant_${shopId}`, 'foodway_restaurant_status_updated', payload);
+    this.dispatchEvent('public', 'foodway_restaurant_status_updated', payload);
+    this.dispatchEvent('public', 'shop_status_updated', payload);
+    this.dispatchEvent('public', 'restaurant_status_updated', payload);
   }
 
   // Merchant -> Public / Menu: Item Created / Updated / Deleted
   emitMenuUpdated(restaurantId: string, item?: any): void {
-    if (!this.io || !restaurantId) return;
+    if (!restaurantId) return;
     console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}] Item:`, item);
     const payload = { restaurantId, shopId: restaurantId, item, dish: item };
-    this.io.to(`restaurant_${restaurantId}`).emit('menu_updated', payload);
-    this.io.emit('menu_updated', payload);
-    this.io.emit('foodway_menu_updated', payload);
-    this.io.emit('menu_item_updated', payload);
+    this.dispatchEvent(`restaurant_${restaurantId}`, 'menu_updated', payload);
+    this.dispatchEvent('public', 'menu_updated', payload);
+    this.dispatchEvent('public', 'foodway_menu_updated', payload);
   }
 
   // Customer -> Merchant & Admin: New Order Created
   emitOrderCreated(order: any): void {
-    if (!this.io) return;
     const restRoom = `restaurant_${order.restaurantId}`;
     const userRoom = `user_${order.customerId}`;
     console.log(`📡 [Socket Emit: ORDER_CREATED] -> Room [${restRoom}] Order #${order.orderId}`);
-    this.io.to('admin').to(restRoom).to(userRoom).emit('order_created', order);
-    this.io.emit('order_created', order);
+    this.dispatchEvent('admin', 'order_created', order);
+    this.dispatchEvent(restRoom, 'order_created', order);
+    this.dispatchEvent(userRoom, 'order_created', order);
+    this.dispatchEvent('public', 'order_created', order);
   }
 
   // Merchant / Admin / Rider -> Customer & Merchant: Order Status Updated
   emitOrderStatusUpdated(order: any): void {
-    if (!this.io) return;
     const userRoom = `user_${order.customerId}`;
     const orderRoom = `order_${order.orderId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
 
     console.log(`📡 [Socket Emit: ORDER_STATUS_UPDATED] -> Order #${order.orderId} Status: ${order.status}`);
-    this.io.to('admin').to(userRoom).to(orderRoom).to(restRoom).emit('order_status_updated', order);
-    this.io.emit('order_status_updated', order);
+    this.dispatchEvent('admin', 'order_status_updated', order);
+    this.dispatchEvent(userRoom, 'order_status_updated', order);
+    this.dispatchEvent(orderRoom, 'order_status_updated', order);
+    this.dispatchEvent(restRoom, 'order_status_updated', order);
+    this.dispatchEvent('public', 'order_status_updated', order);
   }
 
   // Merchant -> Delivery Partner Broadcast: Order Ready for Pickup
   emitOrderReadyForPickup(order: any): void {
-    if (!this.io) return;
     console.log(`📡 [Socket Emit: ORDER_READY_PICKUP] -> Room [delivery_riders] Order #${order.orderId}`);
-    this.io.to('admin').to('delivery_riders').emit('order_ready_pickup', order);
-    this.io.emit('order_ready_pickup', order);
+    this.dispatchEvent('admin', 'order_ready_pickup', order);
+    this.dispatchEvent('delivery_riders', 'order_ready_pickup', order);
+    this.dispatchEvent('public', 'order_ready_pickup', order);
   }
 
   // Rider -> Customer & Merchant & Admin: Rider Status Updated
   emitRiderStatusUpdated(order: any): void {
-    if (!this.io) return;
     const userRoom = `user_${order.customerId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
     const orderRoom = `order_${order.orderId}`;
 
     console.log(`📡 [Socket Emit: RIDER_STATUS_UPDATED] -> Order #${order.orderId} Rider Status: ${order.status}`);
-    this.io.to('admin').to(userRoom).to(restRoom).to(orderRoom).emit('rider_status_updated', order);
-    this.io.emit('rider_status_updated', order);
+    this.dispatchEvent('admin', 'rider_status_updated', order);
+    this.dispatchEvent(userRoom, 'rider_status_updated', order);
+    this.dispatchEvent(restRoom, 'rider_status_updated', order);
+    this.dispatchEvent(orderRoom, 'rider_status_updated', order);
+    this.dispatchEvent('public', 'rider_status_updated', order);
   }
 
   // Admin -> Delivery Partner / Customer / Merchant: Order Assigned to Delivery Agent
   emitOrderAssigned(order: any): void {
-    if (!this.io) return;
     const userRoom = `user_${order.customerId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
     const orderRoom = `order_${order.orderId}`;
     const deliveryRoom = `delivery_${order.deliveryUserId}`;
 
     console.log(`📡 [Socket Emit: ORDER_ASSIGNED] -> Order #${order.orderId} assigned to Rider #${order.deliveryUserId}`);
-    this.io.to('admin').to(deliveryRoom).to('delivery_riders').to(userRoom).to(restRoom).to(orderRoom).emit('order_assigned', order);
-    this.io.emit('order_assigned', order);
+    this.dispatchEvent('admin', 'order_assigned', order);
+    this.dispatchEvent(deliveryRoom, 'order_assigned', order);
+    this.dispatchEvent('delivery_riders', 'order_assigned', order);
+    this.dispatchEvent(userRoom, 'order_assigned', order);
+    this.dispatchEvent(restRoom, 'order_assigned', order);
+    this.dispatchEvent(orderRoom, 'order_assigned', order);
   }
 
   // Delivery Partner -> Admin / Riders: Duty Status Updated
   emitDeliveryDutyUpdated(partner: any): void {
-    if (!this.io) return;
     console.log(`📡 [Socket Emit: PARTNER_DUTY_UPDATED] -> Partner #${partner.userId} OnDuty: ${partner.isOnDuty}`);
-    this.io.to('admin').to('delivery_riders').emit('partner_duty_updated', partner);
-    this.io.emit('partner_duty_updated', partner);
+    this.dispatchEvent('admin', 'partner_duty_updated', partner);
+    this.dispatchEvent('delivery_riders', 'partner_duty_updated', partner);
+    this.dispatchEvent('public', 'partner_duty_updated', partner);
   }
 
   // Multi-device Cart Synchronization
   emitCartUpdated(userId: string, cartItems: any[]): void {
-    if (!this.io || !userId) return;
+    if (!userId) return;
     const userRoom = `user_${userId}`;
     console.log(`📡 [Socket Emit: CART_UPDATED] -> Room [${userRoom}] Items Count: ${cartItems.length}`);
-    this.io.to(userRoom).emit('cart_updated', { userId, cartItems });
+    this.dispatchEvent(userRoom, 'cart_updated', { userId, cartItems });
   }
 
   // Delivery Locations Updated
   emitLocationUpdated(location: any): void {
-    if (!this.io) return;
     console.log(`📡 [Socket Emit: LOCATION_UPDATED] -> Location #${location.locationId}`);
-    this.io.to('admin').emit('location_updated', location);
-    this.io.emit('location_updated', location);
+    this.dispatchEvent('admin', 'location_updated', location);
+    this.dispatchEvent('public', 'location_updated', location);
   }
 
   // Real-Time Delivery Settings & Rates Broadcast
   emitDeliverySettingsUpdated(settings: any): void {
-    if (!this.io) return;
     console.log(`📡 [Socket Emit: DELIVERY_SETTINGS_UPDATED] -> Rates updated live!`, settings);
-    this.io.emit('delivery_settings_updated', settings);
-    this.io.emit('foodway_delivery_settings_updated', settings);
+    this.dispatchEvent('public', 'delivery_settings_updated', settings);
+    this.dispatchEvent('public', 'foodway_delivery_settings_updated', settings);
   }
 }
 
