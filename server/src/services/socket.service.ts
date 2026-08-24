@@ -1,6 +1,8 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
+import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
+import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 export interface SocketUser {
   userId: string;
@@ -52,7 +54,12 @@ export class SocketService {
       const socketUser: SocketUser | undefined = (socket as any).user;
       console.log(`🔌 [Socket.io Connected]: ${socket.id} (User: ${socketUser?.userId || 'Anonymous'}, Role: ${socketUser?.role || 'Guest'})`);
 
-      // Admin Room (Authorized for ADMIN only)
+      // Store Connection ID in Existing Users Table (Option 1 - Zero New Tables)
+      if (socketUser && socketUser.userId) {
+        this.registerUserSocketId(socketUser.userId, socket.id).catch(() => {});
+      }
+
+      // Admin Room
       socket.on('join_admin', () => {
         if (socketUser?.role === 'ADMIN') {
           socket.join('admin');
@@ -60,14 +67,14 @@ export class SocketService {
         }
       });
 
-      // Shop / Restaurant Room Authorization
+      // Shop / Restaurant Room
       socket.on('join_restaurant', (restaurantId: string) => {
         if (!restaurantId) return;
         const cleanId = String(restaurantId).trim();
         const room = `restaurant_${cleanId}`;
         const isAuthorized =
           socketUser?.role === 'ADMIN' ||
-          !socketUser || // Allow public guests to view store updates
+          !socketUser ||
           socketUser?.shopId === cleanId;
 
         if (isAuthorized && !socket.rooms.has(room)) {
@@ -76,7 +83,7 @@ export class SocketService {
         }
       });
 
-      // Customer Room Authorization
+      // Customer Room
       socket.on('join_customer', (customerId: string) => {
         if (!customerId) return;
         const cleanId = String(customerId).trim();
@@ -92,7 +99,7 @@ export class SocketService {
         }
       });
 
-      // Order Room Authorization
+      // Order Room
       socket.on('join_order', (orderId: string) => {
         if (!orderId) return;
         const cleanId = String(orderId).trim();
@@ -103,7 +110,7 @@ export class SocketService {
         }
       });
 
-      // Delivery Partner Room Authorization
+      // Delivery Partner Room
       socket.on('join_delivery', (deliveryId?: string) => {
         const isDeliveryPartner = socketUser?.role === 'DELIVERY_PARTNER' || socketUser?.role === 'ADMIN' || !socketUser;
         if (isDeliveryPartner) {
@@ -125,8 +132,44 @@ export class SocketService {
       });
     });
 
-    console.log('⚡ Socket.io Server Initialized Successfully with JWT Authentication & Room Authorization');
+    console.log('⚡ Socket.io Server Initialized Successfully with Option 1 DynamoDB Connection Storage');
     return this.io;
+  }
+
+  // --- OPTION 1: STORE CONNECTION ID IN EXISTING TABLES ---
+  public async registerUserSocketId(userId: string, connectionId: string, orderId?: string): Promise<void> {
+    if (!userId) return;
+    try {
+      // 1. Update socketConnectionId directly inside existing foodway-users table!
+      await dynamoDocClient.send(
+        new UpdateCommand({
+          TableName: usersTableName,
+          Key: { id: userId },
+          UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
+          ExpressionAttributeValues: {
+            ':cid': connectionId,
+            ':now': new Date().toISOString()
+          }
+        })
+      );
+      console.log(`💾 Saved ConnectionId [${connectionId}] in existing users table for User #${userId}`);
+
+      // 2. If orderId is provided, also store customerSocketConnectionId in existing foodway-orders table!
+      if (orderId) {
+        await dynamoDocClient.send(
+          new UpdateCommand({
+            TableName: ordersTableName,
+            Key: { id: orderId },
+            UpdateExpression: 'SET customerSocketConnectionId = :cid',
+            ExpressionAttributeValues: {
+              ':cid': connectionId
+            }
+          })
+        );
+      }
+    } catch (err) {
+      console.warn(`⚠️ Option 1 DynamoDB connection save warning for User #${userId}:`, (err as any)?.message);
+    }
   }
 
   getIO(): SocketIOServer {
