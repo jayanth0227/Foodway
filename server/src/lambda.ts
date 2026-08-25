@@ -25,23 +25,26 @@ async function handleWebSocketEvent(event: any, context: any) {
     const qsp = event.queryStringParameters || {};
     const headers = event.headers || {};
     const token = qsp.token || headers.Authorization?.replace('Bearer ', '') || headers.authorization?.replace('Bearer ', '') || headers['sec-websocket-protocol'];
-    const userId = qsp.userId;
+    const clientUserId = qsp.userId;
 
-    let authenticatedUserId = userId;
+    let authenticatedUserId = clientUserId;
 
     if (token) {
       try {
         const decoded = verifyToken(token);
         if (decoded && (decoded.id || decoded.email)) {
           authenticatedUserId = decoded.id;
+          console.log(`[WS AUTH SUCCESS] connectionId=${connectionId} authenticatedUserId=${authenticatedUserId}`);
         }
       } catch (err: any) {
-        console.warn(`⚠️ WebSocket connection JWT authentication warning:`, err?.message);
+        console.warn(`[WS AUTH FAILED] connectionId=${connectionId} reason=INVALID_TOKEN error=${err?.message}`);
       }
     }
 
     if (authenticatedUserId) {
       await socketService.registerUserSocketId(authenticatedUserId, connectionId);
+    } else {
+      console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} reason=NO_AUTHENTICATED_USER_ID`);
     }
 
     return { statusCode: 200, body: 'Connected' };
@@ -71,6 +74,7 @@ async function handleWebSocketEvent(event: any, context: any) {
               UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
             })
           );
+          console.log(`[WS DISCONNECT CLEANUP] connectionId=${connectionId} userId=${item.userId || item.email}`);
         }
       }
     } catch (e) {
@@ -99,13 +103,15 @@ async function handleWebSocketEvent(event: any, context: any) {
             userId = decoded.id;
           }
         } catch (err: any) {
-          console.warn(`⚠️ $default JWT verification warning:`, err?.message);
+          console.warn(`[WS AUTH FAILED] connectionId=${connectionId} reason=INVALID_TOKEN_IN_MESSAGE error=${err?.message}`);
         }
       }
 
-      if (action === 'register_connection' || action === 'join_room' || action === 'join_user') {
+      if (action === 'register_connection' || action === 'join_user' || action === 'join_room') {
         if (userId) {
           await socketService.registerUserSocketId(userId, connectionId, orderId);
+        } else {
+          console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} action=${action} reason=NO_USER_ID`);
         }
       }
     } catch (e) {

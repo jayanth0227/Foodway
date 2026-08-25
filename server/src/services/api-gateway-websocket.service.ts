@@ -16,7 +16,7 @@ export class ApiGatewayWebSocketService {
   }
 
   private initClient() {
-    let ep = process.env.WEBSOCKET_API_ENDPOINT || '';
+    let ep = process.env.WEBSOCKET_API_ENDPOINT || 'https://swsw35x9j8.execute-api.ap-south-2.amazonaws.com/production';
     if (ep) {
       // Normalize endpoint: ensure it uses https:// (not wss://) for AWS SDK PostToConnection
       ep = ep.replace(/^wss:\/\//i, 'https://').replace(/\/$/, '');
@@ -103,18 +103,30 @@ export class ApiGatewayWebSocketService {
     const cleanRoom = room.trim();
 
     try {
-      if (cleanRoom === 'admin') {
-        // Find users where role = 'ADMIN'
+      if (cleanRoom === 'public') {
+        // Return ALL active connection IDs for public broadcasts
         const scanRes = await dynamoDocClient.send(
           new ScanCommand({
             TableName: usersTableName,
-            FilterExpression: '#role = :r AND attribute_exists(socketConnectionId)',
-            ExpressionAttributeNames: { '#role': 'role' },
-            ExpressionAttributeValues: { ':r': 'ADMIN' }
+            FilterExpression: 'attribute_exists(socketConnectionId)'
           })
         );
         (scanRes.Items || []).forEach(item => {
           if (item.socketConnectionId) connectionIds.add(item.socketConnectionId);
+        });
+      } else if (cleanRoom === 'admin') {
+        // Find users where role = 'ADMIN' or 'admin'
+        const scanRes = await dynamoDocClient.send(
+          new ScanCommand({
+            TableName: usersTableName,
+            FilterExpression: 'attribute_exists(socketConnectionId)'
+          })
+        );
+        (scanRes.Items || []).forEach(item => {
+          const r = String(item.role || '').toUpperCase();
+          if (r === 'ADMIN' && item.socketConnectionId) {
+            connectionIds.add(item.socketConnectionId);
+          }
         });
       } else if (cleanRoom.startsWith('restaurant_')) {
         const shopId = cleanRoom.replace('restaurant_', '');
@@ -190,13 +202,14 @@ export class ApiGatewayWebSocketService {
         const scanRes = await dynamoDocClient.send(
           new ScanCommand({
             TableName: usersTableName,
-            FilterExpression: '#role = :r AND attribute_exists(socketConnectionId)',
-            ExpressionAttributeNames: { '#role': 'role' },
-            ExpressionAttributeValues: { ':r': 'DELIVERY_PARTNER' }
+            FilterExpression: 'attribute_exists(socketConnectionId)'
           })
         );
         (scanRes.Items || []).forEach(item => {
-          if (item.socketConnectionId) connectionIds.add(item.socketConnectionId);
+          const r = String(item.role || '').toUpperCase();
+          if ((r === 'DELIVERY_PARTNER' || r === 'RIDER' || r === 'DELIVERY') && item.socketConnectionId) {
+            connectionIds.add(item.socketConnectionId);
+          }
         });
       }
     } catch (err: any) {
@@ -209,13 +222,19 @@ export class ApiGatewayWebSocketService {
   // Broadcast event payload to target room
   async broadcastToRoom(room: string, eventName: string, data: any): Promise<number> {
     const connectionIds = await this.getConnectionsForRoom(room);
+    console.log(`[WS BROADCAST] event=${eventName} room=${room} connections=${connectionIds.length}`);
     if (connectionIds.length === 0) return 0;
 
     let successCount = 0;
     await Promise.all(
       connectionIds.map(async (cid) => {
         const sent = await this.postToConnection(cid, eventName, data);
-        if (sent) successCount++;
+        if (sent) {
+          successCount++;
+          console.log(`[WS SEND SUCCESS] event=${eventName} connectionId=${cid}`);
+        } else {
+          console.warn(`[WS SEND FAILED] event=${eventName} connectionId=${cid}`);
+        }
       })
     );
     return successCount;

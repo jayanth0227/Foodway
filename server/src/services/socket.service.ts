@@ -2,7 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
 import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
-import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { UpdateCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { apiGatewayWS } from './api-gateway-websocket.service';
 import userRepository from '../repositories/user.repository';
 
@@ -139,43 +139,73 @@ export class SocketService {
 
   // --- REGISTER WEBSOCKET CONNECTION ID IN EXISTING TABLES ---
   public async registerUserSocketId(userId: string, connectionId: string, orderId?: string): Promise<void> {
-    if (!userId) return;
-    try {
-      const user = await userRepository.findByUserId(userId) || await userRepository.findByIdentifier(userId);
-      if (user) {
-        const key: any = {};
-        if ((user as any).userId) key.userId = (user as any).userId;
-        else if (user.email) key.email = user.email;
-        else key.id = (user as any).id || userId;
+    if (!userId || !connectionId) {
+      console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=MISSING_PARAMETERS`);
+      return;
+    }
 
-        await dynamoDocClient.send(
-          new UpdateCommand({
-            TableName: usersTableName,
-            Key: key,
-            UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
-            ExpressionAttributeValues: {
-              ':cid': connectionId,
-              ':now': new Date().toISOString()
-            }
-          })
-        );
-        console.log(`💾 Saved ConnectionId [${connectionId}] in existing users table for User #${userId}`);
+    try {
+      // 1. Resolve user via repository or direct identifier match
+      let user = await userRepository.findByUserId(userId) || await userRepository.findByIdentifier(userId);
+      
+      // Fallback: If not found by findByUserId, attempt direct scan/query
+      if (!user) {
+        try {
+          const scanRes = await dynamoDocClient.send(
+            new ScanCommand({
+              TableName: usersTableName,
+              FilterExpression: 'userId = :uid OR id = :uid OR email = :uid',
+              ExpressionAttributeValues: { ':uid': userId }
+            })
+          );
+          if (scanRes.Items && scanRes.Items.length > 0) {
+            user = scanRes.Items[0] as any;
+          }
+        } catch (scanErr) {}
       }
+
+      if (!user) {
+        console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=USER_NOT_FOUND`);
+        return;
+      }
+
+      const key: any = {};
+      if ((user as any).userId) key.userId = (user as any).userId;
+      else if (user.email) key.email = user.email;
+      else key.id = (user as any).id || userId;
+
+      await dynamoDocClient.send(
+        new UpdateCommand({
+          TableName: usersTableName,
+          Key: key,
+          UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
+          ExpressionAttributeValues: {
+            ':cid': connectionId,
+            ':now': new Date().toISOString()
+          }
+        })
+      );
+      console.log(`[WS REGISTER SUCCESS] userId=${(user as any).userId || user.email || userId} connectionId=${connectionId}`);
 
       if (orderId) {
-        await dynamoDocClient.send(
-          new UpdateCommand({
-            TableName: ordersTableName,
-            Key: { orderId },
-            UpdateExpression: 'SET customerSocketConnectionId = :cid',
-            ExpressionAttributeValues: {
-              ':cid': connectionId
-            }
-          })
-        );
+        try {
+          await dynamoDocClient.send(
+            new UpdateCommand({
+              TableName: ordersTableName,
+              Key: { orderId },
+              UpdateExpression: 'SET customerSocketConnectionId = :cid',
+              ExpressionAttributeValues: {
+                ':cid': connectionId
+              }
+            })
+          );
+          console.log(`[WS REGISTER SUCCESS] Attached orderId=${orderId} to connectionId=${connectionId}`);
+        } catch (ordErr: any) {
+          console.warn(`⚠️ Warning attaching orderId to connection:`, ordErr?.message);
+        }
       }
-    } catch (err) {
-      console.warn(`⚠️ DynamoDB connection save warning for User #${userId}:`, (err as any)?.message);
+    } catch (err: any) {
+      console.error(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=DYNAMODB_UPDATE_FAILED error=${err?.message || err}`);
     }
   }
 
