@@ -61,16 +61,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           // Asynchronously sync FCM push notification token post-restoration
           notificationService.syncFcmTokenAfterLogin();
         } else {
+          if (!storedUser) {
+            clearSession();
+            setUser(null);
+            setRole(null);
+            setToken(null);
+          }
+        }
+      } catch (error) {
+        // Preserve existing offline/stored user session on network or API error
+        if (!storedUser) {
           clearSession();
           setUser(null);
           setRole(null);
           setToken(null);
         }
-      } catch (error) {
-        clearSession();
-        setUser(null);
-        setRole(null);
-        setToken(null);
       } finally {
         setIsLoading(false);
       }

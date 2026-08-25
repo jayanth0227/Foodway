@@ -613,7 +613,19 @@ export const CustomerOrdersPage: React.FC = () => {
                             <Store size={13} className="shrink-0" />
                             <span className="truncate max-w-[140px] sm:max-w-none">{restaurantDisplayName}</span>
                           </div>
+                          {order.isMultiVendor && (
+                            <span className="text-[10px] font-black uppercase text-purple-400 bg-purple-500/10 border border-purple-500/30 px-2 py-0.5 rounded-md">
+                              🔀 Multi-Vendor
+                            </span>
+                          )}
                         </div>
+
+                        {order.cancellationNotice && (
+                          <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-extrabold flex items-center gap-2 mt-1">
+                            <AlertTriangle size={15} className="shrink-0 text-rose-500" />
+                            <span>{order.cancellationNotice}</span>
+                          </div>
+                        )}
 
                         {order.deliveryAddress && !isExpanded && (
                           <p className="text-xs text-text-secondary truncate max-w-lg">

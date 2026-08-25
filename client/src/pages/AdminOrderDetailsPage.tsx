@@ -195,15 +195,26 @@ export const AdminOrderDetailsPage: React.FC = () => {
                     <Receipt size={24} />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-text-muted">Current Status:</span>
                       <span className={`px-3 py-1 rounded-lg text-xs font-black uppercase border ${getStatusBadgeStyle(order.orderStatus || order.status)}`}>
                         {order.orderStatus || order.status || 'Pending'}
                       </span>
+                      {order.isMultiVendor && (
+                        <span className="px-3 py-1 rounded-lg text-xs font-black uppercase border bg-purple-500/15 border-purple-500/30 text-purple-600 dark:text-purple-400">
+                          🔀 MULTI-VENDOR ORDER
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-600 dark:text-text-muted mt-1 font-medium">
                       Placed on {new Date(order.createdTime || order.orderedAt || Date.now()).toLocaleString()}
                     </p>
+                    {order.cancellationNotice && (
+                      <p className="text-xs font-extrabold text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1">
+                        <AlertTriangle size={14} />
+                        <span>{order.cancellationNotice}</span>
+                      </p>
+                    )}
                   </div>
                 </div>
 

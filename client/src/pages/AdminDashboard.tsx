@@ -148,6 +148,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const filterOutDummy = (items: any[]) => {
     if (!Array.isArray(items)) return [];
     return items.filter((item: any) => {
+      if (!item || typeof item !== 'object') return false;
       const name = (item.name || item.customer || item.customerName || item.restaurantName || '').toLowerCase();
       const id = (item.id || item.orderId || item.restaurantId || '').toLowerCase();
       const isDummy =
@@ -546,7 +547,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     if (isLoading) return;
     // Check credentials using unified auth utility
     const activeUser = user || getCurrentUser();
-    if (!activeUser || activeUser.role !== 'ADMIN') {
+    const activeRole = (activeUser?.role || '').toUpperCase();
+    if (!activeUser || activeRole !== 'ADMIN') {
       navigate('/login', { replace: true });
       return;
     }
@@ -1101,15 +1103,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   };
 
   // Analytics helper calculations
-  const totalRestaurants = restaurants.length;
-  const activeRestaurants = restaurants.filter(r => (r.status || '').toLowerCase() === 'active' || (r.status || '').toLowerCase() === 'open' || r.isOpen === true).length;
-  const totalOrdersToday = orders.length;
-  const pendingOrders = orders.filter(o => (o.orderStatus || o.status || '').toLowerCase() === 'pending').length;
-  const ordersInDelivery = orders.filter(o => ['assigned', 'out for delivery', 'in transit', 'picked up'].includes((o.orderStatus || o.status || '').toLowerCase())).length;
-  const completedOrders = orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length;
+  const totalRestaurants = restaurants.filter(r => r && typeof r === 'object').length;
+  const activeRestaurants = restaurants.filter(r => r && typeof r === 'object' && ((r.status || '').toLowerCase() === 'active' || (r.status || '').toLowerCase() === 'open' || r.isOpen === true)).length;
+  const totalOrdersToday = orders.filter(o => o && typeof o === 'object').length;
+  const pendingOrders = orders.filter(o => o && typeof o === 'object' && (o.orderStatus || o.status || '').toLowerCase() === 'pending').length;
+  const ordersInDelivery = orders.filter(o => o && typeof o === 'object' && ['assigned', 'out for delivery', 'in transit', 'picked up'].includes((o.orderStatus || o.status || '').toLowerCase())).length;
+  const completedOrders = orders.filter(o => o && typeof o === 'object' && ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length;
 
   // Filter Restaurants
   const filteredRestaurants = restaurants.filter(r => {
+    if (!r || typeof r !== 'object') return false;
     const q = (resSearch || '').toLowerCase();
     return (r?.name || '').toLowerCase().includes(q) || 
            (r?.ownerName || '').toLowerCase().includes(q);

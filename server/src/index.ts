@@ -604,6 +604,7 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
 });
 
 // Fetch all orders for Admin (Enriched with full items breakdown, restaurant name, and customer details)
+// Fetch all orders for Admin (Enriched with full items breakdown, multi-vendor aggregation, restaurant name, and customer details)
 app.get('/api/admin/orders', async (req: Request, res: Response) => {
   try {
     let allOrders: any[] = [];
@@ -619,6 +620,11 @@ app.get('/api/admin/orders', async (req: Request, res: Response) => {
     try {
       allRestaurants = await restaurantService.getAllRestaurants();
     } catch (e) { }
+
+    const resMap: Record<string, any> = {};
+    allRestaurants.forEach((r: any) => {
+      resMap[r.id || r.restaurantId] = r;
+    });
 
     const enriched = await Promise.all(allOrders.map(async (o: any) => {
       let itemsList = o.items || o.rawItems || [];
@@ -651,13 +657,18 @@ app.get('/api/admin/orders', async (req: Request, res: Response) => {
         }
       }
 
+      const restObj = resMap[o.restaurantId] || {};
+
       return {
         ...o,
         id: o.orderId,
         orderId: o.orderId,
+        parentOrderId: o.parentOrderId || o.orderId,
         restaurant: resName,
         restaurantName: resName,
         restaurantId: o.restaurantId,
+        restaurantAddress: restObj.address || o.restaurantAddress || '',
+        restaurantPhone: restObj.phone || o.restaurantPhone || '',
         customerName: o.customerName || 'Valued Customer',
         customerPhone: o.customerPhone || '',
         customerAddress: o.deliveryAddress || '',
@@ -673,7 +684,87 @@ app.get('/api/admin/orders', async (req: Request, res: Response) => {
       };
     }));
 
-    res.json({ success: true, orders: enriched });
+    // Group sub-orders by parentOrderId into single consolidated Multi-Vendor Order cards
+    const parentGroupMap: Record<string, any> = {};
+
+    for (const o of enriched) {
+      const parentId = o.parentOrderId || o.orderId;
+      if (!parentGroupMap[parentId]) {
+        parentGroupMap[parentId] = {
+          ...o,
+          id: parentId,
+          orderId: parentId,
+          parentOrderId: parentId,
+          subOrders: [o],
+          items: [...(o.items || [])],
+          vendorStatuses: [{
+            subOrderId: o.orderId,
+            restaurantId: o.restaurantId,
+            restaurantName: o.restaurantName,
+            restaurantAddress: o.restaurantAddress,
+            restaurantPhone: o.restaurantPhone,
+            status: o.orderStatus || o.status || 'Pending',
+            items: o.items || [],
+            totalAmount: o.total || o.totalAmount || 0
+          }],
+          totalAmount: Number(o.total || o.totalAmount || 0),
+          total: Number(o.total || o.totalAmount || 0)
+        };
+      } else {
+        const group = parentGroupMap[parentId];
+        group.subOrders.push(o);
+        group.items = [...group.items, ...(o.items || [])];
+        group.vendorStatuses.push({
+          subOrderId: o.orderId,
+          restaurantId: o.restaurantId,
+          restaurantName: o.restaurantName,
+          restaurantAddress: o.restaurantAddress,
+          restaurantPhone: o.restaurantPhone,
+          status: o.orderStatus || o.status || 'Pending',
+          items: o.items || [],
+          totalAmount: o.total || o.totalAmount || 0
+        });
+        group.totalAmount += Number(o.total || o.totalAmount || 0);
+        group.total += Number(o.total || o.totalAmount || 0);
+      }
+    }
+
+    const consolidatedAdminOrders = Object.values(parentGroupMap).map((group: any) => {
+      const isMultiVendor = group.vendorStatuses.length > 1;
+      const vendorNames = Array.from(new Set(group.vendorStatuses.map((vs: any) => vs.restaurantName))).join(' • ');
+      
+      const statuses = group.vendorStatuses.map((vs: any) => String(vs.status || '').toLowerCase());
+      const cancelledCount = statuses.filter((s: string) => s.includes('cancel') || s.includes('reject')).length;
+      const readyCount = statuses.filter((s: string) => s.includes('ready') || s.includes('packed')).length;
+      const activeCount = group.vendorStatuses.length - cancelledCount;
+
+      let aggregatedStatus = group.orderStatus || 'Pending';
+      if (cancelledCount === group.vendorStatuses.length) {
+        aggregatedStatus = 'Cancelled';
+      } else if (activeCount > 0 && readyCount >= activeCount) {
+        aggregatedStatus = 'Ready for Pickup';
+      } else if (statuses.some((s: string) => s.includes('prepar') || s.includes('accept'))) {
+        aggregatedStatus = 'Preparing';
+      }
+
+      let cancellationNotice = null;
+      if (cancelledCount > 0 && cancelledCount < group.vendorStatuses.length) {
+        const cancelledStores = group.vendorStatuses.filter((vs: any) => String(vs.status || '').toLowerCase().includes('cancel') || String(vs.status || '').toLowerCase().includes('reject')).map((vs: any) => vs.restaurantName).join(', ');
+        cancellationNotice = `Items from ${cancelledStores} were cancelled by the store.`;
+      }
+
+      return {
+        ...group,
+        isMultiVendor,
+        restaurantName: isMultiVendor ? `${vendorNames} (Multi-Vendor)` : group.restaurantName,
+        restaurant: isMultiVendor ? `${vendorNames} (Multi-Vendor)` : group.restaurant,
+        orderStatus: aggregatedStatus,
+        status: aggregatedStatus,
+        cancellationNotice
+      };
+    });
+
+    res.json({ success: true, orders: consolidatedAdminOrders });
   } catch (error: any) {
     console.error('Error fetching admin orders:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch orders.', details: error.message });
@@ -757,6 +848,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
 
     const parentOrderId = `ORD-${Date.now()}`;
     const createdSubOrders: any[] = [];
+    const isMultiVendor = vendorIds.length > 1;
 
     // Create sub-order for each vendor
     for (let index = 0; index < vendorIds.length; index++) {
@@ -770,12 +862,12 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       const vTax = Number((Number(taxes || 0) * vRatio).toFixed(2));
       const vTotal = Number((vSubtotal + vDelivery + vTax).toFixed(2));
 
-      // Append suffix if multiple vendors in order
-      const subOrderId = vendorIds.length > 1 ? `${parentOrderId}-${index + 1}` : parentOrderId;
+      const subOrderId = isMultiVendor ? `${parentOrderId}-${index + 1}` : parentOrderId;
 
       const orderData = {
         orderId: subOrderId,
         parentOrderId,
+        isMultiVendor,
         customerId: customerId || `CUST_${Date.now()}`,
         restaurantId: vId,
         restaurantName: vName,
@@ -806,6 +898,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
         orderId: created.order.orderId,
         id: created.order.orderId,
         parentOrderId,
+        isMultiVendor,
         restaurantId: vId,
         restaurantName: vName,
         customerName: customerName || 'Valued Customer',
@@ -820,7 +913,6 @@ app.post('/api/orders', async (req: Request, res: Response) => {
         time: 'Just Now'
       };
 
-      // Attach raw items to order object
       (created.order as any).items = vItems;
 
       // ⚡ Real-Time Socket Emission to Merchant Room & Broadcast
@@ -871,34 +963,93 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: `Order [${orderId}] not found.` });
     }
 
-    // ⚡ Real-Time Socket Emissions for Admin, Vendors, Riders & Customers
+    // Handle Multi-Vendor Aggregation & Cancellation Logic
+    const parentId = (updated as any).parentOrderId || updated.orderId;
+    let siblingSubOrders: any[] = [];
+    if (ordersTableName) {
+      try {
+        const scanRes = await dynamoDocClient.send(new ScanCommand({
+          TableName: ordersTableName,
+          FilterExpression: 'parentOrderId = :pid OR orderId = :pid',
+          ExpressionAttributeValues: { ':pid': parentId }
+        }));
+        siblingSubOrders = scanRes.Items || [updated];
+      } catch (e) {
+        siblingSubOrders = [updated];
+      }
+    } else {
+      siblingSubOrders = [updated];
+    }
+
+    const isMultiVendor = siblingSubOrders.length > 1;
+    const isCancellation = upperStatus === 'CANCELLED' || upperStatus === 'REJECTED' || upperStatus === 'CANCELLED_BY_STORE';
+
+    const cancelledSiblings = siblingSubOrders.filter((o: any) => {
+      const st = String(o.status || o.orderStatus || '').toUpperCase();
+      return st === 'CANCELLED' || st === 'REJECTED' || st === 'CANCELLED_BY_STORE';
+    });
+
+    const activeSiblings = siblingSubOrders.filter((o: any) => {
+      const st = String(o.status || o.orderStatus || '').toUpperCase();
+      return st !== 'CANCELLED' && st !== 'REJECTED' && st !== 'CANCELLED_BY_STORE';
+    });
+
+    // ⚡ Real-Time Socket Emissions
     try {
       if (socketService) {
-        // Emit general order status update to customer, order, and restaurant rooms
-        socketService.emitOrderStatusUpdated(updated);
-        socketService.emitRiderStatusUpdated(updated);
+        if (isCancellation && isMultiVendor) {
+          if (cancelledSiblings.length === siblingSubOrders.length) {
+            // ALL vendors cancelled -> Entire order cancelled
+            console.log(`🚨 [Multi-Vendor All Cancelled] Order #${parentId} completely cancelled`);
+            socketService.emitOrderStatusUpdated({
+              ...updated,
+              orderId: parentId,
+              status: 'CANCELLED',
+              cancellationNotice: 'All participating stores cancelled the order.'
+            });
+          } else {
+            // PARTIAL vendor cancellation -> Notify customer & update multi-vendor state
+            const cancelledVendorName = updated.shopName || updated.restaurantName || 'Vendor Store';
+            console.log(`⚠️ [Multi-Vendor Partial Cancel] Store ${cancelledVendorName} cancelled items for Order #${parentId}`);
+            socketService.emitVendorItemsCancelled({
+              parentOrderId: parentId,
+              customerId: updated.customerId,
+              cancelledVendorId: updated.shopId || updated.restaurantId,
+              cancelledVendorName,
+              cancelledItems: updated.items || [],
+              remainingActiveStoresCount: activeSiblings.length
+            });
+            socketService.emitOrderStatusUpdated({
+              ...updated,
+              parentOrderId: parentId,
+              cancellationNotice: `Items from ${cancelledVendorName} were cancelled by the store.`
+            });
+          }
+        } else {
+          socketService.emitOrderStatusUpdated(updated);
+          socketService.emitRiderStatusUpdated(updated);
+        }
+
         socketService.getIO().emit('order_status_updated', updated);
         socketService.getIO().emit('rider_status_updated', updated);
 
         const st = String(updated.status || status).toLowerCase();
-        console.log(`📡 [Real-Time Socket Event Triggered] Order #${orderId} Status Changed to: ${st}`);
 
-        // Broadcast READY or ASSIGNED order events to all riders
-        if (st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
-          console.log(`📡 [Real-Time Socket] Emitting order_ready_pickup & order_assigned for Order #${orderId}`);
-          socketService.emitOrderReadyForPickup(updated);
-          socketService.getIO().emit('order_ready_pickup', updated);
-          socketService.getIO().emit('order_assigned', updated);
-          socketService.getIO().to('delivery_riders').emit('order_assigned', updated);
-        }
+        // Check if all active vendors are READY
+        const allActiveReady = activeSiblings.length > 0 && activeSiblings.every((o: any) => {
+          const s = String(o.status || o.orderStatus || '').toLowerCase();
+          return s === 'ready' || s === 'packed' || s === 'ready_for_pickup' || s === 'ready for pickup';
+        });
 
-        // Broadcast DELIVERED order event to Admin & Vendor shops for real-time count updates
-        if (st === 'delivered' || st === 'completed') {
-          console.log(`📡 [Real-Time Socket] Emitting order_delivered for Order #${orderId} to Admin & Vendor Shops`);
-          socketService.getIO().emit('order_delivered', updated);
-          if (updated.restaurantId) {
-            socketService.getIO().to(`restaurant_${updated.restaurantId}`).emit('order_delivered', updated);
-          }
+        if (allActiveReady || st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
+          console.log(`📡 [Real-Time Socket] Emitting order_ready_pickup for Multi-Vendor Order #${parentId}`);
+          socketService.emitOrderReadyForPickup({
+            ...updated,
+            orderId: parentId,
+            status: 'READY'
+          });
+          socketService.getIO().emit('order_ready_pickup', { ...updated, orderId: parentId });
+          socketService.getIO().emit('order_assigned', { ...updated, orderId: parentId });
         }
       }
     } catch (e: any) {

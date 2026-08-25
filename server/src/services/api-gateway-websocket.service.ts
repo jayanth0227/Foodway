@@ -5,6 +5,7 @@ import {
 } from '@aws-sdk/client-apigatewaymanagementapi';
 import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
 import { UpdateCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import userRepository from '../repositories/user.repository';
 
 export class ApiGatewayWebSocketService {
   private client: ApiGatewayManagementApiClient | null = null;
@@ -78,13 +79,20 @@ export class ApiGatewayWebSocketService {
         })
       );
       for (const item of scanRes.Items || []) {
-        await dynamoDocClient.send(
-          new UpdateCommand({
-            TableName: usersTableName,
-            Key: { id: item.id },
-            UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
-          })
-        );
+        const key: any = {};
+        if (item.userId) key.userId = item.userId;
+        else if (item.email) key.email = item.email;
+        else if (item.id) key.id = item.id;
+
+        if (Object.keys(key).length > 0) {
+          await dynamoDocClient.send(
+            new UpdateCommand({
+              TableName: usersTableName,
+              Key: key,
+              UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
+            })
+          );
+        }
       }
     } catch (e) {}
   }
@@ -113,7 +121,7 @@ export class ApiGatewayWebSocketService {
         const scanRes = await dynamoDocClient.send(
           new ScanCommand({
             TableName: usersTableName,
-            FilterExpression: '(shopId = :sid OR restaurantId = :sid OR id = :sid) AND attribute_exists(socketConnectionId)',
+            FilterExpression: '(shopId = :sid OR restaurantId = :sid OR userId = :sid OR id = :sid) AND attribute_exists(socketConnectionId)',
             ExpressionAttributeValues: { ':sid': shopId }
           })
         );
@@ -122,36 +130,59 @@ export class ApiGatewayWebSocketService {
         });
       } else if (cleanRoom.startsWith('user_')) {
         const userId = cleanRoom.replace('user_', '');
-        const getRes = await dynamoDocClient.send(
-          new GetCommand({
-            TableName: usersTableName,
-            Key: { id: userId }
-          })
-        );
-        if (getRes.Item && getRes.Item.socketConnectionId) {
-          connectionIds.add(getRes.Item.socketConnectionId);
-        }
-      } else if (cleanRoom.startsWith('order_')) {
-        const orderId = cleanRoom.replace('order_', '');
-        const getOrderRes = await dynamoDocClient.send(
-          new GetCommand({
-            TableName: ordersTableName,
-            Key: { id: orderId }
-          })
-        );
-        if (getOrderRes.Item) {
-          if (getOrderRes.Item.customerSocketConnectionId) {
-            connectionIds.add(getOrderRes.Item.customerSocketConnectionId);
-          }
-          if (getOrderRes.Item.customerId) {
-            const getCustRes = await dynamoDocClient.send(
-              new GetCommand({
+        try {
+          const userItem = await userRepository.findByUserId(userId) || await userRepository.findByIdentifier(userId);
+          if (userItem && (userItem as any).socketConnectionId) {
+            connectionIds.add((userItem as any).socketConnectionId);
+          } else {
+            const scanRes = await dynamoDocClient.send(
+              new ScanCommand({
                 TableName: usersTableName,
-                Key: { id: getOrderRes.Item.customerId }
+                FilterExpression: '(userId = :uid OR id = :uid OR email = :uid) AND attribute_exists(socketConnectionId)',
+                ExpressionAttributeValues: { ':uid': userId }
               })
             );
-            if (getCustRes.Item?.socketConnectionId) {
-              connectionIds.add(getCustRes.Item.socketConnectionId);
+            (scanRes.Items || []).forEach(item => {
+              if (item.socketConnectionId) connectionIds.add(item.socketConnectionId);
+            });
+          }
+        } catch (e) {}
+      } else if (cleanRoom.startsWith('order_')) {
+        const orderId = cleanRoom.replace('order_', '');
+        let orderItem: any = null;
+        try {
+          const getOrderRes = await dynamoDocClient.send(
+            new GetCommand({
+              TableName: ordersTableName,
+              Key: { orderId }
+            })
+          );
+          orderItem = getOrderRes.Item;
+        } catch (e) {}
+
+        if (!orderItem) {
+          try {
+            const scanRes = await dynamoDocClient.send(
+              new ScanCommand({
+                TableName: ordersTableName,
+                FilterExpression: 'orderId = :oid OR id = :oid',
+                ExpressionAttributeValues: { ':oid': orderId }
+              })
+            );
+            if (scanRes.Items && scanRes.Items.length > 0) {
+              orderItem = scanRes.Items[0];
+            }
+          } catch (e) {}
+        }
+
+        if (orderItem) {
+          if (orderItem.customerSocketConnectionId) {
+            connectionIds.add(orderItem.customerSocketConnectionId);
+          }
+          if (orderItem.customerId) {
+            const cust = await userRepository.findByUserId(orderItem.customerId);
+            if (cust && (cust as any).socketConnectionId) {
+              connectionIds.add((cust as any).socketConnectionId);
             }
           }
         }

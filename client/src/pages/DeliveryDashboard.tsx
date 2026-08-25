@@ -536,9 +536,16 @@ export const DeliveryDashboard: React.FC = () => {
                   {/* CARD HEADER ROW */}
                   <div className="flex items-center justify-between border-b border-glass/40 pb-3">
                     <div>
-                      <span className="text-[10px] font-black uppercase text-primary tracking-widest block mb-0.5">
-                        Assigned Delivery Task
-                      </span>
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="text-[10px] font-black uppercase text-primary tracking-widest block">
+                          Assigned Delivery Task
+                        </span>
+                        {order.isMultiVendor && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-purple-500/15 border border-purple-500/30 text-purple-600 dark:text-purple-400">
+                            🔀 Multi-Vendor Pickup
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-base sm:text-lg font-black font-mono text-text-primary tracking-tight">
                         #{orderId}
                       </h3>
@@ -552,8 +559,47 @@ export const DeliveryDashboard: React.FC = () => {
                     </span>
                   </div>
 
+                  {order.cancellationNotice && (
+                    <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-extrabold flex items-center gap-2">
+                      <AlertTriangle size={15} className="shrink-0 text-rose-500" />
+                      <span>{order.cancellationNotice}</span>
+                    </div>
+                  )}
+
                   {/* VISUAL TRANSIT STATUS STEPPER */}
                   <DeliveryTransitVisualTracker status={order.orderStatus || order.status} />
+
+                  {/* MULTI-VENDOR PICKUP STOPS BREAKDOWN IF MULTI-VENDOR */}
+                  {order.isMultiVendor && Array.isArray(order.vendorStatuses) && order.vendorStatuses.length > 0 ? (
+                    <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/30 space-y-2 text-left">
+                      <span className="text-[11px] font-black text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Store size={14} />
+                        <span>Multi-Vendor Pickup Sequence ({order.vendorStatuses.length} Shops)</span>
+                      </span>
+                      <div className="space-y-2">
+                        {order.vendorStatuses.map((vs: any, vIdx: number) => {
+                          const isCancelled = String(vs.status || '').toLowerCase().includes('cancel') || String(vs.status || '').toLowerCase().includes('reject');
+                          return (
+                            <div key={vIdx} className="p-2.5 rounded-lg bg-bg-dark/60 border border-glass/40 flex items-center justify-between text-xs gap-2">
+                              <div>
+                                <span className="font-extrabold text-text-primary block">
+                                  {vIdx + 1}. {vs.restaurantName}
+                                </span>
+                                {vs.restaurantAddress && (
+                                  <span className="text-[10px] text-text-muted block">{vs.restaurantAddress}</span>
+                                )}
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+                                isCancelled ? 'bg-rose-500/20 border-rose-500/40 text-rose-400' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+                              }`}>
+                                {vs.status || 'Preparing'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
 
                   {/* PICKUP & CUSTOMER ADDRESS GRID */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

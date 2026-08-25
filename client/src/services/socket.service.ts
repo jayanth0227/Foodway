@@ -16,8 +16,10 @@ class UnifiedRealtimeSocketService {
 
   private determineEngineMode() {
     const wsEnv = import.meta.env.VITE_WSS_URL || import.meta.env.VITE_WS_URL || '';
-    if (wsEnv && (wsEnv.startsWith('ws://') || wsEnv.startsWith('wss://'))) {
+    if (wsEnv && (wsEnv.startsWith('wss://') || wsEnv.includes('execute-api') || wsEnv.includes('amazonaws.com'))) {
       this.isNativeMode = true;
+    } else {
+      this.isNativeMode = false;
     }
   }
 

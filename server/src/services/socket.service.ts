@@ -4,6 +4,7 @@ import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
 import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
 import { UpdateCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { apiGatewayWS } from './api-gateway-websocket.service';
+import userRepository from '../repositories/user.repository';
 
 export interface SocketUser {
   userId: string;
@@ -140,24 +141,32 @@ export class SocketService {
   public async registerUserSocketId(userId: string, connectionId: string, orderId?: string): Promise<void> {
     if (!userId) return;
     try {
-      await dynamoDocClient.send(
-        new UpdateCommand({
-          TableName: usersTableName,
-          Key: { id: userId },
-          UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
-          ExpressionAttributeValues: {
-            ':cid': connectionId,
-            ':now': new Date().toISOString()
-          }
-        })
-      );
-      console.log(`💾 Saved ConnectionId [${connectionId}] in existing users table for User #${userId}`);
+      const user = await userRepository.findByUserId(userId) || await userRepository.findByIdentifier(userId);
+      if (user) {
+        const key: any = {};
+        if ((user as any).userId) key.userId = (user as any).userId;
+        else if (user.email) key.email = user.email;
+        else key.id = (user as any).id || userId;
+
+        await dynamoDocClient.send(
+          new UpdateCommand({
+            TableName: usersTableName,
+            Key: key,
+            UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
+            ExpressionAttributeValues: {
+              ':cid': connectionId,
+              ':now': new Date().toISOString()
+            }
+          })
+        );
+        console.log(`💾 Saved ConnectionId [${connectionId}] in existing users table for User #${userId}`);
+      }
 
       if (orderId) {
         await dynamoDocClient.send(
           new UpdateCommand({
             TableName: ordersTableName,
-            Key: { id: orderId },
+            Key: { orderId },
             UpdateExpression: 'SET customerSocketConnectionId = :cid',
             ExpressionAttributeValues: {
               ':cid': connectionId
@@ -327,6 +336,18 @@ export class SocketService {
     console.log(`📡 [Socket Emit: LOCATION_UPDATED] -> Location #${location.locationId}`);
     this.dispatchEvent('admin', 'location_updated', location);
     this.dispatchEvent('public', 'location_updated', location);
+  }
+
+  // Multi-Vendor Items Cancelled Alert
+  emitVendorItemsCancelled(payload: any): void {
+    const { parentOrderId, customerId } = payload;
+    console.log(`📡 [Socket Emit: VENDOR_ITEMS_CANCELLED] -> Order #${parentOrderId}`);
+    this.dispatchEvent('admin', 'vendor_items_cancelled', payload);
+    this.dispatchEvent('delivery_riders', 'vendor_items_cancelled', payload);
+    if (customerId) {
+      this.dispatchEvent(`user_${customerId}`, 'vendor_items_cancelled', payload);
+    }
+    this.dispatchEvent('public', 'vendor_items_cancelled', payload);
   }
 
   // Real-Time Delivery Settings & Rates Broadcast
