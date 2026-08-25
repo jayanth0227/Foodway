@@ -86,16 +86,32 @@ export const CustomerOrdersPage: React.FC = () => {
       const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
         console.log('⚡ [Socket Event: ORDER_STATUS_UPDATED]:', updatedOrder);
         const targetId = updatedOrder.orderId || updatedOrder.id;
+        const parentId = updatedOrder.parentOrderId;
         const newStatus = updatedOrder.status || updatedOrder.orderStatus;
-        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: newStatus } : o));
+
+        setOrders(prev => prev.map(o => {
+          const match = (o.orderId === targetId || o.id === targetId || (parentId && (o.orderId === parentId || o.parentOrderId === parentId)));
+          if (match) {
+            return { ...o, status: newStatus, orderStatus: newStatus };
+          }
+          return o;
+        }));
         playOrderAlertBeep();
       });
 
       const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
         console.log('⚡ [Socket Event: RIDER_STATUS_UPDATED]:', updatedOrder);
         const targetId = updatedOrder.orderId || updatedOrder.id;
+        const parentId = updatedOrder.parentOrderId;
         const newStatus = updatedOrder.status || updatedOrder.orderStatus;
-        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: newStatus } : o));
+
+        setOrders(prev => prev.map(o => {
+          const match = (o.orderId === targetId || o.id === targetId || (parentId && (o.orderId === parentId || o.parentOrderId === parentId)));
+          if (match) {
+            return { ...o, status: newStatus, orderStatus: newStatus };
+          }
+          return o;
+        }));
         playOrderAlertBeep();
       });
 
