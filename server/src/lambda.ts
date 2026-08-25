@@ -58,13 +58,20 @@ async function handleWebSocketEvent(event: any, context: any) {
         })
       );
       for (const item of scanRes.Items || []) {
-        await dynamoDocClient.send(
-          new UpdateCommand({
-            TableName: usersTableName,
-            Key: { id: item.id },
-            UpdateExpression: 'REMOVE socketConnectionId'
-          })
-        );
+        const key: any = {};
+        if (item.userId) key.userId = item.userId;
+        else if (item.email) key.email = item.email;
+        else if (item.id) key.id = item.id;
+
+        if (Object.keys(key).length > 0) {
+          await dynamoDocClient.send(
+            new UpdateCommand({
+              TableName: usersTableName,
+              Key: key,
+              UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
+            })
+          );
+        }
       }
     } catch (e) {
       console.warn(`⚠️ WebSocket disconnect cleanup error:`, e);

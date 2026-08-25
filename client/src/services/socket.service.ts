@@ -170,9 +170,8 @@ class UnifiedRealtimeSocketService {
     return this.socketIO;
   }
 
-  public on(eventName: string, callback: (data: any) => void): this {
-    this.subscribeEvent(eventName, callback);
-    return this;
+  public on(eventName: string, callback: (data: any) => void): () => void {
+    return this.subscribeEvent(eventName, callback);
   }
 
   public off(eventName: string, callback: (data: any) => void): this {
