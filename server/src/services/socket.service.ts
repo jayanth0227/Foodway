@@ -190,171 +190,151 @@ export class SocketService {
   }
 
   // Helper to dispatch event to both Socket.IO (Local Dev) & API Gateway WebSocket (AWS Lambda Production)
-  private async dispatchEvent(room: string, eventName: string, payload: any): Promise<void> {
+  private async dispatchEvent(rooms: string | string[], eventName: string, payload: any): Promise<void> {
+    const roomList = Array.isArray(rooms) ? rooms : [rooms];
+
     // 1. Local Dev: Socket.IO
     if (this.io) {
-      if (room === 'public') {
-        this.io.emit(eventName, payload);
-      } else {
-        this.io.to(room).emit(eventName, payload);
-      }
+      roomList.forEach(room => {
+        if (room === 'public') {
+          this.io?.emit(eventName, payload);
+        } else {
+          this.io?.to(room).emit(eventName, payload);
+        }
+      });
     }
 
     // 2. AWS Lambda Production: API Gateway WebSockets via PostToConnection
     try {
-      await apiGatewayWS.broadcastToRoom(room, eventName, payload);
+      await Promise.all(roomList.map(room => apiGatewayWS.broadcastToRoom(room, eventName, payload)));
     } catch (err) {
-      console.warn(`⚠️ API Gateway broadcast error for event [${eventName}] in room [${room}]:`, err);
+      console.warn(`⚠️ API Gateway broadcast error for event [${eventName}]:`, err);
     }
   }
 
-  // --- REAL-TIME BROADCAST EVENT METHODS (Preserved Exact Public Interface) ---
+  // --- REAL-TIME BROADCAST EVENT METHODS (Async & Awaitable for AWS Lambda) ---
 
   // Admin -> Shop / Public: New Shop Created
-  emitShopCreated(shop: any): void {
+  async emitShopCreated(shop: any): Promise<void> {
     const shopId = shop.id || shop.shopId || shop.restaurantId;
     console.log(`📡 [Socket Emit: SHOP_CREATED] -> Shop #${shopId}`);
-    this.dispatchEvent('admin', 'shop_created', shop);
-    this.dispatchEvent('public', 'shop_created', shop);
+    await this.dispatchEvent(['admin', 'public'], 'shop_created', shop);
   }
 
   // Admin / Merchant -> Public / Dashboards: Shop Profile & Location Updated
-  emitShopUpdated(shop: any): void {
+  async emitShopUpdated(shop: any): Promise<void> {
     const shopId = shop.id || shop.shopId || shop.restaurantId;
     console.log(`📡 [Socket Emit: SHOP_UPDATED & LOCATION_UPDATED] -> Shop #${shopId}`, shop);
-    this.dispatchEvent('admin', 'shop_updated', shop);
-    this.dispatchEvent(`restaurant_${shopId}`, 'shop_updated', shop);
-    this.dispatchEvent('public', 'shop_updated', shop);
-    this.dispatchEvent('public', 'foodway_restaurant_updated', shop);
-    this.dispatchEvent('public', 'restaurant_profile_updated', shop);
-    this.dispatchEvent('public', 'location_updated', shop);
+    await Promise.all([
+      this.dispatchEvent(['admin', `restaurant_${shopId}`, 'public'], 'shop_updated', shop),
+      this.dispatchEvent('public', 'foodway_restaurant_updated', shop),
+      this.dispatchEvent('public', 'restaurant_profile_updated', shop),
+      this.dispatchEvent('public', 'location_updated', shop)
+    ]);
   }
 
   // Admin / Merchant -> Public: Shop Open/Close Status Updated
-  emitShopStatusUpdated(shopId: string, isOpen: boolean, status: string): void {
+  async emitShopStatusUpdated(shopId: string, isOpen: boolean, status: string): Promise<void> {
     if (!shopId) return;
     console.log(`📡 [Socket Emit: SHOP_STATUS_UPDATED] -> Shop #${shopId} Open: ${isOpen}`);
     const payload = { shopId, restaurantId: shopId, isOpen, status };
-    this.dispatchEvent('admin', 'foodway_restaurant_status_updated', payload);
-    this.dispatchEvent(`restaurant_${shopId}`, 'foodway_restaurant_status_updated', payload);
-    this.dispatchEvent('public', 'foodway_restaurant_status_updated', payload);
-    this.dispatchEvent('public', 'shop_status_updated', payload);
-    this.dispatchEvent('public', 'restaurant_status_updated', payload);
+    await Promise.all([
+      this.dispatchEvent(['admin', `restaurant_${shopId}`, 'public'], 'foodway_restaurant_status_updated', payload),
+      this.dispatchEvent(['public'], 'shop_status_updated', payload),
+      this.dispatchEvent(['public'], 'restaurant_status_updated', payload)
+    ]);
   }
 
   // Merchant -> Public / Menu: Item Created / Updated / Deleted
-  emitMenuUpdated(restaurantId: string, item?: any): void {
+  async emitMenuUpdated(restaurantId: string, item?: any): Promise<void> {
     if (!restaurantId) return;
     console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}] Item:`, item);
     const payload = { restaurantId, shopId: restaurantId, item, dish: item };
-    this.dispatchEvent(`restaurant_${restaurantId}`, 'menu_updated', payload);
-    this.dispatchEvent('public', 'menu_updated', payload);
-    this.dispatchEvent('public', 'foodway_menu_updated', payload);
+    await Promise.all([
+      this.dispatchEvent([`restaurant_${restaurantId}`, 'public'], 'menu_updated', payload),
+      this.dispatchEvent('public', 'foodway_menu_updated', payload)
+    ]);
   }
 
   // Customer -> Merchant & Admin: New Order Created
-  emitOrderCreated(order: any): void {
+  async emitOrderCreated(order: any): Promise<void> {
     const restRoom = `restaurant_${order.restaurantId}`;
     const userRoom = `user_${order.customerId}`;
     console.log(`📡 [Socket Emit: ORDER_CREATED] -> Room [${restRoom}] Order #${order.orderId}`);
-    this.dispatchEvent('admin', 'order_created', order);
-    this.dispatchEvent(restRoom, 'order_created', order);
-    this.dispatchEvent(userRoom, 'order_created', order);
-    this.dispatchEvent('public', 'order_created', order);
+    await this.dispatchEvent(['admin', restRoom, userRoom, 'public'], 'order_created', order);
   }
 
   // Merchant / Admin / Rider -> Customer & Merchant: Order Status Updated
-  emitOrderStatusUpdated(order: any): void {
+  async emitOrderStatusUpdated(order: any): Promise<void> {
     const userRoom = `user_${order.customerId}`;
     const orderRoom = `order_${order.orderId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
 
     console.log(`📡 [Socket Emit: ORDER_STATUS_UPDATED] -> Order #${order.orderId} Status: ${order.status}`);
-    this.dispatchEvent('admin', 'order_status_updated', order);
-    this.dispatchEvent(userRoom, 'order_status_updated', order);
-    this.dispatchEvent(orderRoom, 'order_status_updated', order);
-    this.dispatchEvent(restRoom, 'order_status_updated', order);
-    this.dispatchEvent('public', 'order_status_updated', order);
+    await this.dispatchEvent(['admin', userRoom, orderRoom, restRoom, 'public'], 'order_status_updated', order);
   }
 
   // Merchant -> Delivery Partner Broadcast: Order Ready for Pickup
-  emitOrderReadyForPickup(order: any): void {
+  async emitOrderReadyForPickup(order: any): Promise<void> {
     console.log(`📡 [Socket Emit: ORDER_READY_PICKUP] -> Room [delivery_riders] Order #${order.orderId}`);
-    this.dispatchEvent('admin', 'order_ready_pickup', order);
-    this.dispatchEvent('delivery_riders', 'order_ready_pickup', order);
-    this.dispatchEvent('public', 'order_ready_pickup', order);
+    await this.dispatchEvent(['admin', 'delivery_riders', 'public'], 'order_ready_pickup', order);
   }
 
   // Rider -> Customer & Merchant & Admin: Rider Status Updated
-  emitRiderStatusUpdated(order: any): void {
+  async emitRiderStatusUpdated(order: any): Promise<void> {
     const userRoom = `user_${order.customerId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
     const orderRoom = `order_${order.orderId}`;
 
     console.log(`📡 [Socket Emit: RIDER_STATUS_UPDATED] -> Order #${order.orderId} Rider Status: ${order.status}`);
-    this.dispatchEvent('admin', 'rider_status_updated', order);
-    this.dispatchEvent(userRoom, 'rider_status_updated', order);
-    this.dispatchEvent(restRoom, 'rider_status_updated', order);
-    this.dispatchEvent(orderRoom, 'rider_status_updated', order);
-    this.dispatchEvent('public', 'rider_status_updated', order);
+    await this.dispatchEvent(['admin', userRoom, restRoom, orderRoom, 'public'], 'rider_status_updated', order);
   }
 
   // Admin -> Delivery Partner / Customer / Merchant: Order Assigned to Delivery Agent
-  emitOrderAssigned(order: any): void {
+  async emitOrderAssigned(order: any): Promise<void> {
     const userRoom = `user_${order.customerId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
     const orderRoom = `order_${order.orderId}`;
     const deliveryRoom = `delivery_${order.deliveryUserId}`;
 
     console.log(`📡 [Socket Emit: ORDER_ASSIGNED] -> Order #${order.orderId} assigned to Rider #${order.deliveryUserId}`);
-    this.dispatchEvent('admin', 'order_assigned', order);
-    this.dispatchEvent(deliveryRoom, 'order_assigned', order);
-    this.dispatchEvent('delivery_riders', 'order_assigned', order);
-    this.dispatchEvent(userRoom, 'order_assigned', order);
-    this.dispatchEvent(restRoom, 'order_assigned', order);
-    this.dispatchEvent(orderRoom, 'order_assigned', order);
+    await this.dispatchEvent(['admin', deliveryRoom, 'delivery_riders', userRoom, restRoom, orderRoom], 'order_assigned', order);
   }
 
   // Delivery Partner -> Admin / Riders: Duty Status Updated
-  emitDeliveryDutyUpdated(partner: any): void {
+  async emitDeliveryDutyUpdated(partner: any): Promise<void> {
     console.log(`📡 [Socket Emit: PARTNER_DUTY_UPDATED] -> Partner #${partner.userId} OnDuty: ${partner.isOnDuty}`);
-    this.dispatchEvent('admin', 'partner_duty_updated', partner);
-    this.dispatchEvent('delivery_riders', 'partner_duty_updated', partner);
-    this.dispatchEvent('public', 'partner_duty_updated', partner);
+    await this.dispatchEvent(['admin', 'delivery_riders', 'public'], 'partner_duty_updated', partner);
   }
 
   // Multi-device Cart Synchronization
-  emitCartUpdated(userId: string, cartItems: any[]): void {
+  async emitCartUpdated(userId: string, cartItems: any[]): Promise<void> {
     if (!userId) return;
     const userRoom = `user_${userId}`;
     console.log(`📡 [Socket Emit: CART_UPDATED] -> Room [${userRoom}] Items Count: ${cartItems.length}`);
-    this.dispatchEvent(userRoom, 'cart_updated', { userId, cartItems });
+    await this.dispatchEvent(userRoom, 'cart_updated', { userId, cartItems });
   }
 
   // Delivery Locations Updated
-  emitLocationUpdated(location: any): void {
+  async emitLocationUpdated(location: any): Promise<void> {
     console.log(`📡 [Socket Emit: LOCATION_UPDATED] -> Location #${location.locationId}`);
-    this.dispatchEvent('admin', 'location_updated', location);
-    this.dispatchEvent('public', 'location_updated', location);
+    await this.dispatchEvent(['admin', 'public'], 'location_updated', location);
   }
 
   // Multi-Vendor Items Cancelled Alert
-  emitVendorItemsCancelled(payload: any): void {
+  async emitVendorItemsCancelled(payload: any): Promise<void> {
     const { parentOrderId, customerId } = payload;
     console.log(`📡 [Socket Emit: VENDOR_ITEMS_CANCELLED] -> Order #${parentOrderId}`);
-    this.dispatchEvent('admin', 'vendor_items_cancelled', payload);
-    this.dispatchEvent('delivery_riders', 'vendor_items_cancelled', payload);
-    if (customerId) {
-      this.dispatchEvent(`user_${customerId}`, 'vendor_items_cancelled', payload);
-    }
-    this.dispatchEvent('public', 'vendor_items_cancelled', payload);
+    const rooms = ['admin', 'delivery_riders', 'public'];
+    if (customerId) rooms.push(`user_${customerId}`);
+    await this.dispatchEvent(rooms, 'vendor_items_cancelled', payload);
   }
 
   // Real-Time Delivery Settings & Rates Broadcast
-  emitDeliverySettingsUpdated(settings: any): void {
+  async emitDeliverySettingsUpdated(settings: any): Promise<void> {
     console.log(`📡 [Socket Emit: DELIVERY_SETTINGS_UPDATED] -> Rates updated live!`, settings);
-    this.dispatchEvent('public', 'delivery_settings_updated', settings);
-    this.dispatchEvent('public', 'foodway_delivery_settings_updated', settings);
+    await this.dispatchEvent(['public'], 'delivery_settings_updated', settings);
+    await this.dispatchEvent(['public'], 'foodway_delivery_settings_updated', settings);
   }
 }
 

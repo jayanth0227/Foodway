@@ -188,7 +188,7 @@ export const DeliveryDashboard: React.FC = () => {
     return null;
   };
 
-  // Toggle Duty Status with Backend & Socket Broadcast
+  // Toggle Duty Status with Backend (Backend automatically broadcasts partner_duty_updated via WebSocket)
   const handleToggleDuty = async (nextDutyState: boolean) => {
     setIsOnDuty(nextDutyState);
     try {
@@ -197,13 +197,6 @@ export const DeliveryDashboard: React.FC = () => {
         name: user?.name,
         email: user?.email,
         isOnDuty: nextDutyState
-      });
-      socketService.emit('partner_duty_updated', {
-        userId: user?.id,
-        name: user?.name,
-        email: user?.email,
-        isOnDuty: nextDutyState,
-        dutyStatus: nextDutyState ? 'ON_DUTY' : 'OFF_DUTY'
       });
     } catch (e) {
       console.warn('Failed to update duty status on backend:', e);

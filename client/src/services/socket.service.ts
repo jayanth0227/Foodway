@@ -54,12 +54,29 @@ class UnifiedRealtimeSocketService {
         // Start ping heartbeat
         this.startHeartbeat();
 
+        // Register authenticated connectionId with token + userId
+        const token = localStorage.getItem('foodway_auth_token') || localStorage.getItem('mk_auth_token') || '';
+        const userStr = localStorage.getItem('foodway_user') || localStorage.getItem('mk_user') || '';
+        let userId = '';
+        try {
+          if (userStr) {
+            const u = JSON.parse(userStr);
+            userId = u.id || u.userId || u._id || '';
+          }
+        } catch (e) {}
+
+        this.sendNativeEvent('register_connection', {
+          token,
+          userId,
+          rooms: Array.from(this.joinedRooms)
+        });
+
         // Re-join tracked rooms on reconnect
         this.joinedRooms.forEach(roomKey => {
           const parts = roomKey.split('_');
           const type = parts[0];
           const id = parts.slice(1).join('_');
-          this.sendNativeEvent('join_room', { room: roomKey, type, id });
+          this.sendNativeEvent('join_room', { room: roomKey, type, id, userId, token });
         });
       };
 

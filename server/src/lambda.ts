@@ -88,8 +88,20 @@ async function handleWebSocketEvent(event: any, context: any) {
       }
 
       const action = payload.action || payload.event || payload.type || '';
-      const userId = payload.userId || payload.data?.userId;
+      const token = payload.token || payload.data?.token || '';
+      let userId = payload.userId || payload.data?.userId;
       const orderId = payload.orderId || payload.data?.orderId;
+
+      if (token) {
+        try {
+          const decoded = verifyToken(token);
+          if (decoded && (decoded.id || decoded.email)) {
+            userId = decoded.id;
+          }
+        } catch (err: any) {
+          console.warn(`⚠️ $default JWT verification warning:`, err?.message);
+        }
+      }
 
       if (action === 'register_connection' || action === 'join_room' || action === 'join_user') {
         if (userId) {
@@ -106,8 +118,17 @@ async function handleWebSocketEvent(event: any, context: any) {
   return { statusCode: 200, body: 'OK' };
 }
 
+import { initializeFirebaseAdmin } from './config/firebase';
+
 // Master Unified Lambda Handler (Auto-detects HTTP API vs WebSocket API)
 export const handler = async (event: any, context: any) => {
+  // Ensure Firebase Admin is initialized non-blockingly from AWS Secrets Manager / local config
+  try {
+    await initializeFirebaseAdmin();
+  } catch (fbErr: any) {
+    console.warn('⚠️ Firebase async initialization warning:', fbErr?.message);
+  }
+
   // Check if event is an AWS API Gateway WebSocket Event
   const rc = event.requestContext;
   const isWebSocketEvent = rc && (rc.connectionId || rc.routeKey === '$connect' || rc.routeKey === '$disconnect' || rc.routeKey === '$default' || rc.eventType === 'CONNECT' || rc.eventType === 'DISCONNECT' || rc.eventType === 'MESSAGE');

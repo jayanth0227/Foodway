@@ -918,8 +918,7 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       // ⚡ Real-Time Socket Emission to Merchant Room & Broadcast
       try {
         if (socketService) {
-          socketService.emitOrderCreated(newOrderObj);
-          socketService.getIO().emit('order_created', newOrderObj);
+          await socketService.emitOrderCreated(newOrderObj);
           console.log(`📡 [Real-Time Order Alert] Emitted order_created for Order #${created.order.orderId} to vendor ${vId}`);
         }
       } catch (e: any) {
@@ -1026,12 +1025,9 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
             });
           }
         } else {
-          socketService.emitOrderStatusUpdated(updated);
-          socketService.emitRiderStatusUpdated(updated);
+          await socketService.emitOrderStatusUpdated(updated);
+          await socketService.emitRiderStatusUpdated(updated);
         }
-
-        socketService.getIO().emit('order_status_updated', updated);
-        socketService.getIO().emit('rider_status_updated', updated);
 
         const st = String(updated.status || status).toLowerCase();
 
@@ -1043,13 +1039,12 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
 
         if (allActiveReady || st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
           console.log(`📡 [Real-Time Socket] Emitting order_ready_pickup for Multi-Vendor Order #${parentId}`);
-          socketService.emitOrderReadyForPickup({
+          await socketService.emitOrderReadyForPickup({
             ...updated,
             orderId: parentId,
             status: 'READY'
           });
-          socketService.getIO().emit('order_ready_pickup', { ...updated, orderId: parentId });
-          socketService.getIO().emit('order_assigned', { ...updated, orderId: parentId });
+          await socketService.emitOrderAssigned({ ...updated, orderId: parentId });
         }
       }
     } catch (e: any) {
@@ -2113,9 +2108,9 @@ app.put('/api/delivery-partner/duty-status', async (req: Request, res: Response)
 
     // Broadcast Real-Time Duty Status Update via Socket to ALL connected clients (Admin + Rider)
     try {
-      if (socketService && socketService.getIO()) {
+      if (socketService) {
         console.log('📢 Emitting partner_duty_updated via WebSocket:', { userId, name, email, isOnDuty, dutyStatus });
-        socketService.getIO().emit('partner_duty_updated', { userId, name, email, isOnDuty, dutyStatus });
+        await socketService.emitDeliveryDutyUpdated({ userId, name, email, isOnDuty, dutyStatus });
       }
     } catch (socErr) {
       console.warn('⚠️ Error broadcasting duty status socket event:', socErr);
