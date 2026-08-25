@@ -170,8 +170,40 @@ class UnifiedRealtimeSocketService {
     return this.socketIO;
   }
 
+  public on(eventName: string, callback: (data: any) => void): this {
+    this.subscribeEvent(eventName, callback);
+    return this;
+  }
+
+  public off(eventName: string, callback: (data: any) => void): this {
+    this.listeners.get(eventName)?.delete(callback);
+    if (!this.isNativeMode && this.socketIO) {
+      this.socketIO.off(eventName, callback);
+    }
+    return this;
+  }
+
+  public emit(eventName: string, data?: any): this {
+    if (this.isNativeMode) {
+      this.sendNativeEvent(eventName, data);
+    } else {
+      this.connectSocketIO().emit(eventName, data);
+    }
+    return this;
+  }
+
+  public getIO(): any {
+    return this;
+  }
+
   public getSocket(): any {
-    return this.connect();
+    const socketObj = this.connect();
+    if (socketObj && typeof socketObj === 'object' && !socketObj.on) {
+      socketObj.on = (eventName: string, cb: (data: any) => void) => this.on(eventName, cb);
+      socketObj.off = (eventName: string, cb: (data: any) => void) => this.off(eventName, cb);
+      socketObj.emit = (eventName: string, data?: any) => this.emit(eventName, data);
+    }
+    return socketObj;
   }
 
   // Unified Event Registration (Works for Native WS & Socket.io)

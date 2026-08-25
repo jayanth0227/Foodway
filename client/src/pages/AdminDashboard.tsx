@@ -625,7 +625,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     });
 
     // Real-Time Delivery Partner Duty Status Listener (ON_DUTY vs OFF_DUTY / OFFLINE)
-    const socket = socketService.connect();
     const handleDutyUpdate = (data: any) => {
       console.log('⚡ [Socket Event: PARTNER_DUTY_UPDATED]:', data);
       const targetDuty = data.dutyStatus || (data.isOnDuty ? 'ON_DUTY' : 'OFF_DUTY');
@@ -652,7 +651,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         return updated;
       });
     };
-    socket.on('partner_duty_updated', handleDutyUpdate);
+    const unsubscribeDuty = socketService.onPartnerDutyUpdated(handleDutyUpdate);
 
     return () => {
       unsubscribeShopCreated();
@@ -662,7 +661,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       unsubscribeOrderAssigned();
       unsubscribeStatus();
       unsubscribeRider();
-      socket.off('partner_duty_updated', handleDutyUpdate);
+      unsubscribeDuty();
     };
   }, []);
 
