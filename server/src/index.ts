@@ -129,36 +129,90 @@ app.get('/api/aws/status', (req: Request, res: Response) => {
 // Admin API Routes
 // -----------------
 
-// Platform System Settings — defaults, backed by DynamoDB for Lambda persistence
+// Platform System Settings — defaults, backed by DynamoDB & local file for complete persistence
 const defaultPlatformSettings = {
   deliveryFeePerKm: 15,
   baseDeliveryFee: 25,
   freeDeliveryThreshold: 0
 };
 
-// Helper: Read platform settings from DynamoDB (with in-memory cache per invocation)
-let _settingsCache: typeof defaultPlatformSettings | null = null;
-async function getPlatformSettings(): Promise<typeof defaultPlatformSettings> {
-  if (_settingsCache) return _settingsCache;
+const settingsFilePath = path.resolve(__dirname, '../data/platform_settings.json');
+function readSettingsFromFile() {
   try {
-    if (tableName) {
-      const result = await dynamoDocClient.send(new GetCommand({ TableName: tableName, Key: { id: 'platform_settings', email: 'platform_settings' } }));
-      if (result.Item) {
+    if (fs.existsSync(settingsFilePath)) {
+      const data = fs.readFileSync(settingsFilePath, 'utf-8');
+      return JSON.parse(data);
+    }
+  } catch (e) {}
+  return null;
+}
+
+function saveSettingsToFile(settings: any) {
+  try {
+    const dir = path.dirname(settingsFilePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(settingsFilePath, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (e) {}
+}
+
+// Helper: Read platform settings from DynamoDB & local disk file
+let _settingsCache: typeof defaultPlatformSettings | null = null;
+async function getPlatformSettings(forceRefresh = false): Promise<typeof defaultPlatformSettings> {
+  if (_settingsCache && !forceRefresh) return _settingsCache;
+
+  // 1. Try reading from DynamoDB
+  const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+  for (const tName of tablesToTry) {
+    try {
+      const result = await dynamoDocClient.send(new GetCommand({ TableName: tName, Key: { id: 'platform_settings', email: 'platform_settings' } }));
+      if (result.Item && typeof result.Item.deliveryFeePerKm === 'number') {
         _settingsCache = {
-          deliveryFeePerKm: result.Item.deliveryFeePerKm ?? defaultPlatformSettings.deliveryFeePerKm,
-          baseDeliveryFee: result.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee,
-          freeDeliveryThreshold: result.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold
+          deliveryFeePerKm: Number(result.Item.deliveryFeePerKm),
+          baseDeliveryFee: Number(result.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
+          freeDeliveryThreshold: Number(result.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
         };
+        saveSettingsToFile(_settingsCache);
         return _settingsCache;
       }
-    }
-  } catch (e) { }
+    } catch (e) { }
+  }
+
+  // 2. Try reading from local disk file
+  const fileSettings = readSettingsFromFile();
+  if (fileSettings && typeof fileSettings.deliveryFeePerKm === 'number') {
+    _settingsCache = {
+      deliveryFeePerKm: Number(fileSettings.deliveryFeePerKm),
+      baseDeliveryFee: Number(fileSettings.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
+      freeDeliveryThreshold: Number(fileSettings.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
+    };
+    return _settingsCache;
+  }
+
   _settingsCache = { ...defaultPlatformSettings };
   return _settingsCache;
 }
 
 // GET Admin System Settings
 app.get('/api/admin/settings', async (req: Request, res: Response) => {
+  const settings = await getPlatformSettings(true);
+  res.json({ success: true, settings });
+});
+
+// GET Public / Cart Delivery Settings
+app.get('/api/settings/delivery', async (req: Request, res: Response) => {
+  const settings = await getPlatformSettings();
+  res.json({
+    success: true,
+    deliveryFeePerKm: settings.deliveryFeePerKm,
+    baseDeliveryFee: settings.baseDeliveryFee,
+    freeDeliveryThreshold: settings.freeDeliveryThreshold,
+    settings
+  });
+});
+
+app.get('/api/settings', async (req: Request, res: Response) => {
   const settings = await getPlatformSettings();
   res.json({ success: true, settings });
 });
@@ -178,15 +232,36 @@ app.put('/api/admin/settings', async (req: Request, res: Response) => {
       settings.freeDeliveryThreshold = Number(freeDeliveryThreshold);
     }
     _settingsCache = settings;
-    // Persist to DynamoDB
-    try {
-      if (tableName) {
-        await dynamoDocClient.send(new PutCommand({ TableName: tableName, Item: { id: 'platform_settings', email: 'platform_settings', ...settings, updatedAt: new Date().toISOString() } }));
-      }
-    } catch (e) { }
+
+    // 1. Save to local disk file for instant persistence
+    saveSettingsToFile(settings);
+
+    // 2. Persist to DynamoDB tables
+    const tablesToUpdate = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+    for (const tName of tablesToUpdate) {
+      try {
+        await dynamoDocClient.send(new PutCommand({
+          TableName: tName,
+          Item: {
+            id: 'platform_settings',
+            userId: 'platform_settings',
+            email: 'platform_settings',
+            settingId: 'platform_settings',
+            pk: 'platform_settings',
+            ...settings,
+            updatedAt: new Date().toISOString()
+          }
+        }));
+      } catch (e) { }
+    }
+
+    // 3. Broadcast real-time live update to all active customer sessions
+    if (socketService) {
+      socketService.emitDeliverySettingsUpdated(settings);
+    }
     res.json({
       success: true,
-      message: 'Delivery fee settings updated successfully.',
+      message: 'Delivery fee settings updated and saved to DynamoDB successfully.',
       settings
     });
   } catch (err: any) {
@@ -347,6 +422,10 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
       } catch (e) { }
     }
 
+    if (socketService) {
+      socketService.emitShopStatusUpdated(resId, isOpen, nextStatus);
+    }
+
     res.json({ success: true, message: `Restaurant status updated to ${nextStatus}.`, isOpen, status: nextStatus });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to update restaurant status.', details: error.message });
@@ -361,6 +440,7 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
       const isClosed = r.isOpen === false || r.isOpen === 'false' || r.status === 'closed' || r.status === 'inactive' || r.status === 'INACTIVE' || r.status === 'OFFLINE' || r.status === 'offline' || r.status === 'CLOSED';
       const resId = r.shopId || r.restaurantId || r.id;
       const resName = r.shopName || r.restaurantName || r.name;
+      const dietaryType = r.dietaryType || (r.isVegOnly ? 'PURE_VEG' : 'BOTH');
       return {
         id: resId,
         shopId: resId,
@@ -376,7 +456,9 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
         status: isClosed ? 'closed' : 'active',
         address: r.address || '',
         phone: r.phone || '',
-        description: r.description || ''
+        description: r.description || '',
+        dietaryType,
+        isVegOnly: dietaryType === 'PURE_VEG'
       };
     });
     res.json({ success: true, restaurants: mapped });
@@ -634,6 +716,45 @@ app.post('/api/orders', async (req: Request, res: Response) => {
     });
 
     const vendorIds = Object.keys(vendorItemsMap);
+
+    // Validate store status and item availability before order creation
+    for (let index = 0; index < vendorIds.length; index++) {
+      const vId = vendorIds[index];
+      const { restaurantName: vName, items: vItems } = vendorItemsMap[vId];
+
+      const shop = await shopService.getShopById(vId);
+      if (shop) {
+        const statusStr = String(shop.status || '').toLowerCase();
+        const isClosed = shop.isOpen === false || (shop as any).isOpen === 'false' || statusStr === 'closed' || statusStr === 'inactive' || statusStr === 'offline';
+        if (isClosed) {
+          const shopName = (shop as any).shopName || (shop as any).restaurantName || (shop as any).name || vName;
+          return res.status(400).json({
+            success: false,
+            error: `Store "${shopName}" is currently closed and not accepting online orders right now.`
+          });
+        }
+      }
+
+      for (const item of vItems) {
+        if (item.isAvailable === false || item.isAvailable === 'false') {
+          return res.status(400).json({
+            success: false,
+            error: `Item "${item.name || item.foodName}" is currently unavailable from store.`
+          });
+        }
+        const itemId = item.id || item.menuItemId || item.itemId;
+        if (itemId) {
+          const dbItem = await menuService.getItemById(itemId);
+          if (dbItem && (dbItem.isAvailable === false || (dbItem as any).isAvailable === 'false')) {
+            return res.status(400).json({
+              success: false,
+              error: `Item "${item.name || item.foodName || dbItem.name}" is currently unavailable from store.`
+            });
+          }
+        }
+      }
+    }
+
     const parentOrderId = `ORD-${Date.now()}`;
     const createdSubOrders: any[] = [];
 
@@ -1082,11 +1203,16 @@ app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Missing required restaurant parameters.' });
     }
 
+    const isNew = !data.id && !data.restaurantId && !data.shopId;
+    if (isNew && (!data.password || !data.password.trim())) {
+      return res.status(400).json({ success: false, error: 'Password is required to create a new vendor account.' });
+    }
+
     const result = await restaurantService.registerRestaurant({
       restaurantName: name,
       ownerName: data.ownerName || name,
       email: email,
-      password: data.password || 'restaurant123',
+      password: data.password && data.password.trim() ? data.password.trim() : undefined,
       phone: data.phone || '',
       address: data.address || '',
       cuisine: data.category || data.cuisine || 'Multi-Cuisine',
@@ -1097,6 +1223,10 @@ app.post('/api/admin/restaurant', async (req: Request, res: Response) => {
     });
 
     const saved = result.shop || (result as any).restaurant;
+
+    if (socketService) {
+      socketService.emitShopCreated(saved);
+    }
 
     return res.json({
       success: true,
@@ -1313,6 +1443,7 @@ app.post('/api/restaurant/login', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'Email and password are required.' });
     }
 
+    const cleanEmail = email.trim().toLowerCase();
     let matchedRestaurant: any = null;
 
     if (tableName) {
@@ -1320,15 +1451,47 @@ app.post('/api/restaurant/login', async (req: Request, res: Response) => {
         const scanCommand = new ScanCommand({ TableName: tableName });
         const scanResponse = await dynamoDocClient.send(scanCommand);
         if (scanResponse.Items) {
-          matchedRestaurant = scanResponse.Items.find(
-            (item: any) =>
-              (item.type === 'restaurant' || item.pk?.startsWith('RESTAURANT#') || item.email) &&
-              item.email?.toLowerCase() === email.toLowerCase() &&
-              item.password === password
-          );
+          for (const item of scanResponse.Items) {
+            if ((item.type === 'restaurant' || item.pk?.startsWith('RESTAURANT#') || item.email) && item.email?.toLowerCase() === cleanEmail) {
+              const storedPass = item.password || item.pass || item.vendorPassword;
+              let isMatch = false;
+              if (storedPass) {
+                try {
+                  isMatch = await comparePassword(password, storedPass);
+                } catch (e) { }
+                if (!isMatch && storedPass === password) {
+                  isMatch = true;
+                }
+              }
+              if (isMatch) {
+                matchedRestaurant = item;
+                break;
+              }
+            }
+          }
         }
       } catch (err) {
         console.warn('DynamoDB scan failed during restaurant login:', err);
+      }
+    }
+
+    if (!matchedRestaurant) {
+      // Fallback check against restaurantRepository
+      const restRepoMatch = await shopRepository.findByEmail(cleanEmail);
+      if (restRepoMatch) {
+        const storedPass = (restRepoMatch as any).password || (restRepoMatch as any).pass;
+        let isMatch = false;
+        if (storedPass) {
+          try {
+            isMatch = await comparePassword(password, storedPass);
+          } catch (e) { }
+          if (!isMatch && storedPass === password) {
+            isMatch = true;
+          }
+        }
+        if (isMatch) {
+          matchedRestaurant = restRepoMatch;
+        }
       }
     }
 
@@ -1890,6 +2053,10 @@ app.put('/api/restaurant/profile/:restaurantId', async (req: Request, res: Respo
 
     const updated = await restaurantService.updateProfile(restaurantId, profileUpdates);
 
+    if (socketService) {
+      socketService.emitShopUpdated(updated || profileUpdates);
+    }
+
     res.json({
       success: true,
       message: 'Restaurant profile updated successfully.',
@@ -2224,6 +2391,14 @@ app.delete('/api/restaurant/categories/:restaurantId/:categoryName', async (req:
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to delete category.', details: error.message });
   }
+});
+
+// Admin Endpoint: Reset/Seed default password (DISABLED)
+app.post('/api/admin/seed-shop-passwords', async (_req: Request, res: Response) => {
+  return res.status(400).json({
+    success: false,
+    error: 'Default password seeding has been disabled. Vendor passwords must be set during registration or updated in profile settings.'
+  });
 });
 
 // Centralized Production Error Handling Middleware

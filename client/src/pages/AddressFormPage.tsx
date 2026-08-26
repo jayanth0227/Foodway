@@ -90,7 +90,7 @@ const LocationMarker: React.FC<{
 export const AddressFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { addressId } = useParams<{ addressId?: string }>();
-  const { user, isAuthenticated, updateProfile } = useAuth();
+  const { user, isAuthenticated, isLoading, updateProfile } = useAuth();
 
   const isEditing = Boolean(addressId);
 
@@ -110,8 +110,8 @@ export const AddressFormPage: React.FC = () => {
   // Coordinates State (Default to Hyderabad center)
   const DEFAULT_LAT = 17.3850;
   const DEFAULT_LNG = 78.4867;
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
+  const [lat, setLat] = useState<number | undefined>(undefined);
+  const [lng, setLng] = useState<number | undefined>(undefined);
   const [mapPosition, setMapPosition] = useState<[number, number]>([DEFAULT_LAT, DEFAULT_LNG]);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
@@ -119,6 +119,7 @@ export const AddressFormPage: React.FC = () => {
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
+    if (isLoading) return;
     if (!isAuthenticated && !user) {
       navigate('/login', { state: { from: window.location.pathname } });
       return;
@@ -239,6 +240,23 @@ export const AddressFormPage: React.FC = () => {
     setIsSaving(true);
     setStatus(null);
 
+    let finalLat = lat;
+    let finalLng = lng;
+
+    if (!finalLat || !finalLng) {
+      try {
+        const fullAddrStr = [street, area, city, state, pincode].filter(Boolean).join(', ');
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddrStr)}&limit=1`);
+        const data = await resp.json();
+        if (data && data[0] && data[0].lat && data[0].lon) {
+          finalLat = parseFloat(data[0].lat);
+          finalLng = parseFloat(data[0].lon);
+          setLat(finalLat);
+          setLng(finalLng);
+        }
+      } catch (e) {}
+    }
+
     const existingAddresses: Address[] = user?.addresses || [];
     let updatedAddresses: Address[] = [...existingAddresses];
 
@@ -258,8 +276,8 @@ export const AddressFormPage: React.FC = () => {
             state: state.trim(),
             pincode: pincode.trim(),
             landmark: landmark.trim(),
-            latitude: lat ?? undefined,
-            longitude: lng ?? undefined,
+            latitude: finalLat ?? undefined,
+            longitude: finalLng ?? undefined,
             isDefault
           };
         }
@@ -277,8 +295,8 @@ export const AddressFormPage: React.FC = () => {
         state: state.trim(),
         pincode: pincode.trim(),
         landmark: landmark.trim(),
-        latitude: lat ?? undefined,
-        longitude: lng ?? undefined,
+        latitude: finalLat ?? undefined,
+        longitude: finalLng ?? undefined,
         isDefault: isDefault || existingAddresses.length === 0
       };
 

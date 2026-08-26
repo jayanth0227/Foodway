@@ -25,8 +25,7 @@ const OBSOLETE_KEYS = [
   'foodway_video_urls',
   'hms_laboratory_inventory',
   'hms_payroll',
-  'hms_settings_invoice',
-  'mk_cart'
+  'hms_settings_invoice'
 ];
 
 /**
@@ -47,7 +46,7 @@ export const cleanupObsoleteStorage = (): void => {
 };
 
 /**
- * Save auth data into React/JS memory state (and clear obsolete persistent storage)
+ * Save auth data into React/JS memory state AND persistent storage
  */
 export const saveSession = (
   token: string,
@@ -60,49 +59,130 @@ export const saveSession = (
     role: (user.role || 'USER').toUpperCase() as Role
   };
 
-  // Run security cleanup of persistent storage
+  try {
+    localStorage.removeItem('foodway_explicit_logout');
+    localStorage.setItem('foodway_session_token', token);
+    localStorage.setItem('foodway_session_user', JSON.stringify(inMemoryUser));
+  } catch (e) { }
+
+  // Run security cleanup of obsolete persistent storage
   cleanupObsoleteStorage();
 };
 
 /**
- * Clear in-memory session and purge obsolete storage
+ * Clear in-memory session and persistent storage thoroughly
  */
 export const clearSession = (): void => {
   inMemoryAccessToken = null;
   inMemoryUser = null;
 
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('foodway_explicit_logout', 'true');
+
+      const allAuthKeys = [
+        'foodway_session_token',
+        'foodway_session_user',
+        'foodway_auth_token',
+        'mk_auth_token',
+        'restaurantAuth',
+        'adminAuth',
+        'userAuth',
+        'currentUser',
+        'vendor_active_tab',
+        'admin_active_tab',
+        'foodway_jwt_token',
+        'foodway_user_id',
+        'foodway_user_role',
+        'foodway_user_name',
+        'foodway_user_email',
+        'foodway_user_phone',
+        'foodway_user_addresses',
+        'foodway_restaurant_id',
+        'foodway_token_expiry',
+        'foodway_status_changed_at'
+      ];
+
+      allAuthKeys.forEach((key) => {
+        localStorage.removeItem(key);
+        sessionStorage.removeItem(key);
+      });
+
+      try {
+        sessionStorage.clear();
+      } catch (e) {}
+    }
+  } catch (e) { }
+
   cleanupObsoleteStorage();
 };
 
 /**
- * Retrieve active in-memory JWT Access Token
+ * Retrieve active JWT Access Token
  */
 export const getToken = (): string | null => {
-  return inMemoryAccessToken;
+  if (inMemoryAccessToken) return inMemoryAccessToken;
+  try {
+    const saved = localStorage.getItem('foodway_session_token');
+    if (saved) {
+      inMemoryAccessToken = saved;
+      return saved;
+    }
+  } catch (e) { }
+  return null;
 };
 
 /**
- * Set active in-memory JWT Access Token
+ * Set active JWT Access Token
  */
 export const setToken = (token: string | null): void => {
   inMemoryAccessToken = token;
+  try {
+    if (token) {
+      localStorage.setItem('foodway_session_token', token);
+    } else {
+      localStorage.removeItem('foodway_session_token');
+    }
+  } catch (e) { }
 };
 
 /**
- * Get Current Authenticated User object from in-memory state
+ * Get Current Authenticated User object
  */
 export const getCurrentUser = (): User | null => {
-  return inMemoryUser;
+  if (typeof window !== 'undefined' && localStorage.getItem('foodway_explicit_logout') === 'true') {
+    inMemoryUser = null;
+    return null;
+  }
+  if (inMemoryUser) return inMemoryUser;
+  try {
+    const savedUser = localStorage.getItem('foodway_session_user');
+    if (savedUser) {
+      const parsed = JSON.parse(savedUser);
+      if (parsed && typeof parsed === 'object') {
+        inMemoryUser = parsed;
+        return parsed;
+      }
+    }
+  } catch (e) { }
+  return null;
 };
 
 /**
- * Set Current Authenticated User object in in-memory state
+ * Set Current Authenticated User object
  */
 export const setCurrentUser = (user: User | null): void => {
   inMemoryUser = user ? {
     ...user,
     role: (user.role || 'USER').toUpperCase() as Role
   } : null;
+  try {
+    if (inMemoryUser) {
+      localStorage.setItem('foodway_session_user', JSON.stringify(inMemoryUser));
+    } else {
+      localStorage.removeItem('foodway_session_user');
+    }
+  } catch (e) { }
 };
 
 /**

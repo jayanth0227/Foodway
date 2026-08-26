@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { Search, MapPin, Star, Clock, Store, Plus, Heart, ArrowLeft } from 'lucide-react';
-import axios from 'axios';
-import { API_BASE_URL } from '../utils/api';
+import shopService from '../services/shop.service';
 import { MobileShopCardSkeleton } from '../components/common/MobileSkeletonLoader';
 import { useLanguage } from '../context/LanguageContext';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
@@ -24,28 +23,25 @@ export const ShopsPage: React.FC = () => {
     return favMap;
   });
 
-  const fetchShops = async (isInitial = false) => {
-    if (isInitial) setLoading(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/public/restaurants`);
-      const listData = response.data.shops || response.data.restaurants;
-      if (response.data.success && Array.isArray(listData)) {
-        setShops(listData);
-      }
-    } catch (err) {
-      console.error('Failed to fetch shops from DB:', err);
-    } finally {
-      if (isInitial) setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchShops(true);
+    let isMounted = true;
+    const fetchShops = async (force = false) => {
+      try {
+        const listData = await shopService.getPublicRestaurants(force);
+        if (isMounted) {
+          setShops(listData);
+        }
+      } catch (err) {
+        console.error('Failed to fetch shops from DB:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
 
-    const pollInterval = setInterval(() => fetchShops(false), 4000);
-    const handleStatusUpdate = () => fetchShops(false);
+    fetchShops(false);
+
+    const handleStatusUpdate = () => fetchShops(true);
     window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
-    window.addEventListener('storage', handleStatusUpdate);
 
     const syncWishlist = () => {
       const list = getWishlist();
@@ -56,9 +52,8 @@ export const ShopsPage: React.FC = () => {
 
     window.addEventListener('foodway_wishlist_updated', syncWishlist);
     return () => {
-      clearInterval(pollInterval);
+      isMounted = false;
       window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
-      window.removeEventListener('storage', handleStatusUpdate);
       window.removeEventListener('foodway_wishlist_updated', syncWishlist);
     };
   }, []);

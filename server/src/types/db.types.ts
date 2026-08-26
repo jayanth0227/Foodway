@@ -55,10 +55,13 @@ export interface IShop {
   status: ShopStatus;
   rating?: number;
   isOpen?: boolean;
+  dietaryType?: 'PURE_VEG' | 'BOTH';
   cuisine?: string;
   categories?: string[];
   fcmToken?: string;
   lastTokenUpdatedAt?: string;
+  password?: string;
+  vendorPassword?: string;
   createdAt: string;
   updatedAt: string;
 }

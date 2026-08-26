@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import shopService from '../services/shop.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { ShopType } from '../types/enums';
+import { socketService } from '../services/socket.service';
 
 export const getAllShops = async (req: Request, res: Response) => {
   try {
@@ -60,6 +61,9 @@ export const updateShopProfile = async (req: AuthenticatedRequest, res: Response
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Shop not found.' });
     }
+    if (socketService) {
+      socketService.emitShopUpdated(updated);
+    }
     return res.json({ success: true, message: 'Shop profile updated.', shop: updated, restaurant: updated });
   } catch (error: any) {
     console.error('Error updating shop profile:', error);
@@ -75,6 +79,9 @@ export const updateShopStatus = async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ success: false, error: 'Shop ID and isOpen status required.' });
     }
     const updated = await shopService.updateShopStatus(shopId, isOpen);
+    if (socketService) {
+      socketService.emitShopStatusUpdated(shopId, Boolean(isOpen), isOpen ? 'active' : 'closed');
+    }
     return res.json({ success: true, message: `Shop status updated to ${isOpen ? 'OPEN' : 'CLOSED'}.`, shop: updated, restaurant: updated });
   } catch (error: any) {
     console.error('Error updating shop status:', error);

@@ -33,7 +33,7 @@ import type { Address } from '../types/auth.types';
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAuthenticated, updateProfile, refreshAuth, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, updateProfile, refreshAuth, logout } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'DETAILS' | 'ADDRESSES'>(
     (location.state as any)?.activeTab || 'DETAILS'
@@ -66,6 +66,7 @@ export const ProfilePage: React.FC = () => {
   }, [location.state]);
 
   useEffect(() => {
+    if (isLoading) return;
     if (!isAuthenticated && !user) {
       navigate('/login', { state: { from: '/profile' } });
       return;

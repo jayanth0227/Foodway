@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User, Role, AuthState } from '../types/auth.types';
-import { saveSession, clearSession, cleanupObsoleteStorage, setCurrentUser, setToken as setInMemoryToken } from '../utils/auth.utils';
+import { saveSession, clearSession, cleanupObsoleteStorage, setCurrentUser, setToken as setInMemoryToken, getToken, getCurrentUser } from '../utils/auth.utils';
 import authService from '../services/auth.service';
 import notificationService from '../services/notification.service';
 
@@ -29,10 +29,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Purge obsolete sensitive credentials from localStorage/sessionStorage
       cleanupObsoleteStorage();
 
+      // Guard: If user explicitly logged out, DO NOT restore old session automatically
+      const isLoggedOut = typeof window !== 'undefined' && localStorage.getItem('foodway_explicit_logout') === 'true';
+      if (isLoggedOut) {
+        setUser(null);
+        setRole(null);
+        setToken(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // Immediately restore stored session from persistent storage
+      const storedToken = getToken();
+      const storedUser = getCurrentUser();
+
+      if (storedUser) {
+        setUser(storedUser);
+        setRole(storedUser.role);
+        setToken(storedToken || 'active_session');
+      }
+
       try {
         const res = await authService.getCurrentUser();
-        if (res && res.success && res.user) {
-          const activeToken = res.token || 'active_session';
+        if (res && res.success && res.user && localStorage.getItem('foodway_explicit_logout') !== 'true') {
+          const activeToken = res.token || storedToken || 'active_session';
           saveSession(activeToken, res.user);
           setUser(res.user);
           setRole(res.user.role);
@@ -87,13 +107,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const handleLogout = async () => {
-    try {
-      await authService.logout();
-    } catch (e) {}
     clearSession();
     setUser(null);
     setRole(null);
     setToken(null);
+    try {
+      await authService.logout();
+    } catch (e) {}
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('foodway_explicit_logout', 'true');
+      window.location.href = '/login';
+    }
   };
 
   const handleRegister = async (name: string, email: string, password?: string, phone?: string) => {
@@ -189,3 +213,5 @@ export const useAuthContext = () => {
   }
   return context;
 };
+
+export const useAuth = useAuthContext;

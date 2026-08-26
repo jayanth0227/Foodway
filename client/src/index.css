@@ -9,7 +9,7 @@
   --bg-dark-color: #FAF8F6;
   --bg-card: #FFFFFF;
   --bg-card-sec: #FFF8F2;
-  
+
   --color-primary: #C59363;
   --color-primary-dark: #D0A67F;
   --color-secondary: #9D6A43;
@@ -17,31 +17,31 @@
   --color-success: #22C55E;
   --color-warning: #F59E0B;
   --color-error: #EF4444;
-  
+
   --text-primary-color: #1A1A1A;
   --text-secondary-color: #5B5B5B;
   --text-muted-color: #7B7B7B;
-  
+
   --border-glass-color: #E9E1D9;
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-bg-hover: rgba(255, 255, 255, 0.85);
-  
+
   --glow-gold-color: rgba(185, 121, 79, 0.08);
   --glow-blue-color: rgba(59, 130, 246, 0.08);
-  
+
   --gold-grad-start: #C59363;
   --gold-grad-mid: #D0A67F;
   --gold-grad-end: #9D6A43;
-  
+
   --bg-glass-subtle: rgba(197, 147, 99, 0.04);
   --bg-glass-subtle-hover: rgba(197, 147, 99, 0.08);
-  
+
   --shadow-luxury: 0 18px 60px rgba(0, 0, 0, 0.08);
   --shadow-luxury-hover: 0 25px 70px rgba(0, 0, 0, 0.12);
-  
+
   --badge-glass-bg: rgba(255, 255, 255, 0.65);
   --badge-glass-border: rgba(197, 147, 99, 0.16);
-  
+
   --bottom-nav-bg: rgba(255, 255, 255, 0.92);
   --bottom-nav-border: rgba(197, 147, 99, 0.25);
   --bottom-nav-shadow: 0 15px 45px rgba(0, 0, 0, 0.12), 0 5px 15px rgba(197, 147, 99, 0.05);
@@ -52,7 +52,7 @@
   --bg-dark-color: #090B10;
   --bg-card-sec: #11141B;
   --bg-card: #181C25;
-  
+
   --color-primary: #C59363;
   --color-primary-dark: #D0A67F;
   --color-secondary: #9D6A43;
@@ -60,31 +60,31 @@
   --color-success: #22C55E;
   --color-warning: #F59E0B;
   --color-error: #EF4444;
-  
+
   --text-primary-color: #FFFFFF;
   --text-secondary-color: #D8D8D8;
   --text-muted-color: #9CA3AF;
-  
+
   --border-glass-color: rgba(255, 255, 255, 0.08);
   --glass-bg: rgba(255, 255, 255, 0.04);
   --glass-bg-hover: rgba(255, 255, 255, 0.08);
-  
+
   --glow-gold-color: rgba(197, 147, 99, 0.22);
   --glow-blue-color: rgba(59, 130, 246, 0.25);
-  
+
   --gold-grad-start: #FFFFFF;
   --gold-grad-mid: #C59363;
   --gold-grad-end: #9D6A43;
-  
+
   --bg-glass-subtle: rgba(255, 255, 255, 0.03);
   --bg-glass-subtle-hover: rgba(255, 255, 255, 0.06);
-  
+
   --shadow-luxury: 0 20px 60px rgba(0, 0, 0, 0.45);
   --shadow-luxury-hover: 0 30px 80px rgba(0, 0, 0, 0.6);
-  
+
   --badge-glass-bg: rgba(17, 20, 27, 0.65);
   --badge-glass-border: rgba(255, 255, 255, 0.08);
-  
+
   --bottom-nav-bg: rgba(13, 16, 23, 0.92);
   --bottom-nav-border: rgba(255, 255, 255, 0.08);
   --bottom-nav-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 25px rgba(197, 147, 99, 0.03);
@@ -92,7 +92,8 @@
 
 @layer base {
   html {
-    scroll-behavior: auto; /* Handled by Lenis smooth scrolling */
+    scroll-behavior: auto;
+    /* Handled by Lenis smooth scrolling */
     background-color: var(--bg-dark-color);
     color: var(--text-primary-color);
     font-family: 'Outfit', 'Inter', sans-serif;
@@ -109,14 +110,21 @@
     transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     font-family: 'Poppins', 'Outfit', sans-serif;
     letter-spacing: -0.02em;
     font-weight: 700;
   }
 
   /* Global Dark Theme Input & Autofill Fixes */
-  input, textarea, select {
+  input,
+  textarea,
+  select {
     color: var(--text-primary-color);
   }
 
@@ -141,15 +149,19 @@
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--bg-dark-color);
   transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(197, 147, 99, 0.3); /* Brand Copper */
+  background: rgba(197, 147, 99, 0.3);
+  /* Brand Copper */
   border-radius: 99px;
   border: 2px solid var(--bg-dark-color);
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(197, 147, 99, 0.6);
 }
@@ -186,14 +198,15 @@
     -webkit-backdrop-filter: blur(24px) saturate(180%);
     border: 1px solid var(--border-glass-color);
     box-shadow: var(--shadow-luxury);
-    border-radius: 1.5rem; /* larger border-radius (rounded-3xl) */
+    border-radius: 1.5rem;
+    /* larger border-radius (rounded-3xl) */
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .glass-panel-hover {
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
   }
-  
+
   .glass-panel-hover:hover {
     background: var(--glass-bg-hover);
     border-color: rgba(197, 147, 99, 0.35);
@@ -220,14 +233,14 @@
   .border-gradient-gold {
     border: 1px solid transparent;
     background: linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
-                linear-gradient(135deg, var(--color-primary), var(--border-glass-color), var(--color-secondary)) border-box;
+      linear-gradient(135deg, var(--color-primary), var(--border-glass-color), var(--color-secondary)) border-box;
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .border-gradient-blue {
     border: 1px solid transparent;
     background: linear-gradient(var(--bg-card), var(--bg-card)) padding-box,
-                linear-gradient(135deg, var(--color-accent), var(--border-glass-color), var(--color-primary)) border-box;
+      linear-gradient(135deg, var(--color-accent), var(--border-glass-color), var(--color-primary)) border-box;
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
@@ -290,7 +303,7 @@
     overflow: hidden;
     z-index: 1;
   }
-  
+
   .btn-primary::after {
     content: '';
     position: absolute;
@@ -375,7 +388,8 @@
 }
 
 /* Lenis Custom Smooth Scroll */
-html.lenis, html.lenis body {
+html.lenis,
+html.lenis body {
   height: auto;
 }
 
@@ -397,27 +411,67 @@ html.lenis, html.lenis body {
 
 /* Scooter Suspension, Headlight, Speedline, and Leaf animations */
 @keyframes scooter-bounce {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  25% { transform: translateY(-0.8px) rotate(-0.05deg); }
-  75% { transform: translateY(0.8px) rotate(0.05deg); }
+
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  25% {
+    transform: translateY(-0.8px) rotate(-0.05deg);
+  }
+
+  75% {
+    transform: translateY(0.8px) rotate(0.05deg);
+  }
 }
 
 @keyframes headlight-glow {
-  0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 8px rgba(197, 147, 99, 0.4)); }
-  50% { opacity: 0.95; filter: drop-shadow(0 0 15px rgba(197, 147, 99, 0.7)); }
+
+  0%,
+  100% {
+    opacity: 0.7;
+    filter: drop-shadow(0 0 8px rgba(197, 147, 99, 0.4));
+  }
+
+  50% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 15px rgba(197, 147, 99, 0.7));
+  }
 }
 
 @keyframes speedline-flow {
-  0% { stroke-dashoffset: 40; opacity: 0; }
-  20% { opacity: 0.8; }
-  80% { opacity: 0.8; }
-  100% { stroke-dashoffset: -40; opacity: 0; }
+  0% {
+    stroke-dashoffset: 40;
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 0.8;
+  }
+
+  80% {
+    opacity: 0.8;
+  }
+
+  100% {
+    stroke-dashoffset: -40;
+    opacity: 0;
+  }
 }
 
 @keyframes leaf-drift {
-  0% { transform: translate(0, 0) rotate(0deg); }
-  50% { transform: translate(-10px, 5px) rotate(8deg); }
-  100% { transform: translate(0, 0) rotate(0deg); }
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+
+  50% {
+    transform: translate(-10px, 5px) rotate(8deg);
+  }
+
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
 }
 
 .animate-scooter-bounce {
@@ -442,6 +496,7 @@ html.lenis, html.lenis body {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }
@@ -465,13 +520,11 @@ html.lenis, html.lenis body {
   bottom: 0;
   left: 0;
   transform: translateX(-100%);
-  background-image: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0.08) 20%,
-    rgba(255, 255, 255, 0.18) 60%,
-    rgba(255, 255, 255, 0)
-  );
+  background-image: linear-gradient(90deg,
+      rgba(255, 255, 255, 0) 0,
+      rgba(255, 255, 255, 0.08) 20%,
+      rgba(255, 255, 255, 0.18) 60%,
+      rgba(255, 255, 255, 0));
   animation: shimmer 1.8s infinite ease-in-out;
   content: '';
 }
@@ -481,6 +534,7 @@ html.lenis, html.lenis body {
   0% {
     transform: translateX(0%);
   }
+
   100% {
     transform: translateX(-50%);
   }
@@ -489,11 +543,9 @@ html.lenis, html.lenis body {
 .animate-marquee-slow {
   display: flex;
   width: max-content;
-  animation: marqueeSlow 30s linear infinite;
+  animation: marqueeSlow 100s linear infinite;
 }
 
 .animate-marquee-slow:hover {
   animation-play-state: paused;
 }
-
-

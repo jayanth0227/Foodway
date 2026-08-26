@@ -23,6 +23,7 @@ import {
   X
 } from 'lucide-react';
 import axios from 'axios';
+import shopService from '../services/shop.service';
 import { API_BASE_URL } from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -84,9 +85,9 @@ export const CategoriesPage: React.FC = () => {
     const loadCategoriesData = async () => {
       setLoading(true);
       try {
-        const [catResp, resResp, dishResp] = await Promise.allSettled([
+        const [catResp, resList, dishResp] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/public/categories`),
-          axios.get(`${API_BASE_URL}/public/restaurants`),
+          shopService.getPublicRestaurants(),
           axios.get(`${API_BASE_URL}/public/dishes`)
         ]);
 
@@ -96,10 +97,8 @@ export const CategoriesPage: React.FC = () => {
           setCulinaryCategories(getMergedCategories([]));
         }
 
-        if (resResp.status === 'fulfilled') {
-          const resData = resResp.value.data;
-          const list = Array.isArray(resData) ? resData : (resData?.restaurants || resData?.data || []);
-          setRestaurants(list);
+        if (resList.status === 'fulfilled') {
+          setRestaurants(resList.value);
         }
 
         if (dishResp.status === 'fulfilled') {
