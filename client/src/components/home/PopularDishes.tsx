@@ -24,13 +24,29 @@ export const PopularDishes: React.FC = () => {
     return favMap;
   });
 
+  const [cmsConfig, setCmsConfig] = useState<any>(null);
+
   useEffect(() => {
     const fetchDishes = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`${API_BASE_URL}/public/dishes`);
-        if (response.data.success && Array.isArray(response.data.dishes) && response.data.dishes.length > 0) {
-          setDishes(response.data.dishes);
+        const [dishesRes, cmsRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/public/dishes`),
+          axios.get(`${API_BASE_URL}/cms/homepage`).catch(() => ({ data: null }))
+        ]);
+
+        if (cmsRes?.data?.success && cmsRes.data.cms) {
+          setCmsConfig(cmsRes.data.cms.flavoursOfKonaseema);
+        }
+
+        if (dishesRes.data.success && Array.isArray(dishesRes.data.dishes) && dishesRes.data.dishes.length > 0) {
+          let fetched = dishesRes.data.dishes;
+          const featuredIds = cmsRes?.data?.cms?.flavoursOfKonaseema?.featuredItemIds;
+          if (Array.isArray(featuredIds) && featuredIds.length > 0) {
+            const filtered = fetched.filter((d: any) => featuredIds.includes(d.id) || featuredIds.includes(d._id));
+            if (filtered.length > 0) fetched = filtered;
+          }
+          setDishes(fetched);
         } else {
           setDishes(FALLBACK_KONASEEMA_DISHES);
         }
@@ -269,10 +285,10 @@ export const PopularDishes: React.FC = () => {
         <div className="flex items-end justify-between mb-4 sm:mb-6 pb-3 border-b border-glass/40 gap-3">
           <div className="space-y-0.5 sm:space-y-1 text-left max-w-xl">
             <h2 className="text-lg sm:text-3xl md:text-4xl font-extrabold font-display text-gradient-gold tracking-tight">
-            Flavours of Konaseema
+              {cmsConfig?.title || 'Flavours of Konaseema'}
             </h2>
             <p className="hidden sm:block text-xs sm:text-sm text-text-secondary font-medium leading-relaxed">
-              Experience traditional recipes, local ingredients, and unforgettable gourmet tastes directly from the kitchens that define Konaseema.
+              {cmsConfig?.subtitle || 'Experience traditional recipes, local ingredients, and unforgettable gourmet tastes directly from the kitchens that define Konaseema.'}
             </p>
           </div>
 

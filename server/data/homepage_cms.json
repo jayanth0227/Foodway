@@ -1,0 +1,72 @@
+{
+  "heroStats": {
+    "customers": "30K+",
+    "restaurants": "500+",
+    "deliveryTime": "30 min"
+  },
+  "flavoursOfKonaseema": {
+    "title": "Flavours of Konaseema",
+    "subtitle": "Experience traditional recipes, local ingredients, and unforgettable gourmet tastes directly from the kitchens that define Konaseema.",
+    "featuredItemIds": [
+      "ITM-164601801",
+      "ITM-722233631",
+      "ITM-430552882",
+      "ITM-825177971",
+      "ITM-648325619"
+    ]
+  },
+  "whyChooseUs": {
+    "title": "Why Choose MK Delivery..!",
+    "subtitle": "From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.",
+    "features": [
+      {
+        "id": "feat-1",
+        "title": "Fresh & Quality Food",
+        "badge": "FRESH",
+        "description": "We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care."
+      },
+      {
+        "id": "feat-2",
+        "title": "Fast Delivery",
+        "badge": "20-30 MINS",
+        "description": "Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting."
+      },
+      {
+        "id": "feat-3",
+        "title": "Live Order Tracking",
+        "badge": "LIVE",
+        "description": "Track your order in real time from restaurant confirmation until it arrives at your home."
+      }
+    ]
+  },
+  "faqs": [
+    {
+      "id": "faq-1",
+      "question": "How do I place an order?",
+      "answer": "Browse restaurants, select your favorite dishes, add them to your cart, and proceed to checkout with live order tracking."
+    },
+    {
+      "id": "faq-2",
+      "question": "How long does delivery take?",
+      "answer": "Most orders across Konaseema are delivered within 20 to 30 minutes depending on your location."
+    },
+    {
+      "id": "faq-3",
+      "question": "Can I track my order?",
+      "answer": "Yes! Real-time GPS order tracking and status updates are visible directly on your active order screen."
+    },
+    {
+      "id": "faq-4",
+      "question": "Which areas do you currently serve?",
+      "answer": "We deliver fast and fresh across Ravulapalem and surrounding towns in Konaseema."
+    }
+  ],
+  "contactDetails": {
+    "email": "mkdeliveryservices12@gmail.com",
+    "phone": "+91 9573041191",
+    "address": "Ravulapalem-533238",
+    "whatsapp": "+919573041191",
+    "instagram": "https://instagram.com/mkdeliveryservices",
+    "copyrightText": "© 2026 MK DELIVERY SERVICES. ALL RIGHTS RESERVED."
+  }
+}

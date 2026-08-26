@@ -3,6 +3,7 @@ import { motion, useScroll, useSpring, useTransform } from 'framer-motion';
 import { Utensils, Zap, MapPin, ShieldCheck, HeartHandshake, Smile, Sparkles, CheckCircle2, Award, Star } from 'lucide-react';
 import { TIMELINE_STEPS } from '../../utils/mockData';
 import { DeliveryProcessSkeleton } from './HomePageSkeleton';
+import { API_BASE_URL } from '../../utils/api';
 
 // Map icon names to Lucide icons
 const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> = {
@@ -17,12 +18,25 @@ const iconMap: Record<string, React.FC<{ size?: number; className?: string }>> =
 export const DeliveryProcess: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [cmsConfig, setCmsConfig] = useState<any>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 250);
-    return () => clearTimeout(timer);
+    fetch(`${API_BASE_URL}/cms/homepage`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && data?.cms?.whyChooseUs) {
+          setCmsConfig(data.cms.whyChooseUs);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
+
+  const title = cmsConfig?.title || 'Why Choose MK Delivery..!';
+  const subtitle = cmsConfig?.subtitle || 'From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.';
+  const featuresList = (Array.isArray(cmsConfig?.features) && cmsConfig.features.length > 0)
+    ? cmsConfig.features
+    : TIMELINE_STEPS.map(s => ({ id: s.id, title: s.title, badge: s.timeEstimate, description: s.description, iconName: s.iconName }));
 
 
 
@@ -49,11 +63,11 @@ export const DeliveryProcess: React.FC = () => {
           className="text-center max-w-3xl mx-auto mb-8 sm:mb-24 space-y-1.5 sm:space-y-3"
         >
           <h2 className="text-2xl sm:text-4xl md:text-5xl font-black font-display text-gradient-gold tracking-tight leading-tight">
-            Why Choose MK Delivery..!
+            {title}
           </h2>
 
           <p className="text-xs sm:text-sm md:text-base text-text-muted font-medium max-w-xl mx-auto leading-relaxed">
-            From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.
+            {subtitle}
           </p>
         </motion.div>
 
@@ -64,13 +78,14 @@ export const DeliveryProcess: React.FC = () => {
 
           {/* Timeline Step Cards */}
           <div className="space-y-10 sm:space-y-14 relative z-20">
-            {TIMELINE_STEPS.map((step, idx) => {
+            {featuresList.map((step: any, idx: number) => {
               const isEven = idx % 2 === 0;
               const IconComp = iconMap[step.iconName] || Utensils;
+              const badge = step.badge || step.timeEstimate || 'FEATURE';
 
               return (
                 <div
-                  key={step.id}
+                  key={step.id || idx}
                   className={`flex flex-col md:flex-row items-start ${
                     isEven ? 'md:flex-row-reverse' : ''
                   } relative group`}
@@ -107,7 +122,7 @@ export const DeliveryProcess: React.FC = () => {
 
                         {/* Tagline Badge Right Aligned */}
                         <span className="shrink-0 text-[9px] font-extrabold uppercase tracking-wider text-primary bg-primary/15 border border-primary/30 px-2 py-0.5 rounded-md whitespace-nowrap ml-auto">
-                          {step.timeEstimate}
+                          {badge}
                         </span>
                       </div>
 

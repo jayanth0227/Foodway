@@ -4,17 +4,27 @@ import { Plus, Minus, ChevronDown, ChevronUp } from 'lucide-react';
 import { FAQS } from '../../utils/mockData';
 import { FAQSkeleton } from './HomePageSkeleton';
 
+import { API_BASE_URL } from '../../utils/api';
+
 export const FAQ: React.FC = () => {
   const [openId, setOpenId] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [faqsList, setFaqsList] = useState<any[]>(FAQS);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 300);
-    return () => clearTimeout(timer);
+    fetch(`${API_BASE_URL}/cms/homepage`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && Array.isArray(data?.cms?.faqs) && data.cms.faqs.length > 0) {
+          setFaqsList(data.cms.faqs);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const visibleFaqs = showAll ? FAQS : FAQS.slice(0, 4);
+  const visibleFaqs = showAll ? faqsList : faqsList.slice(0, 4);
 
   const toggleFAQ = (id: string) => {
     setOpenId((prev) => (prev === id ? null : id));
@@ -101,7 +111,7 @@ export const FAQ: React.FC = () => {
         </motion.div>
 
         {/* Know More / Show Less Button */}
-        {FAQS.length > 4 && (
+        {faqsList.length > 4 && (
           <div className="flex justify-center mt-10">
             <button
               onClick={() => setShowAll(!showAll)}

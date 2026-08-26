@@ -7,17 +7,36 @@ import DeliveryLocations from './DeliveryLocations';
 import { HeroSkeleton } from './HomePageSkeleton';
 
 
+import { useNavigate } from 'react-router-dom';
+
 interface HeroProps {
   onOpenAuth: (type: 'login' | 'register') => void;
 }
 
 export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobile, setIsMobile] = useState(false);
   const [loadingHero, setLoadingHero] = useState(true);
+  const [heroStats, setHeroStats] = useState({
+    customers: '20K+',
+    restaurants: '500+',
+    deliveryTime: '30 min'
+  });
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/cms/homepage`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && data?.cms?.heroStats) {
+          setHeroStats(data.cms.heroStats);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [videoUrls, setVideoUrls] = useState<{
     darkest: string;
@@ -93,8 +112,6 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   const bgBlob2X = useTransform(springX, (mx) => mx * 0.3);
   const bgBlob2Y = useTransform(springY, (my) => -my * 0.3);
 
-
-
   // Combined MotionValues for Leaf 1 (Scroll Y + Mouse Parallax)
   const leaf1X = useTransform(springX, (mx) => mx * -2.2);
   const leaf1Y = useTransform(
@@ -166,44 +183,46 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   // Track mouse coordinates inside section
   const handleMouseMove = (e: React.MouseEvent) => {
     const { clientX, clientY } = e;
-    // Calculate difference from center of screen
     const x = (clientX - window.innerWidth / 2) / 35;
     const y = (clientY - window.innerHeight / 2) / 35;
     mouseX.set(x);
     mouseY.set(y);
   };
 
+  // Submit Search Query -> Navigate to Shops / Dishes page with search parameter
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      const el = document.getElementById('featured-restaurants');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+    const query = searchQuery.trim() || placeholderText.replace(/^Search\s+/i, '').replace(/\.\.\.$/, '').trim();
+    if (query) {
+      navigate(`/shops?search=${encodeURIComponent(query)}`);
+    } else {
+      navigate('/shops');
     }
   };
 
-  // Simulate premium concierge order response
+  // Order Now Click -> Navigate directly to Shops Page to pick restaurants & place orders
   const handleOrderClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsOrdering(true);
     setTimeout(() => {
       setIsOrdering(false);
-      onOpenAuth('register');
-    }, 1200);
+      navigate('/shops');
+    }, 400);
   };
 
-  // Simulate premium loading and scroll to restaurants
+  // Explore Click -> Scroll to Featured Restaurants or Navigate to Shops
   const handleExploreClick = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsExploring(true);
     setTimeout(() => {
       setIsExploring(false);
-      const el = document.getElementById('featured-restaurants');
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const featuredEl = document.getElementById('featured-restaurants') || document.getElementById('categories');
+      if (featuredEl) {
+        featuredEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        navigate('/shops');
       }
-    }, 1000);
+    }, 400);
   };
 
   if (loadingHero) return <HeroSkeleton />;
@@ -432,7 +451,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
               <User className="text-primary shrink-0" size={14} />
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">20K+</span>
+                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.customers || '20K+'}</span>
                 <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Customers</span>
               </div>
             </div>
@@ -440,7 +459,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
               <Store className="text-primary shrink-0" size={14} />
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">500+</span>
+                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.restaurants || '500+'}</span>
                 <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Restaurants</span>
               </div>
             </div>
@@ -448,7 +467,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
               <Clock className="text-primary shrink-0" size={14} />
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">30 min</span>
+                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.deliveryTime || '30 min'}</span>
                 <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Delivery</span>
               </div>
             </div>

@@ -152,5 +152,25 @@ export const handler = async (event: any, context: any) => {
   }
 
   // Otherwise, handle standard HTTP API request via serverless-express
-  return await expressHandler(event, context);
+  const response = await expressHandler(event, context);
+
+  // Guarantee CORS headers on all AWS API Gateway HTTP responses (including preflight OPTIONS)
+  if (response) {
+    const origin = event.headers?.origin || event.headers?.Origin || '*';
+    if (!response.headers) {
+      response.headers = {};
+    }
+    response.headers['Access-Control-Allow-Origin'] = origin;
+    response.headers['Access-Control-Allow-Credentials'] = 'true';
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, PATCH, OPTIONS';
+    response.headers['Access-Control-Allow-Headers'] =
+      'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, token, userid';
+
+    const httpMethod = event.httpMethod || event.requestContext?.http?.method || event.requestContext?.httpMethod;
+    if (httpMethod === 'OPTIONS') {
+      response.statusCode = 200;
+    }
+  }
+
+  return response;
 };
