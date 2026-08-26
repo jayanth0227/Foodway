@@ -5,6 +5,8 @@ import { saveSession, clearSession, cleanupObsoleteStorage, setCurrentUser, setT
 import authService from '../services/auth.service';
 import notificationService from '../services/notification.service';
 
+import socketService from '../services/socket.service';
+
 interface AuthContextType extends AuthState {
   login: (email: string, password?: string) => Promise<{ success: boolean; role?: Role; error?: string }>;
   logout: () => void;
@@ -20,6 +22,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [role, setRole] = useState<Role | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const isLoggingOutRef = React.useRef<boolean>(false);
 
   // Initialize auth & restore session securely from backend HttpOnly cookie on app startup
   useEffect(() => {
@@ -87,6 +90,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const handleLogin = async (email: string, password?: string) => {
     try {
       setIsLoading(true);
+      isLoggingOutRef.current = false;
       const res = await authService.login({ email, password });
 
       if (res.success && res.user) {
@@ -112,6 +116,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const handleLogout = async () => {
+    if (isLoggingOutRef.current) return;
+    isLoggingOutRef.current = true;
+
+    try {
+      socketService.disconnect();
+    } catch (e) {}
+
     clearSession();
     setUser(null);
     setRole(null);

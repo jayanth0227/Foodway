@@ -29,8 +29,11 @@ class UnifiedRealtimeSocketService {
       clearInterval(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.joinedRooms.clear();
     if (this.nativeWS) {
       try {
+        this.nativeWS.onclose = null;
+        this.nativeWS.onerror = null;
         this.nativeWS.close();
       } catch (e) {}
       this.nativeWS = null;
@@ -49,7 +52,12 @@ class UnifiedRealtimeSocketService {
     }
 
     const defaultProductionWss = 'wss://swsw35x9j8.execute-api.ap-south-2.amazonaws.com/production';
-    const baseWsUrl = import.meta.env.VITE_WSS_URL || import.meta.env.VITE_WS_URL || defaultProductionWss;
+    let baseWsUrl = import.meta.env.VITE_WSS_URL || import.meta.env.VITE_WS_URL || defaultProductionWss;
+
+    // Fallback: If baseWsUrl points to localhost/127.0.0.1 or local port 5000, redirect to production AWS WebSocket API
+    if (!baseWsUrl || baseWsUrl.includes('localhost') || baseWsUrl.includes('127.0.0.1')) {
+      baseWsUrl = defaultProductionWss;
+    }
 
     const token = getToken() || '';
     const currentUser = getCurrentUser();

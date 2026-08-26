@@ -251,15 +251,15 @@ export const CartPage: React.FC = () => {
     }
   }, [cartItems]);
 
-  // Real-Time Socket Subscription for Live Store Open/Closed Status Updates
+  // Real-Time Socket Subscription for Live Store Open/Closed Status & Menu Updates
   useEffect(() => {
     if (cartItems.length > 0) {
       const firstDish = cartItems[0]?.dish;
-      const targetResId = String((firstDish as any)?.restaurantId || (firstDish as any)?.shopId || '').toLowerCase();
+      const targetResId = String((firstDish as any)?.restaurantId || (firstDish as any)?.shopId || '').toLowerCase().replace(/[-_]/g, '');
 
       const unsubscribeStatus = socketService.onShopStatusUpdated((data: any) => {
         if (!data) return;
-        const eventResId = String(data.shopId || data.restaurantId || '').toLowerCase();
+        const eventResId = String(data.shopId || data.restaurantId || data.id || '').toLowerCase().replace(/[-_]/g, '');
         console.log('⚡ [Live Socket Event: SHOP_STATUS_UPDATED] Received in Cart:', data);
 
         if (!targetResId || !eventResId || eventResId === targetResId || targetResId.includes(eventResId) || eventResId.includes(targetResId)) {
@@ -271,21 +271,9 @@ export const CartPage: React.FC = () => {
         }
       });
 
-      return () => {
-        unsubscribeStatus();
-      };
-    }
-  }, [cartItems]);
-
-  // Real-Time Socket Subscription for Live Vendor Location & Address Updates
-  useEffect(() => {
-    if (cartItems.length > 0) {
-      const firstDish = cartItems[0]?.dish;
-      const targetResId = String((firstDish as any)?.restaurantId || (firstDish as any)?.shopId || '').toLowerCase();
-
       const unsubscribeShop = socketService.onShopUpdated((updatedShop: any) => {
         if (!updatedShop) return;
-        const uId = String(updatedShop.id || updatedShop.shopId || updatedShop.restaurantId || '').toLowerCase();
+        const uId = String(updatedShop.id || updatedShop.shopId || updatedShop.restaurantId || '').toLowerCase().replace(/[-_]/g, '');
         console.log('⚡ [Live Socket Event: SHOP_UPDATED] Received in Cart:', updatedShop);
 
         if (!targetResId || !uId || uId === targetResId || targetResId.includes(uId) || uId.includes(targetResId)) {
@@ -301,6 +289,7 @@ export const CartPage: React.FC = () => {
       });
 
       return () => {
+        unsubscribeStatus();
         unsubscribeShop();
       };
     }

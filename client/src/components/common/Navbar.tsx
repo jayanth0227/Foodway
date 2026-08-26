@@ -161,7 +161,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
   const handleLogoutClick = () => {
     logout();
-    navigate('/login');
   };
 
   return (

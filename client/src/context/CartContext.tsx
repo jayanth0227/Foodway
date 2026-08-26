@@ -146,23 +146,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
-      // Listen for Real-Time Menu Item Price & Details Updates from Vendors
+      // Listen for Real-Time Menu Item Price & Details & Availability Updates from Vendors
       const unsubscribeMenu = socketService.onMenuUpdated((data: any) => {
         console.log('⚡ [Live Socket Event: MENU_UPDATED] Received in CartContext:', data);
         const updatedItem = data?.item || data?.dish || data;
-        if (!updatedItem) return;
+        if (!updatedItem && !data?.deletedId) return;
 
-        const targetItemId = String(updatedItem.id || updatedItem.itemId || updatedItem.menuItemId || data?.deletedId || '').toLowerCase();
+        const rawTargetId = updatedItem?.id || updatedItem?.itemId || updatedItem?.menuItemId || data?.deletedId || data?.id;
+        const targetId = String(rawTargetId || '').toLowerCase().replace(/[-_]/g, '');
 
         setCartItems(prevCart => {
           let hasChanges = false;
           const nextCart = prevCart.map(cartItem => {
-            const itemDishId = String(cartItem.dish.id || cartItem.dish.itemId || (cartItem.dish as any).menuItemId || '').toLowerCase();
+            const dishId = String(cartItem.dish.id || cartItem.dish.itemId || (cartItem.dish as any).menuItemId || '').toLowerCase().replace(/[-_]/g, '');
 
-            if (targetItemId && (itemDishId === targetItemId || itemDishId.includes(targetItemId) || targetItemId.includes(itemDishId))) {
+            if (targetId && (dishId === targetId || dishId.includes(targetId) || targetId.includes(dishId))) {
               hasChanges = true;
 
-              if (data?.deletedId) {
+              if (data?.deletedId || updatedItem?.isDeleted) {
                 return null;
               }
 
@@ -170,7 +171,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const newName = updatedItem.name || updatedItem.foodName || cartItem.dish.name;
               const newImage = updatedItem.image || updatedItem.foodImage || cartItem.dish.image;
               const newVeg = updatedItem.isVeg !== undefined ? updatedItem.isVeg : cartItem.dish.isVeg;
-              const newAvailable = updatedItem.isAvailable !== undefined ? updatedItem.isAvailable : cartItem.dish.isAvailable;
+              const newAvailable = updatedItem.isAvailable !== undefined ? (updatedItem.isAvailable !== false && updatedItem.isAvailable !== 'false') : cartItem.dish.isAvailable;
 
               let updatedVariant = cartItem.selectedVariant;
               if (updatedVariant && Array.isArray(updatedItem.variants)) {
@@ -201,9 +202,39 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       });
 
+      // Listen for Real-Time Shop Open/Closed Status Updates
+      const unsubscribeShopStatus = socketService.onShopStatusUpdated((data: any) => {
+        if (!data) return;
+        console.log('⚡ [Live Socket Event: SHOP_STATUS_UPDATED] Received in CartContext:', data);
+        const eventShopId = String(data.shopId || data.restaurantId || data.id || '').toLowerCase().replace(/[-_]/g, '');
+        const isClosed = data.isOpen === false || data.isOpen === 'false' || data.status === 'closed' || data.status === 'inactive' || data.status === 'offline';
+
+        setCartItems(prevCart => {
+          let hasChanges = false;
+          const nextCart = prevCart.map(cartItem => {
+            const itemShopId = String((cartItem.dish as any).restaurantId || (cartItem.dish as any).shopId || '').toLowerCase().replace(/[-_]/g, '');
+
+            if (!eventShopId || !itemShopId || eventShopId === itemShopId || eventShopId.includes(itemShopId) || itemShopId.includes(eventShopId)) {
+              hasChanges = true;
+              return {
+                ...cartItem,
+                dish: {
+                  ...cartItem.dish,
+                  isAvailable: isClosed ? false : cartItem.dish.isAvailable,
+                  restaurantIsOpen: !isClosed
+                }
+              };
+            }
+            return cartItem;
+          });
+          return hasChanges ? nextCart : prevCart;
+        });
+      });
+
       return () => {
         unsubscribe();
         unsubscribeMenu();
+        unsubscribeShopStatus();
       };
     } else {
       // User is logged out / unauthenticated -> Clear in-memory cart and remove guest cart keys

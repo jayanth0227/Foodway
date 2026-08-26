@@ -59,10 +59,13 @@ export class ApiGatewayWebSocketService {
       );
       return true;
     } catch (err: any) {
-      console.warn(`⚠️ API Gateway PostToConnection error for connectionId [${connectionId}]:`, err?.message);
       if (err.name === 'GoneException' || err.$metadata?.httpStatusCode === 410) {
         // Stale connection ID, clear from foodway-users
         this.clearStaleConnection(connectionId).catch(() => {});
+      } else if (err.name === 'AccessDeniedException' || err.$metadata?.httpStatusCode === 403 || err?.message?.includes('not authorized')) {
+        console.warn(`⚠️ [AWS IAM Authorization Warning] IAM identity lacks 'execute-api:ManageConnections' permission on API Gateway. Note: On AWS Lambda production, the execution role has permission. For local dev, attach policy: execute-api:ManageConnections.`);
+      } else {
+        console.warn(`⚠️ API Gateway PostToConnection error for connectionId [${connectionId}]:`, err?.message);
       }
       return false;
     }
