@@ -13,7 +13,9 @@ export async function initializeFirebaseAdmin(): Promise<void> {
       const fileContent = fs.readFileSync(keyPath, "utf8").trim();
       if (fileContent) {
         const serviceAccount = JSON.parse(fileContent);
-        initializeApp({ credential: cert(serviceAccount) });
+        if (getApps().length === 0) {
+          initializeApp({ credential: cert(serviceAccount) });
+        }
         console.log("🔥 Firebase Admin Initialized from local serviceAccountKey.json");
         return;
       }
@@ -27,7 +29,9 @@ export async function initializeFirebaseAdmin(): Promise<void> {
     const envJson = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_CREDENTIALS;
     if (envJson) {
       const serviceAccount = JSON.parse(envJson);
-      initializeApp({ credential: cert(serviceAccount) });
+      if (getApps().length === 0) {
+        initializeApp({ credential: cert(serviceAccount) });
+      }
       console.log("🔥 Firebase Admin Initialized from Environment Variable");
       return;
     }
@@ -47,7 +51,9 @@ export async function initializeFirebaseAdmin(): Promise<void> {
 
     if (secretString) {
       const serviceAccount = JSON.parse(secretString);
-      initializeApp({ credential: cert(serviceAccount) });
+      if (getApps().length === 0) {
+        initializeApp({ credential: cert(serviceAccount) });
+      }
       console.log("🔥 Firebase Admin Initialized successfully from AWS Secrets Manager!");
       return;
     }

@@ -79,19 +79,23 @@ export class ApiGatewayWebSocketService {
         })
       );
       for (const item of scanRes.Items || []) {
-        const key: any = {};
-        if (item.userId) key.userId = item.userId;
-        else if (item.email) key.email = item.email;
-        else if (item.id) key.id = item.id;
+        const keyCandidates: any[] = [];
+        if (item.email) keyCandidates.push({ email: item.email });
+        if (item.userId) keyCandidates.push({ userId: item.userId });
+        if (item.id) keyCandidates.push({ id: item.id });
 
-        if (Object.keys(key).length > 0) {
-          await dynamoDocClient.send(
-            new UpdateCommand({
-              TableName: usersTableName,
-              Key: key,
-              UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
-            })
-          );
+        for (const key of keyCandidates) {
+          try {
+            await dynamoDocClient.send(
+              new UpdateCommand({
+                TableName: usersTableName,
+                Key: key,
+                UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
+              })
+            );
+            console.log(`[WS STALE CLEANUP] connectionId=${connectionId} userId=${item.userId || item.email}`);
+            break;
+          } catch (e) {}
         }
       }
     } catch (e) {}

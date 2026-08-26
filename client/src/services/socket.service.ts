@@ -1,11 +1,10 @@
-import { io, Socket } from 'socket.io-client';
+import { getToken, getCurrentUser } from '../utils/auth.utils';
 import { API_BASE_URL } from '../utils/api';
 
 class UnifiedRealtimeSocketService {
-  private socketIO: Socket | null = null;
   private nativeWS: WebSocket | null = null;
   private joinedRooms: Set<string> = new Set();
-  private isNativeMode: boolean = false;
+  private isNativeMode: boolean = true;
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
   private reconnectTimer: any = null;
   private pingInterval: any = null;
@@ -15,21 +14,32 @@ class UnifiedRealtimeSocketService {
   }
 
   private determineEngineMode() {
-    const wsEnv = import.meta.env.VITE_WSS_URL || import.meta.env.VITE_WS_URL || '';
-    if (wsEnv && (wsEnv.startsWith('wss://') || wsEnv.includes('execute-api') || wsEnv.includes('amazonaws.com'))) {
-      this.isNativeMode = true;
-    } else {
-      this.isNativeMode = false;
-    }
+    // Production AWS WebSocket API default
+    this.isNativeMode = true;
   }
 
   // Unified Connect Function
-  public connect(): any {
-    if (this.isNativeMode) {
-      return this.connectNativeWS();
-    } else {
-      return this.connectSocketIO();
+  public connect(): WebSocket | null {
+    return this.connectNativeWS();
+  }
+
+  public disconnect(): void {
+    this.stopHeartbeat();
+    if (this.reconnectTimer) {
+      clearInterval(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
+    if (this.nativeWS) {
+      try {
+        this.nativeWS.close();
+      } catch (e) {}
+      this.nativeWS = null;
+    }
+  }
+
+  public reconnect(): void {
+    this.disconnect();
+    this.connect();
   }
 
   // --- NATIVE WEBSOCKET ENGINE ---
@@ -38,45 +48,51 @@ class UnifiedRealtimeSocketService {
       return this.nativeWS;
     }
 
-    const wsUrl = import.meta.env.VITE_WSS_URL || import.meta.env.VITE_WS_URL || 'ws://localhost:5000';
-    console.log(`⚡ [Native WebSocket Engine] Connecting to: ${wsUrl}`);
+    const defaultProductionWss = 'wss://swsw35x9j8.execute-api.ap-south-2.amazonaws.com/production';
+    const baseWsUrl = import.meta.env.VITE_WSS_URL || import.meta.env.VITE_WS_URL || defaultProductionWss;
+
+    const token = getToken() || '';
+    const currentUser = getCurrentUser();
+    const userId = currentUser?.id || (currentUser as any)?.userId || currentUser?.email || '';
+
+    // Append ?token=... for $connect route JWT verification in AWS API Gateway
+    const fullWsUrl = token
+      ? `${baseWsUrl}${baseWsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
+      : baseWsUrl;
+
+    console.log(`⚡ [Native WebSocket Engine] Connecting to: ${baseWsUrl} (Authenticated User: ${userId || 'Anonymous'})`);
 
     try {
-      this.nativeWS = new WebSocket(wsUrl);
+      this.nativeWS = new WebSocket(fullWsUrl);
 
       this.nativeWS.onopen = () => {
-        console.log(`⚡ [Native WebSocket Engine] Successfully Connected!`);
+        console.log(`⚡ [Native WebSocket Engine] Successfully Connected to AWS API Gateway WebSocket!`);
         if (this.reconnectTimer) {
           clearInterval(this.reconnectTimer);
           this.reconnectTimer = null;
         }
 
-        // Start ping heartbeat
+        // Start ping heartbeat keepalive
         this.startHeartbeat();
 
         // Register authenticated connectionId with token + userId
-        const token = localStorage.getItem('foodway_auth_token') || localStorage.getItem('mk_auth_token') || '';
-        const userStr = localStorage.getItem('foodway_user') || localStorage.getItem('mk_user') || '';
-        let userId = '';
-        try {
-          if (userStr) {
-            const u = JSON.parse(userStr);
-            userId = u.id || u.userId || u._id || '';
-          }
-        } catch (e) {}
+        const freshToken = getToken() || '';
+        const freshUser = getCurrentUser();
+        const freshUserId = freshUser?.id || (freshUser as any)?.userId || freshUser?.email || '';
 
         this.sendNativeEvent('register_connection', {
-          token,
-          userId,
+          token: freshToken,
+          userId: freshUserId,
           rooms: Array.from(this.joinedRooms)
         });
 
         // Re-join tracked rooms on reconnect
         this.joinedRooms.forEach(roomKey => {
-          const parts = roomKey.split('_');
-          const type = parts[0];
-          const id = parts.slice(1).join('_');
-          this.sendNativeEvent('join_room', { room: roomKey, type, id, userId, token });
+          this.sendNativeEvent('join_room', {
+            room: roomKey,
+            token: freshToken,
+            userId: freshUserId
+          });
         });
       };
 
@@ -88,11 +104,15 @@ class UnifiedRealtimeSocketService {
 
           if (eventName && this.listeners.has(eventName)) {
             this.listeners.get(eventName)?.forEach(cb => {
-              try { cb(eventData); } catch (e) { console.warn(`Listener error for ${eventName}:`, e); }
+              try {
+                cb(eventData);
+              } catch (e) {
+                console.warn(`Listener error for ${eventName}:`, e);
+              }
             });
           }
         } catch (err) {
-          console.warn('⚡ [Native WebSocket] Received non-JSON message:', event.data);
+          // Ignore non-JSON frame responses
         }
       };
 
@@ -116,7 +136,7 @@ class UnifiedRealtimeSocketService {
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.reconnectTimer = setInterval(() => {
-      console.log('🔄 [Native WebSocket] Attempting reconnect...');
+      console.log('🔄 [Native WebSocket] Attempting reconnect to AWS API Gateway...');
       this.connectNativeWS();
     }, 3000);
   }
@@ -139,52 +159,9 @@ class UnifiedRealtimeSocketService {
 
   private sendNativeEvent(event: string, data: any) {
     if (this.nativeWS && this.nativeWS.readyState === WebSocket.OPEN) {
-      this.nativeWS.send(JSON.stringify({ event, action: event, type: event, data }));
+      const payload = { event, action: event, type: event, ...data, data };
+      this.nativeWS.send(JSON.stringify(payload));
     }
-  }
-
-  // --- SOCKET.IO FALLBACK ENGINE ---
-  private connectSocketIO(): Socket {
-    if (!this.socketIO) {
-      let socketUrl = 'http://localhost:5000';
-      if (typeof window !== 'undefined' && window.location && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        const protocol = window.location.protocol || 'http:';
-        socketUrl = `${protocol}//${window.location.hostname}:5000`;
-      } else if (API_BASE_URL) {
-        socketUrl = API_BASE_URL.replace(/\/api$/, '');
-      }
-
-      const token = localStorage.getItem('foodway_auth_token') || localStorage.getItem('mk_auth_token') || '';
-
-      this.socketIO = io(socketUrl, {
-        auth: { token },
-        transports: ['websocket', 'polling'],
-        autoConnect: true,
-        reconnection: true,
-        reconnectionAttempts: 15,
-        reconnectionDelay: 1500
-      });
-
-      this.socketIO.on('connect', () => {
-        console.log(`⚡ [Socket.io Connected] ID: ${this.socketIO?.id}`);
-        this.joinedRooms.forEach(room => {
-          const parts = room.split('_');
-          const type = parts[0];
-          const id = parts.slice(1).join('_');
-          if (type === 'admin') this.socketIO?.emit('join_admin');
-          if (type === 'restaurant') this.socketIO?.emit('join_restaurant', id);
-          if (type === 'user') this.socketIO?.emit('join_customer', id);
-          if (type === 'order') this.socketIO?.emit('join_order', id);
-          if (type === 'delivery') this.socketIO?.emit('join_delivery', id);
-        });
-      });
-    }
-
-    if (this.socketIO && !this.socketIO.connected) {
-      this.socketIO.connect();
-    }
-
-    return this.socketIO;
   }
 
   public on(eventName: string, callback: (data: any) => void): () => void {
@@ -193,18 +170,11 @@ class UnifiedRealtimeSocketService {
 
   public off(eventName: string, callback: (data: any) => void): this {
     this.listeners.get(eventName)?.delete(callback);
-    if (!this.isNativeMode && this.socketIO) {
-      this.socketIO.off(eventName, callback);
-    }
     return this;
   }
 
   public emit(eventName: string, data?: any): this {
-    if (this.isNativeMode) {
-      this.sendNativeEvent(eventName, data);
-    } else {
-      this.connectSocketIO().emit(eventName, data);
-    }
+    this.sendNativeEvent(eventName, data);
     return this;
   }
 
@@ -214,99 +184,87 @@ class UnifiedRealtimeSocketService {
 
   public getSocket(): any {
     const socketObj = this.connect();
-    if (socketObj && typeof socketObj === 'object' && !socketObj.on) {
-      socketObj.on = (eventName: string, cb: (data: any) => void) => this.on(eventName, cb);
-      socketObj.off = (eventName: string, cb: (data: any) => void) => this.off(eventName, cb);
-      socketObj.emit = (eventName: string, data?: any) => this.emit(eventName, data);
+    if (socketObj && typeof socketObj === 'object' && !(socketObj as any).on) {
+      (socketObj as any).on = (eventName: string, cb: (data: any) => void) => this.on(eventName, cb);
+      (socketObj as any).off = (eventName: string, cb: (data: any) => void) => this.off(eventName, cb);
+      (socketObj as any).emit = (eventName: string, data?: any) => this.emit(eventName, data);
     }
     return socketObj;
   }
 
-  // Unified Event Registration (Works for Native WS & Socket.io)
+  // Unified Event Registration
   private subscribeEvent(eventName: string, callback: (data: any) => void): () => void {
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, new Set());
     }
     this.listeners.get(eventName)?.add(callback);
-
-    // If using Socket.io, also attach socket.io listener
-    if (!this.isNativeMode) {
-      const ioSocket = this.connectSocketIO();
-      ioSocket.on(eventName, callback);
-    } else {
-      this.connectNativeWS();
-    }
+    this.connectNativeWS();
 
     return () => {
       this.listeners.get(eventName)?.delete(callback);
-      if (!this.isNativeMode && this.socketIO) {
-        this.socketIO.off(eventName, callback);
-      }
     };
   }
 
   // --- ROOM JOIN METHODS ---
   public joinAdmin(): void {
-    const roomKey = 'admin_room';
-    if (this.joinedRooms.has(roomKey)) return;
-    this.joinedRooms.add(roomKey);
-
-    if (this.isNativeMode) {
-      this.sendNativeEvent('join_admin', { room: roomKey });
-    } else {
-      this.connectSocketIO().emit('join_admin');
+    const roomKey = 'admin';
+    if (!this.joinedRooms.has(roomKey)) {
+      this.joinedRooms.add(roomKey);
     }
+    const token = getToken() || '';
+    const user = getCurrentUser();
+    this.sendNativeEvent('join_admin', { room: roomKey, token, userId: user?.id });
+    this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
 
   public joinRestaurant(restaurantId: string): void {
     if (!restaurantId) return;
-    const roomKey = `restaurant_${restaurantId}`;
-    if (this.joinedRooms.has(roomKey)) return;
-    this.joinedRooms.add(roomKey);
-
-    if (this.isNativeMode) {
-      this.sendNativeEvent('join_restaurant', { restaurantId, room: roomKey });
-    } else {
-      this.connectSocketIO().emit('join_restaurant', restaurantId);
+    const cleanId = String(restaurantId).trim();
+    const roomKey = `restaurant_${cleanId}`;
+    if (!this.joinedRooms.has(roomKey)) {
+      this.joinedRooms.add(roomKey);
     }
+    const token = getToken() || '';
+    const user = getCurrentUser();
+    this.sendNativeEvent('join_restaurant', { restaurantId: cleanId, room: roomKey, token, userId: user?.id });
+    this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
 
   public joinCustomer(customerId: string): void {
     if (!customerId) return;
-    const roomKey = `user_${customerId}`;
-    if (this.joinedRooms.has(roomKey)) return;
-    this.joinedRooms.add(roomKey);
-
-    if (this.isNativeMode) {
-      this.sendNativeEvent('join_customer', { customerId, room: roomKey });
-    } else {
-      this.connectSocketIO().emit('join_customer', customerId);
+    const cleanId = String(customerId).trim();
+    const roomKey = `user_${cleanId}`;
+    if (!this.joinedRooms.has(roomKey)) {
+      this.joinedRooms.add(roomKey);
     }
+    const token = getToken() || '';
+    const user = getCurrentUser();
+    this.sendNativeEvent('join_customer', { customerId: cleanId, room: roomKey, token, userId: user?.id || cleanId });
+    this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id || cleanId });
   }
 
   public joinOrder(orderId: string): void {
     if (!orderId) return;
-    const roomKey = `order_${orderId}`;
-    if (this.joinedRooms.has(roomKey)) return;
-    this.joinedRooms.add(roomKey);
-
-    if (this.isNativeMode) {
-      this.sendNativeEvent('join_order', { orderId, room: roomKey });
-    } else {
-      this.connectSocketIO().emit('join_order', orderId);
+    const cleanId = String(orderId).trim();
+    const roomKey = `order_${cleanId}`;
+    if (!this.joinedRooms.has(roomKey)) {
+      this.joinedRooms.add(roomKey);
     }
+    const token = getToken() || '';
+    const user = getCurrentUser();
+    this.sendNativeEvent('join_order', { orderId: cleanId, room: roomKey, token, userId: user?.id });
+    this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
 
   public joinDelivery(deliveryId?: string): void {
     const roomKey = `delivery_${deliveryId || 'riders'}`;
-    if (this.joinedRooms.has(roomKey)) return;
-    this.joinedRooms.add(roomKey);
-
-    if (this.isNativeMode) {
-      this.sendNativeEvent('join_delivery', { deliveryId: deliveryId || 'riders', room: roomKey });
-    } else {
-      this.connectSocketIO().emit('join_delivery', deliveryId || '');
+    if (!this.joinedRooms.has(roomKey)) {
+      this.joinedRooms.add(roomKey);
     }
+    const token = getToken() || '';
+    const user = getCurrentUser();
+    this.sendNativeEvent('join_delivery', { deliveryId: deliveryId || 'riders', room: roomKey, token, userId: user?.id });
+    this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
 
   // --- EVENT LISTENER SUBSCRIPTIONS ---
