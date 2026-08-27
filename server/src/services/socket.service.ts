@@ -1,6 +1,10 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
+import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
+import { UpdateCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { apiGatewayWS } from './api-gateway-websocket.service';
+import userRepository from '../repositories/user.repository';
 
 export interface SocketUser {
   userId: string;
@@ -52,7 +56,11 @@ export class SocketService {
       const socketUser: SocketUser | undefined = (socket as any).user;
       console.log(`🔌 [Socket.io Connected]: ${socket.id} (User: ${socketUser?.userId || 'Anonymous'}, Role: ${socketUser?.role || 'Guest'})`);
 
-      // Admin Room (Authorized for ADMIN only)
+      if (socketUser && socketUser.userId) {
+        this.registerUserSocketId(socketUser.userId, socket.id).catch(() => {});
+      }
+
+      // Admin Room
       socket.on('join_admin', () => {
         if (socketUser?.role === 'ADMIN') {
           socket.join('admin');
@@ -60,14 +68,14 @@ export class SocketService {
         }
       });
 
-      // Shop / Restaurant Room Authorization
+      // Shop / Restaurant Room
       socket.on('join_restaurant', (restaurantId: string) => {
         if (!restaurantId) return;
         const cleanId = String(restaurantId).trim();
         const room = `restaurant_${cleanId}`;
         const isAuthorized =
           socketUser?.role === 'ADMIN' ||
-          !socketUser || // Allow public guests to view store updates
+          !socketUser ||
           socketUser?.shopId === cleanId;
 
         if (isAuthorized && !socket.rooms.has(room)) {
@@ -76,7 +84,7 @@ export class SocketService {
         }
       });
 
-      // Customer Room Authorization
+      // Customer Room
       socket.on('join_customer', (customerId: string) => {
         if (!customerId) return;
         const cleanId = String(customerId).trim();
@@ -92,7 +100,7 @@ export class SocketService {
         }
       });
 
-      // Order Room Authorization
+      // Order Room
       socket.on('join_order', (orderId: string) => {
         if (!orderId) return;
         const cleanId = String(orderId).trim();
@@ -103,7 +111,7 @@ export class SocketService {
         }
       });
 
-      // Delivery Partner Room Authorization
+      // Delivery Partner Room
       socket.on('join_delivery', (deliveryId?: string) => {
         const isDeliveryPartner = socketUser?.role === 'DELIVERY_PARTNER' || socketUser?.role === 'ADMIN' || !socketUser;
         if (isDeliveryPartner) {
@@ -125,8 +133,80 @@ export class SocketService {
       });
     });
 
-    console.log('⚡ Socket.io Server Initialized Successfully with JWT Authentication & Room Authorization');
+    console.log('⚡ Socket.io Server Initialized Successfully with Option 1 DynamoDB Connection Storage');
     return this.io;
+  }
+
+  // --- REGISTER WEBSOCKET CONNECTION ID IN EXISTING TABLES ---
+  public async registerUserSocketId(userId: string, connectionId: string, orderId?: string): Promise<void> {
+    if (!userId || !connectionId) {
+      console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=MISSING_PARAMETERS`);
+      return;
+    }
+
+    try {
+      // 1. Resolve user via repository or direct identifier match
+      let user = await userRepository.findByUserId(userId) || await userRepository.findByIdentifier(userId);
+      
+      // Fallback: If not found by findByUserId, attempt direct scan/query
+      if (!user) {
+        try {
+          const scanRes = await dynamoDocClient.send(
+            new ScanCommand({
+              TableName: usersTableName,
+              FilterExpression: 'userId = :uid OR id = :uid OR email = :uid',
+              ExpressionAttributeValues: { ':uid': userId }
+            })
+          );
+          if (scanRes.Items && scanRes.Items.length > 0) {
+            user = scanRes.Items[0] as any;
+          }
+        } catch (scanErr) {}
+      }
+
+      if (!user) {
+        console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=USER_NOT_FOUND`);
+        return;
+      }
+
+      const key: any = {};
+      if ((user as any).userId) key.userId = (user as any).userId;
+      else if (user.email) key.email = user.email;
+      else key.id = (user as any).id || userId;
+
+      await dynamoDocClient.send(
+        new UpdateCommand({
+          TableName: usersTableName,
+          Key: key,
+          UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
+          ExpressionAttributeValues: {
+            ':cid': connectionId,
+            ':now': new Date().toISOString()
+          }
+        })
+      );
+      console.log(`[WS REGISTER SUCCESS] userId=${(user as any).userId || user.email || userId} connectionId=${connectionId}`);
+
+      if (orderId) {
+        try {
+          await dynamoDocClient.send(
+            new UpdateCommand({
+              TableName: ordersTableName,
+              Key: { orderId },
+              UpdateExpression: 'SET customerSocketConnectionId = :cid',
+              ExpressionAttributeValues: {
+                ':cid': connectionId
+              }
+            })
+          );
+          console.log(`[WS REGISTER SUCCESS] Attached orderId=${orderId} to connectionId=${connectionId}`);
+        } catch (ordErr: any) {
+          console.warn(`⚠️ Warning attaching orderId to connection:`, ordErr?.message);
+        }
+      }
+    } catch (err: any) {
+      console.error(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=DYNAMODB_UPDATE_FAILED error=${err?.message || err}`);
+    }
   }
 
   getIO(): SocketIOServer {
@@ -139,137 +219,152 @@ export class SocketService {
     return this.io;
   }
 
-  // --- REAL-TIME BROADCAST EVENT METHODS ---
+  // Helper to dispatch event to both Socket.IO (Local Dev) & API Gateway WebSocket (AWS Lambda Production)
+  private async dispatchEvent(rooms: string | string[], eventName: string, payload: any): Promise<void> {
+    const roomList = Array.isArray(rooms) ? rooms : [rooms];
+
+    // 1. Local Dev: Socket.IO
+    if (this.io) {
+      roomList.forEach(room => {
+        if (room === 'public') {
+          this.io?.emit(eventName, payload);
+        } else {
+          this.io?.to(room).emit(eventName, payload);
+        }
+      });
+    }
+
+    // 2. AWS Lambda Production: API Gateway WebSockets via PostToConnection
+    try {
+      await Promise.all(roomList.map(room => apiGatewayWS.broadcastToRoom(room, eventName, payload)));
+    } catch (err) {
+      console.warn(`⚠️ API Gateway broadcast error for event [${eventName}]:`, err);
+    }
+  }
+
+  // --- REAL-TIME BROADCAST EVENT METHODS (Async & Awaitable for AWS Lambda) ---
 
   // Admin -> Shop / Public: New Shop Created
-  emitShopCreated(shop: any): void {
-    if (!this.io) return;
+  async emitShopCreated(shop: any): Promise<void> {
     const shopId = shop.id || shop.shopId || shop.restaurantId;
     console.log(`📡 [Socket Emit: SHOP_CREATED] -> Shop #${shopId}`);
-    this.io.to('admin').emit('shop_created', shop);
-    this.io.emit('shop_created', shop);
+    await this.dispatchEvent(['admin', 'public'], 'shop_created', shop);
   }
 
   // Admin / Merchant -> Public / Dashboards: Shop Profile & Location Updated
-  emitShopUpdated(shop: any): void {
-    if (!this.io) return;
+  async emitShopUpdated(shop: any): Promise<void> {
     const shopId = shop.id || shop.shopId || shop.restaurantId;
     console.log(`📡 [Socket Emit: SHOP_UPDATED & LOCATION_UPDATED] -> Shop #${shopId}`, shop);
-    this.io.to('admin').to(`restaurant_${shopId}`).emit('shop_updated', shop);
-    this.io.emit('shop_updated', shop);
-    this.io.emit('foodway_restaurant_updated', shop);
-    this.io.emit('restaurant_profile_updated', shop);
-    this.io.emit('location_updated', shop);
+    await Promise.all([
+      this.dispatchEvent(['admin', `restaurant_${shopId}`, 'public'], 'shop_updated', shop),
+      this.dispatchEvent('public', 'foodway_restaurant_updated', shop),
+      this.dispatchEvent('public', 'restaurant_profile_updated', shop),
+      this.dispatchEvent('public', 'location_updated', shop)
+    ]);
   }
 
   // Admin / Merchant -> Public: Shop Open/Close Status Updated
-  emitShopStatusUpdated(shopId: string, isOpen: boolean, status: string): void {
-    if (!this.io || !shopId) return;
+  async emitShopStatusUpdated(shopId: string, isOpen: boolean, status: string): Promise<void> {
+    if (!shopId) return;
     console.log(`📡 [Socket Emit: SHOP_STATUS_UPDATED] -> Shop #${shopId} Open: ${isOpen}`);
     const payload = { shopId, restaurantId: shopId, isOpen, status };
-    this.io.to('admin').to(`restaurant_${shopId}`).emit('foodway_restaurant_status_updated', payload);
-    this.io.emit('foodway_restaurant_status_updated', payload);
-    this.io.emit('shop_status_updated', payload);
-    this.io.emit('restaurant_status_updated', payload);
-    this.io.emit('shop_updated', payload);
+    await Promise.all([
+      this.dispatchEvent(['admin', `restaurant_${shopId}`, 'public'], 'foodway_restaurant_status_updated', payload),
+      this.dispatchEvent(['public'], 'shop_status_updated', payload),
+      this.dispatchEvent(['public'], 'restaurant_status_updated', payload)
+    ]);
   }
 
   // Merchant -> Public / Menu: Item Created / Updated / Deleted
-  emitMenuUpdated(restaurantId: string, item?: any): void {
-    if (!this.io || !restaurantId) return;
+  async emitMenuUpdated(restaurantId: string, item?: any): Promise<void> {
+    if (!restaurantId) return;
     console.log(`📡 [Socket Emit: MENU_UPDATED] -> Restaurant [${restaurantId}] Item:`, item);
     const payload = { restaurantId, shopId: restaurantId, item, dish: item };
-    this.io.to(`restaurant_${restaurantId}`).emit('menu_updated', payload);
-    this.io.emit('menu_updated', payload);
-    this.io.emit('foodway_menu_updated', payload);
-    this.io.emit('menu_item_updated', payload);
+    await Promise.all([
+      this.dispatchEvent([`restaurant_${restaurantId}`, 'public'], 'menu_updated', payload),
+      this.dispatchEvent('public', 'foodway_menu_updated', payload)
+    ]);
   }
 
   // Customer -> Merchant & Admin: New Order Created
-  emitOrderCreated(order: any): void {
-    if (!this.io) return;
+  async emitOrderCreated(order: any): Promise<void> {
     const restRoom = `restaurant_${order.restaurantId}`;
     const userRoom = `user_${order.customerId}`;
     console.log(`📡 [Socket Emit: ORDER_CREATED] -> Room [${restRoom}] Order #${order.orderId}`);
-    this.io.to('admin').to(restRoom).to(userRoom).emit('order_created', order);
-    this.io.emit('order_created', order);
+    await this.dispatchEvent(['admin', restRoom, userRoom, 'public'], 'order_created', order);
   }
 
   // Merchant / Admin / Rider -> Customer & Merchant: Order Status Updated
-  emitOrderStatusUpdated(order: any): void {
-    if (!this.io) return;
+  async emitOrderStatusUpdated(order: any): Promise<void> {
     const userRoom = `user_${order.customerId}`;
     const orderRoom = `order_${order.orderId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
 
     console.log(`📡 [Socket Emit: ORDER_STATUS_UPDATED] -> Order #${order.orderId} Status: ${order.status}`);
-    this.io.to('admin').to(userRoom).to(orderRoom).to(restRoom).emit('order_status_updated', order);
-    this.io.emit('order_status_updated', order);
+    await this.dispatchEvent(['admin', userRoom, orderRoom, restRoom, 'public'], 'order_status_updated', order);
   }
 
   // Merchant -> Delivery Partner Broadcast: Order Ready for Pickup
-  emitOrderReadyForPickup(order: any): void {
-    if (!this.io) return;
+  async emitOrderReadyForPickup(order: any): Promise<void> {
     console.log(`📡 [Socket Emit: ORDER_READY_PICKUP] -> Room [delivery_riders] Order #${order.orderId}`);
-    this.io.to('admin').to('delivery_riders').emit('order_ready_pickup', order);
-    this.io.emit('order_ready_pickup', order);
+    await this.dispatchEvent(['admin', 'delivery_riders', 'public'], 'order_ready_pickup', order);
   }
 
   // Rider -> Customer & Merchant & Admin: Rider Status Updated
-  emitRiderStatusUpdated(order: any): void {
-    if (!this.io) return;
+  async emitRiderStatusUpdated(order: any): Promise<void> {
     const userRoom = `user_${order.customerId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
     const orderRoom = `order_${order.orderId}`;
 
     console.log(`📡 [Socket Emit: RIDER_STATUS_UPDATED] -> Order #${order.orderId} Rider Status: ${order.status}`);
-    this.io.to('admin').to(userRoom).to(restRoom).to(orderRoom).emit('rider_status_updated', order);
-    this.io.emit('rider_status_updated', order);
+    await this.dispatchEvent(['admin', userRoom, restRoom, orderRoom, 'public'], 'rider_status_updated', order);
   }
 
   // Admin -> Delivery Partner / Customer / Merchant: Order Assigned to Delivery Agent
-  emitOrderAssigned(order: any): void {
-    if (!this.io) return;
+  async emitOrderAssigned(order: any): Promise<void> {
     const userRoom = `user_${order.customerId}`;
     const restRoom = `restaurant_${order.restaurantId}`;
     const orderRoom = `order_${order.orderId}`;
     const deliveryRoom = `delivery_${order.deliveryUserId}`;
 
     console.log(`📡 [Socket Emit: ORDER_ASSIGNED] -> Order #${order.orderId} assigned to Rider #${order.deliveryUserId}`);
-    this.io.to('admin').to(deliveryRoom).to('delivery_riders').to(userRoom).to(restRoom).to(orderRoom).emit('order_assigned', order);
-    this.io.emit('order_assigned', order);
+    await this.dispatchEvent(['admin', deliveryRoom, 'delivery_riders', userRoom, restRoom, orderRoom], 'order_assigned', order);
   }
 
   // Delivery Partner -> Admin / Riders: Duty Status Updated
-  emitDeliveryDutyUpdated(partner: any): void {
-    if (!this.io) return;
+  async emitDeliveryDutyUpdated(partner: any): Promise<void> {
     console.log(`📡 [Socket Emit: PARTNER_DUTY_UPDATED] -> Partner #${partner.userId} OnDuty: ${partner.isOnDuty}`);
-    this.io.to('admin').to('delivery_riders').emit('partner_duty_updated', partner);
-    this.io.emit('partner_duty_updated', partner);
+    await this.dispatchEvent(['admin', 'delivery_riders', 'public'], 'partner_duty_updated', partner);
   }
 
   // Multi-device Cart Synchronization
-  emitCartUpdated(userId: string, cartItems: any[]): void {
-    if (!this.io || !userId) return;
+  async emitCartUpdated(userId: string, cartItems: any[]): Promise<void> {
+    if (!userId) return;
     const userRoom = `user_${userId}`;
     console.log(`📡 [Socket Emit: CART_UPDATED] -> Room [${userRoom}] Items Count: ${cartItems.length}`);
-    this.io.to(userRoom).emit('cart_updated', { userId, cartItems });
+    await this.dispatchEvent(userRoom, 'cart_updated', { userId, cartItems });
   }
 
   // Delivery Locations Updated
-  emitLocationUpdated(location: any): void {
-    if (!this.io) return;
+  async emitLocationUpdated(location: any): Promise<void> {
     console.log(`📡 [Socket Emit: LOCATION_UPDATED] -> Location #${location.locationId}`);
-    this.io.to('admin').emit('location_updated', location);
-    this.io.emit('location_updated', location);
+    await this.dispatchEvent(['admin', 'public'], 'location_updated', location);
+  }
+
+  // Multi-Vendor Items Cancelled Alert
+  async emitVendorItemsCancelled(payload: any): Promise<void> {
+    const { parentOrderId, customerId } = payload;
+    console.log(`📡 [Socket Emit: VENDOR_ITEMS_CANCELLED] -> Order #${parentOrderId}`);
+    const rooms = ['admin', 'delivery_riders', 'public'];
+    if (customerId) rooms.push(`user_${customerId}`);
+    await this.dispatchEvent(rooms, 'vendor_items_cancelled', payload);
   }
 
   // Real-Time Delivery Settings & Rates Broadcast
-  emitDeliverySettingsUpdated(settings: any): void {
-    if (!this.io) return;
+  async emitDeliverySettingsUpdated(settings: any): Promise<void> {
     console.log(`📡 [Socket Emit: DELIVERY_SETTINGS_UPDATED] -> Rates updated live!`, settings);
-    this.io.emit('delivery_settings_updated', settings);
-    this.io.emit('foodway_delivery_settings_updated', settings);
+    await this.dispatchEvent(['public'], 'delivery_settings_updated', settings);
+    await this.dispatchEvent(['public'], 'foodway_delivery_settings_updated', settings);
   }
 }
 
