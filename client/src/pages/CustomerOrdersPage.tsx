@@ -83,41 +83,43 @@ export const CustomerOrdersPage: React.FC = () => {
       const custId = user.id || user.email;
       socketService.joinCustomer(custId);
 
-      const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
-        console.log('⚡ [Socket Event: ORDER_STATUS_UPDATED]:', updatedOrder);
+      const handleOrderUpdate = (updatedOrder: any) => {
+        console.log('⚡ [Socket Event: ORDER/RIDER UPDATED]:', updatedOrder);
         const targetId = updatedOrder.orderId || updatedOrder.id;
         const parentId = updatedOrder.parentOrderId;
         const newStatus = updatedOrder.status || updatedOrder.orderStatus;
 
-        setOrders(prev => prev.map(o => {
-          const match = (o.orderId === targetId || o.id === targetId || (parentId && (o.orderId === parentId || o.parentOrderId === parentId)));
-          if (match) {
-            return { ...o, status: newStatus, orderStatus: newStatus };
-          }
-          return o;
-        }));
-        playOrderAlertBeep();
-      });
-
-      const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
-        console.log('⚡ [Socket Event: RIDER_STATUS_UPDATED]:', updatedOrder);
-        const targetId = updatedOrder.orderId || updatedOrder.id;
-        const parentId = updatedOrder.parentOrderId;
-        const newStatus = updatedOrder.status || updatedOrder.orderStatus;
+        const riderInfo = updatedOrder.assignedRider || updatedOrder.deliveryPartnerName || (typeof updatedOrder.deliveryPartner === 'object' ? updatedOrder.deliveryPartner?.name || updatedOrder.deliveryPartner?.email : updatedOrder.deliveryPartner);
+        const riderPhone = updatedOrder.deliveryPartnerPhone || updatedOrder.riderPhone || (typeof updatedOrder.deliveryPartner === 'object' ? updatedOrder.deliveryPartner?.phone : '');
 
         setOrders(prev => prev.map(o => {
           const match = (o.orderId === targetId || o.id === targetId || (parentId && (o.orderId === parentId || o.parentOrderId === parentId)));
           if (match) {
-            return { ...o, status: newStatus, orderStatus: newStatus };
+            return {
+              ...o,
+              status: newStatus || o.status,
+              orderStatus: newStatus || o.orderStatus,
+              ...(riderInfo ? {
+                assignedRider: riderInfo,
+                deliveryPartnerName: riderInfo,
+                deliveryPartnerPhone: riderPhone,
+                deliveryPartner: updatedOrder.deliveryPartner || riderInfo
+              } : {})
+            };
           }
           return o;
         }));
         playOrderAlertBeep();
-      });
+      };
+
+      const unsubscribeStatus = socketService.onOrderStatusUpdated(handleOrderUpdate);
+      const unsubscribeRider = socketService.onRiderStatusUpdated(handleOrderUpdate);
+      const unsubscribeAssigned = socketService.onOrderAssigned(handleOrderUpdate);
 
       return () => {
         unsubscribeStatus();
         unsubscribeRider();
+        unsubscribeAssigned();
       };
     } else {
       setLoading(false);
@@ -685,6 +687,7 @@ export const CustomerOrdersPage: React.FC = () => {
                             status={order.status}
                             riderName={order.assignedRider || order.deliveryPartnerName}
                             riderPhone={order.deliveryPartnerPhone}
+                            deliveryPin={order.deliveryPin || order.deliveryOtp}
                           />
 
                           {/* Delivery Address */}

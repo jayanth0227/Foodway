@@ -1,6 +1,6 @@
 {
   "heroStats": {
-    "customers": "30K+",
+    "customers": "2K+",
     "restaurants": "500+",
     "deliveryTime": "30 min"
   },
@@ -11,8 +11,9 @@
       "ITM-164601801",
       "ITM-722233631",
       "ITM-430552882",
-      "ITM-825177971",
-      "ITM-648325619"
+      "ITM-648325619",
+      "ITM-030714440",
+      "ITM-173185518"
     ]
   },
   "whyChooseUs": {
@@ -44,11 +45,6 @@
       "id": "faq-1",
       "question": "How do I place an order?",
       "answer": "Browse restaurants, select your favorite dishes, add them to your cart, and proceed to checkout with live order tracking."
-    },
-    {
-      "id": "faq-2",
-      "question": "How long does delivery take?",
-      "answer": "Most orders across Konaseema are delivered within 20 to 30 minutes depending on your location."
     },
     {
       "id": "faq-3",

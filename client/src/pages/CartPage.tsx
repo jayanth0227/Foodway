@@ -479,7 +479,7 @@ export const CartPage: React.FC = () => {
         <div className="max-w-7xl mx-auto space-y-8">
 
           {/* Clean Page Header */}
-          <div className="flex items-center justify-between border-b border-border-color/60 pb-5">
+          <div className="flex items-center justify-between border-b border-glass pb-5">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -489,7 +489,7 @@ export const CartPage: React.FC = () => {
                     navigate(-1);
                   }
                 }}
-                className="w-10 h-10 rounded-2xl bg-card-bg border border-border-color/80 text-text-secondary hover:text-primary flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                className="w-10 h-10 rounded-2xl bg-bg-card border border-glass text-text-secondary hover:text-primary flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
                 title="Go Back"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -510,10 +510,10 @@ export const CartPage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-md mx-auto bg-white dark:bg-card-bg/95 border border-slate-200/90 dark:border-border-color/80 rounded-3xl p-6 sm:p-7 space-y-5 my-6 text-left"
+              className="max-w-md mx-auto bg-bg-card border border-glass rounded-3xl p-6 sm:p-7 space-y-5 my-6 text-left shadow-luxury"
             >
               {/* Top Header Row */}
-              <div className="flex items-center gap-3.5 pb-4 border-b border-border-color/60">
+              <div className="flex items-center gap-3.5 pb-4 border-b border-glass">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 shrink-0">
                   <CheckCircle2 className="w-6 h-6 stroke-[2.5]" />
                 </div>
@@ -528,8 +528,8 @@ export const CartPage: React.FC = () => {
               </div>
 
               {/* Receipt Details Grid */}
-              <div className="bg-bg-dark/50 border border-border-color/70 rounded-2xl p-4 space-y-3 text-xs">
-                <div className="flex justify-between items-center pb-2 border-b border-border-color/40">
+              <div className="bg-bg-cardSec/70 border border-glass rounded-2xl p-4 space-y-3 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-glass/60">
                   <span className="text-text-muted font-bold">Order ID</span>
                   <span className="font-black font-mono text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
                     #{orderSuccess}
@@ -556,7 +556,7 @@ export const CartPage: React.FC = () => {
                 </div>
 
                 {deliveryAddress && (
-                  <div className="pt-2 border-t border-border-color/40 space-y-0.5">
+                  <div className="pt-2 border-t border-glass/60 space-y-0.5">
                     <span className="text-text-muted font-bold block text-[10px] uppercase tracking-wider">Delivery Details</span>
                     <p className="font-bold text-text-primary truncate">{customerName || 'Customer'} • {customerPhone}</p>
                     <p className="text-[11px] text-text-muted truncate">{deliveryAddress}</p>
@@ -569,7 +569,7 @@ export const CartPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/orders')}
-                  className="flex-1 py-3.5 px-4 rounded-2xl bg-primary hover:bg-primary-dark text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                  className="flex-1 py-3.5 px-4 rounded-2xl bg-primary hover:bg-primary-dark text-white dark:text-black font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-luxury active:scale-98"
                 >
                   <Clock className="w-4 h-4" />
                   <span>Track Live Order</span>
@@ -578,7 +578,7 @@ export const CartPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/')}
-                  className="px-5 py-3.5 rounded-2xl border border-border-color/80 text-xs font-bold text-text-secondary hover:bg-bg-dark transition-colors cursor-pointer active:scale-95"
+                  className="px-5 py-3.5 rounded-2xl border border-glass text-xs font-bold text-text-secondary hover:bg-bg-darkSec transition-colors cursor-pointer active:scale-95"
                 >
                   Home
                 </button>
@@ -588,7 +588,7 @@ export const CartPage: React.FC = () => {
             <CartPageSkeleton />
           ) : cartItems.length === 0 ? (
             /* EMPTY CART SCREEN */
-            <div className="text-center py-20 bg-card-bg border border-border-color rounded-3xl p-8 max-w-lg mx-auto space-y-6">
+            <div className="text-center py-20 bg-bg-card border border-glass rounded-3xl p-8 max-w-lg mx-auto space-y-6 shadow-luxury">
               <div className="w-24 h-24 rounded-full bg-primary/15 text-primary flex items-center justify-center mx-auto border border-primary/30">
                 <ShoppingBag className="w-12 h-12" />
               </div>
@@ -602,7 +602,7 @@ export const CartPage: React.FC = () => {
               </div>
               <button
                 onClick={() => navigate('/shops')}
-                className="px-8 py-3.5 rounded-2xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all inline-flex items-center gap-2 cursor-pointer shadow-md"
+                className="px-8 py-3.5 rounded-2xl bg-primary text-white dark:text-black text-xs font-bold hover:bg-primary-dark transition-all inline-flex items-center gap-2 cursor-pointer shadow-luxury"
               >
                 <Utensils className="w-4 h-4" />
                 <span>Explore Shops & Supermarkets</span>
@@ -802,9 +802,9 @@ export const CartPage: React.FC = () => {
 
               {/* RIGHT COLUMN: Checkout & Saved Address Selector (5 cols) */}
               <div className={`lg:col-span-5 space-y-6 ${mobileStep === 1 ? 'hidden lg:block' : 'block'}`}>
-                <form onSubmit={handlePlaceOrder} className="bg-white dark:bg-bg-card border border-glass rounded-3xl p-5 sm:p-7 space-y-5 relative overflow-hidden shadow-luxury">
+                <form onSubmit={handlePlaceOrder} className="bg-bg-card border border-glass rounded-3xl p-5 sm:p-7 space-y-5 relative overflow-hidden shadow-luxury">
                   {/* Header Title */}
-                  <div className="flex items-center justify-between border-b border-border-color/60 pb-3.5 relative z-10">
+                  <div className="flex items-center justify-between border-b border-glass pb-3.5 relative z-10">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                         <MapPin className="w-4.5 h-4.5" />
@@ -847,12 +847,12 @@ export const CartPage: React.FC = () => {
                                 className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
                                   isSelected
                                     ? 'bg-primary/10 border-primary ring-2 ring-primary/20 text-text-primary'
-                                    : 'bg-bg-dark/40 border-border-color/80 text-text-secondary hover:border-primary/40'
+                                    : 'bg-bg-cardSec border-glass text-text-secondary hover:border-primary/40'
                                 }`}
                               >
                                 <div className="space-y-1 text-xs min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <span className="px-2 py-0.5 rounded-md bg-bg-dark border border-border-color text-[10px] font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1">
+                                    <span className="px-2 py-0.5 rounded-md bg-bg-dark border border-glass text-[10px] font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1">
                                       {addr.label === 'Home' && <Home className="w-3 h-3 text-primary" />}
                                       {addr.label === 'Work' && <Briefcase className="w-3 h-3 text-primary" />}
                                       {addr.label !== 'Home' && addr.label !== 'Work' && <Navigation className="w-3 h-3 text-primary" />}
@@ -869,9 +869,9 @@ export const CartPage: React.FC = () => {
                                 </div>
                                 <div className="pt-0.5 shrink-0">
                                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                                    isSelected ? 'bg-primary border-primary text-white' : 'border-border-color'
+                                    isSelected ? 'bg-primary border-primary text-white dark:text-black' : 'border-glass'
                                   }`}>
-                                    {isSelected && <Check className="w-3 h-3" />}
+                                    {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                                   </div>
                                 </div>
                               </div>
@@ -882,7 +882,7 @@ export const CartPage: React.FC = () => {
                     )}
 
                     {/* Customer Contact & Address Inputs */}
-                    <div className="space-y-3 pt-1 border-t border-border-color/60">
+                    <div className="space-y-3 pt-1 border-t border-glass">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
@@ -895,7 +895,7 @@ export const CartPage: React.FC = () => {
                               required
                               value={customerName}
                               onChange={(e) => setCustomerName(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
                               placeholder="Full Name"
                             />
                           </div>
@@ -912,7 +912,7 @@ export const CartPage: React.FC = () => {
                               required
                               value={customerPhone}
                               onChange={(e) => setCustomerPhone(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-xs text-text-primary focus:outline-none focus:border-primary font-medium font-mono"
+                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium font-mono"
                               placeholder="Mobile Number"
                             />
                           </div>
@@ -932,7 +932,7 @@ export const CartPage: React.FC = () => {
                             setDeliveryAddress(e.target.value);
                             setIsCustomAddress(true);
                           }}
-                          className="w-full p-3 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-xs text-text-primary focus:outline-none focus:border-primary resize-none font-medium leading-relaxed"
+                          className="w-full p-3 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary resize-none font-medium leading-relaxed"
                           placeholder="House No, Flat, Street, Locality, City, Pincode"
                         />
                       </div>
@@ -946,14 +946,14 @@ export const CartPage: React.FC = () => {
                           type="text"
                           value={instructions}
                           onChange={(e) => setInstructions(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-bg-card border border-glass dark:border-white/15 text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                          className="w-full px-3 py-2 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
                           placeholder="e.g. Ring the doorbell, leave at front gate"
                         />
                       </div>
                     </div>
 
                     {/* Simplified Payment Method Reassurance Badge (Cash on Delivery) */}
-                    <div className="space-y-1.5 pt-2 border-t border-border-color/60">
+                    <div className="space-y-1.5 pt-2 border-t border-glass">
                       <label className="block text-[11px] font-extrabold text-text-primary uppercase tracking-wider">
                         Payment Method
                       </label>
@@ -969,8 +969,8 @@ export const CartPage: React.FC = () => {
                     </div>
 
                     {/* Bill Breakdown Summary */}
-                    <div className="pt-2 border-t border-border-color/60 space-y-3">
-                      <div className="bg-bg-dark/50 border border-border-color/80 rounded-2xl p-4 space-y-3 text-xs">
+                    <div className="pt-2 border-t border-glass space-y-3">
+                      <div className="bg-bg-cardSec/70 border border-glass rounded-2xl p-4 space-y-3 text-xs">
                         {/* Items Subtotal */}
                         <div className="flex justify-between items-center text-text-secondary">
                           <span className="flex items-center gap-2 font-bold text-text-primary">
@@ -983,15 +983,15 @@ export const CartPage: React.FC = () => {
                         </div>
 
                         {/* Delivery Fee */}
-                        <div className="flex justify-between items-center text-text-secondary pt-2.5 border-t border-border-color/40">
+                        <div className="flex justify-between items-center text-text-secondary pt-2.5 border-t border-glass/60">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="font-semibold text-text-primary">Delivery Fee</span>
                             {calculatedDistanceKm ? (
-                              <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-border-color/60">
+                              <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-glass">
                                 {calculatedDistanceKm} km @ ₹{deliveryFeePerKm}/km
                               </span>
                             ) : (
-                              <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-border-color/60">
+                              <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-glass">
                                 Base rate @ ₹{deliveryFeePerKm}/km
                               </span>
                             )}

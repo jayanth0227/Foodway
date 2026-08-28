@@ -28,14 +28,29 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   });
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/cms/homepage`)
-      .then(res => res.json())
-      .then(data => {
-        if (data?.success && data?.cms?.heroStats) {
-          setHeroStats(data.cms.heroStats);
-        }
-      })
-      .catch(() => {});
+    const fetchHeroStats = () => {
+      fetch(`${API_BASE_URL}/cms/homepage`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.success && data?.cms?.heroStats) {
+            setHeroStats(data.cms.heroStats);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchHeroStats();
+
+    const handleCMSUpdate = (e: any) => {
+      if (e.detail?.heroStats) {
+        setHeroStats(e.detail.heroStats);
+      } else {
+        fetchHeroStats();
+      }
+    };
+
+    window.addEventListener('homepage_cms_updated', handleCMSUpdate);
+    return () => window.removeEventListener('homepage_cms_updated', handleCMSUpdate);
   }, []);
 
   const [videoUrls, setVideoUrls] = useState<{
@@ -355,11 +370,11 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
           >
             <form
               onSubmit={handleSearchSubmit}
-              className={`flex items-center bg-bg-cardSec/80 backdrop-blur-xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 ${searchFocused ? 'border-primary/60 shadow-[0_0_35px_rgba(197,147,99,0.18)]' : 'border-glass'
+              className={`flex items-center bg-white/15 dark:bg-black/60 backdrop-blur-2xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 shadow-luxury ${searchFocused ? 'border-primary ring-2 ring-primary/30 shadow-[0_0_35px_rgba(197,147,99,0.25)]' : 'border-glass dark:border-white/20'
                 }`}
             >
               <div className="flex-1 flex items-center px-2.5 sm:px-4 space-x-2 sm:space-x-3">
-                <Search size={16} className={`transition-colors duration-300 ${searchFocused ? 'text-primary' : 'text-text-muted'}`} />
+                <Search size={18} className={`transition-colors duration-300 shrink-0 ${searchFocused ? 'text-primary' : 'text-primary/80'}`} />
                 <div className="relative flex-grow">
                   {/* Real Search Input */}
                   <input
@@ -369,13 +384,13 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                     aria-label="Search restaurants and cuisines"
-                    className="w-full bg-transparent border-none outline-none text-text-primary text-xs sm:text-sm py-2 sm:py-3 font-medium relative z-10"
+                    className="w-full bg-transparent !bg-transparent border-none outline-none text-text-primary dark:text-white text-xs sm:text-sm py-2 sm:py-3 font-semibold relative z-10"
                   />
                   {/* Dynamic placeholder typing overlay */}
                   {!searchQuery && (
-                    <span className="absolute left-0 right-2 top-1/2 -translate-y-1/2 text-text-muted/60 text-xs sm:text-sm font-medium pointer-events-none select-none z-0 truncate">
+                    <span className="absolute left-0 right-2 top-1/2 -translate-y-1/2 text-text-secondary dark:text-gray-300 text-xs sm:text-sm font-semibold pointer-events-none select-none z-0 truncate">
                       {placeholderText}
-                      <span className="w-[1.5px] h-3.5 sm:h-4 bg-primary/70 inline-block align-middle ml-0.5 animate-pulse" />
+                      <span className="w-[2px] h-3.5 sm:h-4 bg-primary inline-block align-middle ml-0.5 animate-pulse" />
                     </span>
                   )}
                 </div>
@@ -383,10 +398,10 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               <button
                 type="submit"
                 aria-label="Submit search query"
-                className="btn-primary px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-[15px] font-bold text-[11px] sm:text-xs uppercase tracking-wider flex items-center space-x-1 shrink-0"
+                className="btn-primary px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-[15px] font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center space-x-1 shrink-0 cursor-pointer shadow-luxury hover:scale-[1.02] active:scale-95 transition-all"
               >
                 <span>Find Dishes</span>
-                <ChevronRight size={13} />
+                <ChevronRight size={14} className="stroke-[3]" />
               </button>
             </form>
           </motion.div>

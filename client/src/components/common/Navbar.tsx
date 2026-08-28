@@ -167,8 +167,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
     <>
       <header
         className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${isScrolled
-          ? 'bg-bg-dark/90 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury'
-          : 'bg-bg-dark/90 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury lg:bg-transparent lg:border-transparent lg:py-6 lg:shadow-none'
+          ? 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury'
+          : 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury lg:bg-transparent lg:border-transparent lg:py-6 lg:shadow-none'
           }`}
       >
         {/* Scroll Progress Bar */}
@@ -230,17 +230,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3">
-            {/* Theme Toggle Button - Desktop Only */}
+            {/* Theme Toggle Mode Switch Button - Desktop & Mobile Topbar */}
             <button
               onClick={toggleTheme}
-              className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
+              className="relative p-2 sm:p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer shrink-0"
               aria-label="Toggle theme"
               title="Toggle Theme"
             >
               {theme === 'light' ? (
                 <Moon size={18} className="group-hover:scale-110 group-hover:rotate-[15deg] transition-all duration-500" />
               ) : (
-                <Sun size={18} className="group-hover:scale-110 group-hover:rotate-[45deg] transition-all duration-500" />
+                <Sun size={18} className="text-amber-400 group-hover:scale-110 group-hover:rotate-[45deg] transition-all duration-500" />
               )}
             </button>
 
@@ -388,7 +388,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
         isProfileModalOpen
       ) && (
         <nav
-          className="fixed bottom-0 left-0 right-0 w-full z-[999999] lg:hidden bg-white/95 dark:bg-bg-darkSec/95 border-t border-slate-200/80 dark:border-glass backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around overflow-visible shadow-[0_-4px_25px_rgba(0,0,0,0.15)]"
+          className="fixed bottom-0 left-0 right-0 w-full z-[999999] lg:hidden bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white border-t border-slate-200/80 dark:border-glass backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around overflow-visible shadow-[0_-4px_25px_rgba(0,0,0,0.15)]"
         >
         {/* 1. Home */}
         <button

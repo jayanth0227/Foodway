@@ -65,6 +65,38 @@ export const useRealtimeSync = () => {
       window.dispatchEvent(new CustomEvent('foodway_location_updated', { detail: data }));
     };
 
+    const handleCMSChange = (data?: any) => {
+      console.log('⚡ [Real-time Sync] Homepage CMS updated:', data);
+      queryClient.invalidateQueries({ queryKey: ['cms'] });
+      queryClient.invalidateQueries({ queryKey: ['homepage'] });
+      window.dispatchEvent(new CustomEvent('homepage_cms_updated', { detail: data }));
+    };
+
+    const handleCategoryChange = (data?: any) => {
+      console.log('⚡ [Real-time Sync] Categories updated:', data);
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      window.dispatchEvent(new CustomEvent('foodway_category_updated', { detail: data }));
+    };
+
+    const handleDeliverySettingsChange = (data?: any) => {
+      console.log('⚡ [Real-time Sync] Delivery settings updated:', data);
+      queryClient.invalidateQueries({ queryKey: ['delivery-settings'] });
+      window.dispatchEvent(new CustomEvent('foodway_delivery_settings_updated', { detail: data }));
+    };
+
+    const handleProfileChange = (data?: any) => {
+      console.log('⚡ [Real-time Sync] Profile updated:', data);
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] });
+      queryClient.invalidateQueries({ queryKey: ['user'] });
+      window.dispatchEvent(new CustomEvent('foodway_profile_updated', { detail: data }));
+    };
+
+    const handleVendorItemsCancelled = (data?: any) => {
+      console.log('⚡ [Real-time Sync] Vendor items cancelled:', data);
+      handleOrderChange(data);
+      window.dispatchEvent(new CustomEvent('vendor_items_cancelled', { detail: data }));
+    };
+
     // 3. Register Socket Event Listeners
     const unsubShopCreated = socketService.onShopCreated(handleShopChange);
     const unsubShopUpdated = socketService.onShopUpdated(handleShopChange);
@@ -77,6 +109,11 @@ export const useRealtimeSync = () => {
     const unsubRiderStatus = socketService.onRiderStatusUpdated(handleOrderChange);
     const unsubPartnerDuty = socketService.onPartnerDutyUpdated(handlePartnerChange);
     const unsubLocation = socketService.onLocationUpdated(handleLocationChange);
+    const unsubCMS = socketService.onCMSUpdated(handleCMSChange);
+    const unsubCategory = socketService.onCategoryUpdated(handleCategoryChange);
+    const unsubDeliverySettings = socketService.onDeliverySettingsUpdated(handleDeliverySettingsChange);
+    const unsubProfile = socketService.onProfileUpdated(handleProfileChange);
+    const unsubVendorCancelled = socketService.onVendorItemsCancelled(handleVendorItemsCancelled);
 
     return () => {
       unsubShopCreated();
@@ -90,6 +127,11 @@ export const useRealtimeSync = () => {
       unsubRiderStatus();
       unsubPartnerDuty();
       unsubLocation();
+      unsubCMS();
+      unsubCategory();
+      unsubDeliverySettings();
+      unsubProfile();
+      unsubVendorCancelled();
     };
   }, [user, isAuthenticated, queryClient]);
 };

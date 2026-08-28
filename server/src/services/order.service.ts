@@ -63,6 +63,8 @@ export class OrderService {
       };
     });
 
+    const deliveryPin = Math.floor(1000 + Math.random() * 9000).toString();
+
     const order: IOrder = {
       orderId,
       customerId: data.customerId,
@@ -71,6 +73,8 @@ export class OrderService {
       restaurantId: targetShopId,
       shopName: targetShopName,
       restaurantName: targetShopName,
+      deliveryPin,
+      deliveryOtp: deliveryPin,
       paymentMethod: data.paymentMethod || 'Online Payment',
       paymentStatus: 'SUCCESS',
       subtotal: Number(data.subtotal),

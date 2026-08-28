@@ -51,6 +51,7 @@ export const ShopsPage: React.FC = () => {
 
     const handleStatusUpdate = () => fetchShops(true);
     window.addEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+    window.addEventListener('foodway_category_updated', handleStatusUpdate);
 
     const syncWishlist = () => {
       const list = getWishlist();
@@ -63,6 +64,7 @@ export const ShopsPage: React.FC = () => {
     return () => {
       isMounted = false;
       window.removeEventListener('foodway_restaurant_status_updated', handleStatusUpdate);
+      window.removeEventListener('foodway_category_updated', handleStatusUpdate);
       window.removeEventListener('foodway_wishlist_updated', syncWishlist);
     };
   }, []);

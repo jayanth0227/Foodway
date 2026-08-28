@@ -246,17 +246,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   };
 
   const isTodayOrder = (o: any) => {
-    if (!o) return false;
+    if (!o) return true;
     const dateVal = o.createdAt || o.orderedAt || o.createdTime || o.date;
     if (!dateVal) return true;
     const d = new Date(dateVal);
     if (isNaN(d.getTime())) return true;
     const today = new Date();
-    return (
-      d.getDate() === today.getDate() &&
-      d.getMonth() === today.getMonth() &&
-      d.getFullYear() === today.getFullYear()
-    );
+    const diffMs = Math.abs(today.getTime() - d.getTime());
+    return diffMs <= 48 * 3600 * 1000;
   };
 
   const getItemVariantLabel = (it: any): string | null => {
@@ -299,27 +296,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     if (!matchesSearch) return false;
 
     const statusLower = (o.orderStatus || o.status || '').toString().toLowerCase();
-    const isToday = isTodayOrder(o);
+    const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
     if (orderStatusFilter === 'All') {
-      return isToday && (
-        statusLower === 'pending' ||
-        statusLower === 'accepted' ||
-        statusLower === 'preparing' ||
-        statusLower === 'ready' ||
-        statusLower === 'assigned' ||
-        statusLower === 'picked up' ||
-        statusLower === 'out_for_delivery' ||
-        statusLower === 'out for delivery'
-      );
+      return !isFinalized;
     }
 
     if (orderStatusFilter === 'Completed') {
-      return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+      return statusLower === 'completed' || statusLower === 'delivered';
     }
 
     if (orderStatusFilter === 'Rejected') {
-      return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+      return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
     }
 
     if (orderStatusFilter === 'Order History') {
@@ -332,25 +320,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const getTabOrderCount = (st: string) => {
     return orders.filter(o => {
       const statusLower = (o.orderStatus || o.status || '').toString().toLowerCase();
-      const isToday = isTodayOrder(o);
+      const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
       if (st === 'All') {
-        return isToday && (
-          statusLower === 'pending' ||
-          statusLower === 'accepted' ||
-          statusLower === 'preparing' ||
-          statusLower === 'ready' ||
-          statusLower === 'assigned' ||
-          statusLower === 'picked up' ||
-          statusLower === 'out_for_delivery' ||
-          statusLower === 'out for delivery'
-        );
+        return !isFinalized;
       }
       if (st === 'Completed') {
-        return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+        return statusLower === 'completed' || statusLower === 'delivered';
       }
       if (st === 'Rejected') {
-        return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+        return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
       }
       if (st === 'Order History') {
         return true;
@@ -561,10 +540,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     // Join Admin Socket Room
     socketService.joinAdmin();
 
-    // Load original AWS & Admin API data
-    fetchAWSStatus();
-    fetchDBItems();
-    fetchHeroVideos();
+    // Load original AWS & Admin API data safely
     fetchAdminRestaurants();
     fetchAdminOrders();
     fetchDeliveryPartners();
@@ -669,7 +645,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     };
   }, []);
 
-  const fetchAdminRestaurants = async () => {
+  async function fetchAdminRestaurants() {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/restaurants`);
       if (response.data.success && Array.isArray(response.data.restaurants)) {
@@ -678,9 +654,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } catch (err) {
       console.error('Error fetching admin restaurants:', err);
     }
-  };
+  }
 
-  const fetchAdminOrders = async () => {
+  async function fetchAdminOrders() {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/orders`);
       if (response.data.success && Array.isArray(response.data.orders)) {
@@ -689,10 +665,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } catch (err) {
       console.error('Error fetching admin orders:', err);
     }
-  };
+  }
 
   // Original AWS Functions (Unchanged APIs)
-  const fetchHeroVideos = async () => {
+  async function fetchHeroVideos() {
     setFetchingVideos(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/hero/videos`);
@@ -709,7 +685,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } finally {
       setFetchingVideos(false);
     }
-  };
+  }
 
   const handleSyncHeroVideos = async () => {
     setSyncingVideos(true);
@@ -734,16 +710,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     }
   };
 
-  const fetchAWSStatus = async () => {
+  async function fetchAWSStatus() {
     try {
       const response = await axios.get(`${API_BASE_URL}/aws/status`);
       setAwsStatus(response.data);
     } catch (error) {
       console.error('Error fetching AWS status:', error);
     }
-  };
+  }
 
-  const fetchDBItems = async () => {
+  async function fetchDBItems() {
     setDbLoading(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/db-items`);
@@ -753,7 +729,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } finally {
       setDbLoading(false);
     }
-  };
+  }
 
   const handleSeedDatabase = async () => {
     setSeeding(true);
@@ -1128,34 +1104,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       <div className="absolute bottom-[10%] right-[10%] w-[550px] h-[550px] rounded-full bg-accent/5 blur-[150px] pointer-events-none z-0" />
 
       {/* Hamburger header for mobile */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-bg-darkSec/80 border-b border-glass backdrop-blur-md flex items-center justify-between px-6 z-40">
-        <div className="flex items-center gap-3">
-          <img src="/logo.jpeg" alt="Logo" className="w-8 h-8 rounded-full object-cover border border-primary/40" />
-          <span className="font-display font-black text-sm tracking-widest text-primary">MK CONSOLE</span>
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200 dark:border-glass backdrop-blur-xl flex items-center justify-between px-4 z-40 shadow-md">
+        <div className="flex items-center gap-2.5">
+          <img src="/logo.jpeg" alt="Logo" className="w-8 h-8 rounded-xl object-cover border border-primary/40 shadow-2xs" />
+          <div>
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">PLATFORM ADMIN</span>
+            <span className="font-display font-black text-xs tracking-tight text-slate-900 dark:text-text-primary block">MK CONSOLE</span>
+          </div>
         </div>
-        <button 
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="p-2 text-text-secondary hover:text-primary transition-colors border border-glass rounded-lg bg-glass-subtle"
-        >
-          <Menu size={18} />
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="p-2 text-text-secondary hover:text-primary transition-colors border border-slate-200 dark:border-glass rounded-xl bg-slate-100 dark:bg-glass cursor-pointer"
+            title="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            onClick={() => handleLogout()}
+            className="p-2 text-rose-500 hover:text-rose-600 transition-colors border border-rose-500/30 rounded-xl bg-rose-500/10 cursor-pointer"
+            title="Logout Admin Console"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </header>
 
-      {/* Mobile Backdrop Overlay for Drawer */}
-      {isSidebarOpen && (
-        <div 
-          onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-30 lg:hidden"
-        />
-      )}
+      {/* Admin Mobile Bottom Navigation Bar */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white backdrop-blur-2xl border-t border-slate-200 dark:border-glass px-2 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.15)] flex items-center justify-around">
+        {[
+          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+          { id: 'restaurants', label: 'Shops', icon: Store },
+          { id: 'orders', label: 'Orders', icon: ClipboardList },
+          { id: 'delivery', label: 'Delivery', icon: Bike },
+          { id: 'locations', label: 'Locations', icon: MapPin },
+          { id: 'settings', label: 'Settings', icon: Settings }
+        ].map(item => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all duration-200 cursor-pointer relative ${isActive
+                  ? 'text-primary font-black scale-105'
+                  : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label={item.label}
+            >
+              <Icon size={20} className={isActive ? 'text-primary stroke-[2.5]' : ''} />
+              <span className="text-[9.5px] font-extrabold mt-0.5 tracking-tight truncate max-w-[56px]">
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div
+                  layoutId="adminBottomTabUnderline"
+                  className="absolute -bottom-1 w-5 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(197,147,99,0.6)]"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
 
-      {/* Sidebar Navigation */}
+      {/* Desktop Sidebar Navigation */}
       <aside 
         data-lenis-prevent
-        className={`
-          fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-40 transition-transform duration-300 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex flex-col justify-between shrink-0 shadow-2xl
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}
+        className="hidden lg:flex fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-40 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex-col justify-between shrink-0 shadow-2xl"
       >
         {/* Sidebar Header */}
         <div className="p-6 border-b border-glass flex items-center justify-between">
@@ -2666,10 +2683,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         {/* ==================================================== */}
         {activeTab === 'delivery' && (
           <div className="space-y-8 animate-fadeIn">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-glass pb-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-glass pb-4">
               <div>
-                <span className="text-[#B87C44] dark:text-[#D9A36C] font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
-                <h1 className="text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight">Delivery Fleet & Live Assignments</h1>
+                <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
+                <h1 className="text-3xl font-black font-display text-text-primary tracking-tight">Delivery Fleet & Live Assignments</h1>
               </div>
 
               <button
@@ -2683,24 +2700,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             </div>
 
             {/* Registered Delivery Partners stored in DB */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass space-y-4 shadow-xl">
+            <div className="glass-panel border border-glass p-5 sm:p-6 rounded-3xl space-y-4 shadow-luxury">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <UserCheck size={18} className="text-[#B87C44] dark:text-[#D9A36C]" />
+                  <h3 className="text-base font-black text-text-primary flex items-center gap-2">
+                    <UserCheck size={18} className="text-primary" />
                     <span>Registered Delivery Partners (Stored in Database)</span>
                   </h3>
-                  <p className="text-xs text-slate-600 dark:text-text-muted mt-0.5 font-medium">
-                    Delivery partners can log in at the central <code className="text-[#B87C44] dark:text-[#D9A36C] font-mono font-bold">/login</code> page using their credentials.
+                  <p className="text-xs text-text-muted mt-0.5 font-medium">
+                    Delivery partners can log in at the central <code className="text-primary font-mono font-bold">/login</code> page using their credentials.
                   </p>
                 </div>
-                <span className="self-start sm:self-auto px-3.5 py-1 rounded-full text-xs font-black uppercase bg-[#B87C44]/15 border border-[#B87C44]/30 text-[#B87C44] dark:text-[#D9A36C] shrink-0">
+                <span className="self-start sm:self-auto px-3.5 py-1 rounded-full text-xs font-black uppercase bg-primary/15 border border-primary/30 text-primary shrink-0">
                   {dbDeliveryPartners.length} Partners Registered
                 </span>
               </div>
 
               {dbDeliveryPartners.length === 0 ? (
-                <div className="p-8 text-center rounded-2xl border border-dashed border-slate-300 dark:border-glass text-slate-600 dark:text-text-muted text-xs font-semibold bg-slate-50/50 dark:bg-bg-dark/40 flex flex-col items-center gap-3">
+                <div className="p-8 text-center rounded-2xl border border-dashed border-glass text-text-muted text-xs font-semibold bg-bg-darkSec/40 flex flex-col items-center gap-3">
                   <p>No custom delivery partners created yet. Click "+ Create Delivery Partner" to add a new delivery partner.</p>
                   <button
                     type="button"
@@ -2712,7 +2729,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-primary/30">
                   {dbDeliveryPartners.map((partner) => {
                     const partnerName = (partner.name || '').toLowerCase();
                     const partnerEmail = (partner.email || '').toLowerCase();
@@ -2731,32 +2748,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                     const isBusyOnRide = !isOffline && Boolean(activeTransitOrder);
 
                     return (
-                      <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-slate-50 dark:bg-bg-dark/80 border border-slate-200 dark:border-glass/60 flex flex-col justify-between gap-3 relative hover:border-amber-500/40 dark:hover:border-primary/40 transition-all shadow-sm">
+                      <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-bg-cardSec/90 border border-glass flex flex-col justify-between gap-3 relative hover:border-primary/50 transition-all shadow-md">
                         <div className="flex justify-between items-start gap-2">
                           <div className="space-y-0.5 min-w-0 flex-grow">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{partner.name}</span>
+                              <span className="font-extrabold text-text-primary text-sm truncate">{partner.name}</span>
                               
                               {/* 3-State Status Pill: OFF DUTY vs BUSY ON RIDE vs ONLINE */}
                               {isOffline ? (
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 shrink-0 flex items-center gap-1">
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 shrink-0 flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                                   <span>OFFLINE</span>
                                 </span>
                               ) : isBusyOnRide ? (
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-blue-500/15 border border-blue-500/40 text-blue-700 dark:text-sky-400 shrink-0 flex items-center gap-1 animate-pulse">
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-blue-500/15 border border-blue-500/40 text-blue-600 dark:text-sky-400 shrink-0 flex items-center gap-1 animate-pulse">
                                   <Bike size={10} className="text-blue-500 dark:text-sky-400" />
                                   <span>BUSY • ON RIDE</span>
                                 </span>
                               ) : (
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shrink-0 flex items-center gap-1">
+                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shrink-0 flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                   <span>ONLINE • AVAILABLE</span>
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-slate-600 dark:text-text-muted truncate" title={partner.email}>{partner.email}</p>
-                            <p className="text-[11px] text-slate-500 dark:text-text-muted font-mono">{partner.phone || 'No phone'}</p>
+                            <p className="text-xs text-text-secondary truncate" title={partner.email}>{partner.email}</p>
+                            <p className="text-[11px] text-text-muted font-mono">{partner.phone || 'No phone'}</p>
                           </div>
                           <button
                             type="button"
@@ -2771,17 +2788,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                         {/* Active order chip if on ride */}
                         {activeTransitOrder && !isOffline && (
                           <div className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-between text-[10px]">
-                            <span className="text-slate-600 dark:text-text-muted font-semibold">Carrying Order:</span>
+                            <span className="text-text-muted font-semibold">Carrying Order:</span>
                             <span className="font-mono font-bold text-blue-600 dark:text-sky-400">#{activeTransitOrder.id || activeTransitOrder.orderId}</span>
                           </div>
                         )}
 
-                        <div className="pt-2 border-t border-slate-200 dark:border-glass/30 flex items-center justify-between text-[10px] text-slate-600 dark:text-text-muted font-medium">
-                          <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-text-secondary truncate">
-                            <Bike size={12} className="text-amber-600 dark:text-primary shrink-0" />
+                        <div className="pt-2 border-t border-glass/30 flex items-center justify-between text-[10px] text-text-muted font-medium">
+                          <span className="flex items-center gap-1 font-bold text-text-secondary truncate">
+                            <Bike size={12} className="text-primary shrink-0" />
                             <span>{partner.vehicleType || 'Bike'} {partner.vehicleNumber ? `• ${partner.vehicleNumber}` : ''}</span>
                           </span>
-                          <span className="font-mono text-amber-700 dark:text-primary font-bold shrink-0">
+                          <span className="font-mono text-primary font-bold shrink-0">
                             ID: {partner.userId}
                           </span>
                         </div>
@@ -2796,39 +2813,39 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
               
               {/* Column 1: Waiting for Rider */}
-              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
+              <div className="space-y-4 glass-panel border border-glass p-4 rounded-2xl shadow-luxury">
+                <div className="flex items-center justify-between border-b border-glass pb-2.5">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Waiting for Rider</h2>
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-text-primary">Waiting for Rider</h2>
                   </div>
-                  <span className="text-[11px] font-black bg-amber-500/15 text-amber-700 dark:text-warning px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                  <span className="text-[11px] font-black bg-amber-500/15 text-amber-600 dark:text-warning px-2.5 py-0.5 rounded-full border border-amber-500/30">
                     {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
                   </span>
                 </div>
 
                 <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
                   {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
+                    <div className="py-12 text-center text-text-muted text-xs font-semibold border border-dashed border-glass rounded-xl bg-bg-darkSec/30">
                       No orders waiting for riders.
                     </div>
                   ) : (
                     orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-amber-500/40 dark:hover:border-primary/40 transition-all">
-                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
+                      <div key={order.id} className="bg-bg-cardSec/90 border border-glass rounded-xl p-4 space-y-3 shadow-md hover:border-primary/40 transition-all">
+                        <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
+                          <span className="font-mono font-bold text-primary">#{order.id}</span>
                           <span className="uppercase font-extrabold text-amber-600 dark:text-warning">{order.orderStatus || order.status}</span>
                         </div>
                         <div className="space-y-1.5 text-[10px] leading-relaxed">
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
                         </div>
-                        <div className="pt-2.5 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
+                        <div className="pt-2.5 border-t border-glass/30 flex gap-2 items-center">
                           <select
                             value={selectedRiders[order.id] || ''}
                             onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-darkSec border border-slate-300 dark:border-glass rounded-lg text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
+                            className="flex-1 py-1.5 px-2 bg-bg-dark border border-glass rounded-lg text-[10px] font-bold text-text-primary outline-none focus:border-primary/40"
                           >
                             <option value="">Select Rider...</option>
                             {allDeliveryRiders.map(r => (
@@ -2838,7 +2855,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                           <button
                             onClick={() => handleAssignRider(order.id)}
                             disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded-lg bg-amber-500 dark:bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
+                            className="py-1.5 px-3 rounded-lg bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
                           >
                             Assign
                           </button>
@@ -2850,41 +2867,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               </div>
 
               {/* Column 2: Assigned Orders */}
-              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
+              <div className="space-y-4 glass-panel border border-glass p-4 rounded-2xl shadow-luxury">
+                <div className="flex items-center justify-between border-b border-glass pb-2.5">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Assigned Orders</h2>
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-text-primary">Assigned Orders</h2>
                   </div>
-                  <span className="text-[11px] font-black bg-blue-500/15 text-blue-700 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                  <span className="text-[11px] font-black bg-blue-500/15 text-blue-600 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/30">
                     {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
                   </span>
                 </div>
 
                 <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-blue-500/30">
                   {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
+                    <div className="py-12 text-center text-text-muted text-xs font-semibold border border-dashed border-glass rounded-xl bg-bg-darkSec/30">
                       No active courier transits.
                     </div>
                   ) : (
                     orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-blue-500/40 dark:hover:border-primary/40 transition-all">
-                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
+                      <div key={order.id} className="bg-bg-cardSec/90 border border-glass rounded-xl p-4 space-y-3 shadow-md hover:border-blue-500/40 dark:hover:border-primary/40 transition-all">
+                        <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
+                          <span className="font-mono font-bold text-primary">#{order.id}</span>
                           <span className="uppercase font-extrabold text-blue-600 dark:text-primary">{order.orderStatus || order.status}</span>
                         </div>
                         <div className="space-y-1.5 text-[10px] leading-relaxed">
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-amber-700 dark:text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-slate-700 dark:text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
                         </div>
-                        <div className="pt-2.5 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
+                        <div className="pt-2.5 border-t border-glass/30 flex gap-2 items-center">
                           <select
                             value={selectedRiders[order.id] || ''}
                             onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-darkSec border border-slate-300 dark:border-glass rounded-lg text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
+                            className="flex-1 py-1.5 px-2 bg-bg-dark border border-glass rounded-lg text-[10px] font-bold text-text-primary outline-none focus:border-primary/40"
                           >
                             <option value="">Reassign Rider...</option>
                             {allDeliveryRiders.filter(r => r !== order.assignedRider).map(r => (
@@ -2894,7 +2911,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                           <button
                             onClick={() => handleAssignRider(order.id)}
                             disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded-lg bg-slate-100 dark:bg-glass border border-slate-300 dark:border-glass hover:border-amber-500 dark:hover:border-primary/40 text-slate-700 dark:text-text-secondary hover:text-amber-700 dark:hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
+                            className="py-1.5 px-3 rounded-lg bg-glass border border-glass hover:border-primary/40 text-text-primary hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
                           >
                             Reassign
                           </button>
@@ -2906,34 +2923,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               </div>
 
               {/* Column 3: Delivered Orders */}
-              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
+              <div className="space-y-4 glass-panel border border-glass p-4 rounded-2xl shadow-luxury">
+                <div className="flex items-center justify-between border-b border-glass pb-2.5">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Delivered Orders</h2>
+                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-text-primary">Delivered Orders</h2>
                   </div>
-                  <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                  <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
                   </span>
                 </div>
 
                 <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-emerald-500/30">
                   {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
+                    <div className="py-12 text-center text-text-muted text-xs font-semibold border border-dashed border-glass rounded-xl bg-bg-darkSec/30">
                       No orders successfully delivered yet.
                     </div>
                   ) : (
                     orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-emerald-500/40 transition-all opacity-90 hover:opacity-100">
-                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
+                      <div key={order.id} className="bg-bg-cardSec/90 border border-glass rounded-xl p-4 space-y-3 shadow-md hover:border-emerald-500/40 transition-all opacity-95 hover:opacity-100">
+                        <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
+                          <span className="font-mono font-bold text-primary">#{order.id}</span>
                           <span className="uppercase font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
                         </div>
                         <div className="space-y-1.5 text-[10px] leading-relaxed">
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
                         </div>
                       </div>
                     ))

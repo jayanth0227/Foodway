@@ -115,6 +115,20 @@ export const CategoriesPage: React.FC = () => {
     };
 
     loadCategoriesData();
+
+    const handleRealtimeUpdate = () => {
+      loadCategoriesData();
+    };
+
+    window.addEventListener('foodway_category_updated', handleRealtimeUpdate);
+    window.addEventListener('foodway_menu_updated', handleRealtimeUpdate);
+    window.addEventListener('foodway_restaurant_status_updated', handleRealtimeUpdate);
+
+    return () => {
+      window.removeEventListener('foodway_category_updated', handleRealtimeUpdate);
+      window.removeEventListener('foodway_menu_updated', handleRealtimeUpdate);
+      window.removeEventListener('foodway_restaurant_status_updated', handleRealtimeUpdate);
+    };
   }, []);
 
   const handleSelectCategory = (catName: string) => {

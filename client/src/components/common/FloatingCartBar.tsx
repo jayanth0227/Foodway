@@ -23,25 +23,24 @@ export const FloatingCartBar: React.FC = () => {
   const userRole = (user?.role || '').toUpperCase();
   const isVendorOrAdminRole = ['SHOP', 'RESTAURANT', 'VENDOR', 'ADMIN', 'DELIVERY', 'DRIVER'].includes(userRole);
 
-  // Hide on auth (login/register), vendor/shop/admin/restaurant/delivery portal routes, or on checkout/cart pages
+  // Hide on auth (login/register), portal dashboards, or on checkout/cart pages
   const isAuthOrPortalRoute =
     location.pathname === '/login' ||
     location.pathname === '/register' ||
     location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/restaurant') ||
-    location.pathname.startsWith('/shop') ||
+    location.pathname.startsWith('/restaurant/dashboard') ||
+    location.pathname.startsWith('/shop/dashboard') ||
     location.pathname.startsWith('/vendor') ||
     location.pathname.startsWith('/delivery') ||
     location.pathname === '/cart' ||
     location.pathname === '/checkout';
 
-  // Only show popup for regular customer users on customer pages when cart is not empty
-  if (!isAuthenticated || !user || isVendorOrAdminRole || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
+  // Only show popup for customer users on customer pages when cart is not empty
+  if (isVendorOrAdminRole || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
     return null;
   }
 
   const handleCheckout = () => {
-    setCartOpen(false);
     navigate('/cart');
   };
 
@@ -56,10 +55,13 @@ export const FloatingCartBar: React.FC = () => {
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 80, opacity: 0, scale: 0.95 }}
         transition={{ type: 'spring', damping: 22, stiffness: 280 }}
-        className="fixed bottom-[84px] left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6 z-[99999] sm:w-[420px]"
+        className="fixed bottom-[144px] lg:bottom-20 right-4 sm:right-6 z-[999999] w-[calc(100%-2rem)] sm:w-[420px]"
       >
-        {/* Exact Zomato-Style Floating Cart Card */}
-        <div className="w-full bg-white dark:bg-[#181C25] backdrop-blur-2xl p-2.5 sm:p-3 rounded-[22px] shadow-[0_16px_40px_rgba(0,0,0,0.18)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.8)] border border-slate-200/90 dark:border-white/20 flex items-center justify-between gap-2 transition-all">
+        {/* Floating Cart Toast Card */}
+        <div
+          onClick={handleCheckout}
+          className="w-full bg-white dark:bg-[#181C25] backdrop-blur-2xl p-2.5 sm:p-3 rounded-[22px] shadow-[0_16px_40px_rgba(0,0,0,0.18)] dark:shadow-[0_16px_50px_rgba(0,0,0,0.8)] border border-slate-200/90 dark:border-white/20 flex items-center justify-between gap-2 transition-all cursor-pointer hover:scale-[1.01] active:scale-98"
+        >
           {/* Left: Circular Image + Details Stack */}
           <div className="flex items-center gap-2.5 min-w-0 flex-1 pl-0.5">
             {/* Circular Food/Restaurant Thumbnail */}
@@ -110,7 +112,10 @@ export const FloatingCartBar: React.FC = () => {
             {/* Circle Close X Button */}
             <button
               type="button"
-              onClick={() => setIsDismissed(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsDismissed(true);
+              }}
               className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-600 dark:text-slate-200 flex items-center justify-center transition-colors cursor-pointer shrink-0"
               title="Dismiss"
             >

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, UtensilsCrossed, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, UtensilsCrossed, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check, ArrowRight } from 'lucide-react';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
@@ -20,7 +20,7 @@ const removeEmojis = (str: string) => {
 export const RestaurantDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addToCart, reduceQuantity, getItemQuantity } = useCart();
+  const { cartItems, totalAmount, totalItemsCount, addToCart, reduceQuantity, getItemQuantity, setCartOpen } = useCart();
 
   const [restaurant, setRestaurant] = useState<any | null>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -736,7 +736,7 @@ export const RestaurantDetailsPage: React.FC = () => {
       {/* Variant Picker Pop-up Bottom Sheet Modal (Option 3) */}
       <AnimatePresence>
         {activePickerDish && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+          <div className="fixed inset-0 z-[1000000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
             <motion.div
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -835,7 +835,7 @@ export const RestaurantDetailsPage: React.FC = () => {
 
       {/* Liquid Viscous SVG Gooey Popover Menu */}
       {categories.length > 1 && (
-        <div className="fixed bottom-[88px] right-4 sm:right-8 z-40">
+        <div className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-[1000000]">
           <GooeyPopover
             isOpen={isCategoryFabOpen}
             onOpenChange={setIsCategoryFabOpen}

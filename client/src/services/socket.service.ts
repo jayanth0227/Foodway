@@ -1,25 +1,22 @@
 import { getToken, getCurrentUser } from '../utils/auth.utils';
 import { API_BASE_URL } from '../utils/api';
+import { io, Socket as SocketIOSocket } from 'socket.io-client';
 
 class UnifiedRealtimeSocketService {
   private nativeWS: WebSocket | null = null;
+  private ioSocket: SocketIOSocket | null = null;
   private joinedRooms: Set<string> = new Set();
-  private isNativeMode: boolean = true;
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
   private reconnectTimer: any = null;
   private pingInterval: any = null;
 
   constructor() {
-    this.determineEngineMode();
-  }
-
-  private determineEngineMode() {
-    // Production AWS WebSocket API default
-    this.isNativeMode = true;
+    // Auto-connect on instantiation
   }
 
   // Unified Connect Function
-  public connect(): WebSocket | null {
+  public connect(): any {
+    this.connectLocalSocketIO();
     return this.connectNativeWS();
   }
 
@@ -30,6 +27,14 @@ class UnifiedRealtimeSocketService {
       this.reconnectTimer = null;
     }
     this.joinedRooms.clear();
+
+    if (this.ioSocket) {
+      try {
+        this.ioSocket.disconnect();
+      } catch (e) {}
+      this.ioSocket = null;
+    }
+
     if (this.nativeWS) {
       try {
         this.nativeWS.onclose = null;
@@ -43,6 +48,70 @@ class UnifiedRealtimeSocketService {
   public reconnect(): void {
     this.disconnect();
     this.connect();
+  }
+
+  // --- LOCAL SOCKET.IO ENGINE FOR MULTI-DEVICE LOCAL TESTING ---
+  private connectLocalSocketIO(): SocketIOSocket | null {
+    const isLocalEnv =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.hostname.startsWith('192.168.') ||
+      window.location.hostname.startsWith('10.');
+
+    if (!isLocalEnv) return null;
+    if (this.ioSocket && this.ioSocket.connected) return this.ioSocket;
+
+    const token = getToken() || '';
+    const socketServerUrl = API_BASE_URL.replace(/\/api\/?$/, '');
+
+    try {
+      console.log(`⚡ [Socket.IO Local Engine] Connecting to: ${socketServerUrl}`);
+      this.ioSocket = io(socketServerUrl, {
+        auth: { token },
+        extraHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 2000
+      });
+
+      this.ioSocket.on('connect', () => {
+        console.log(`⚡ [Socket.IO Local Engine] Successfully Connected! Socket ID: ${this.ioSocket?.id}`);
+        // Re-join rooms on Socket.IO
+        this.joinedRooms.forEach(room => {
+          if (room === 'admin') this.ioSocket?.emit('join_admin');
+          else if (room.startsWith('restaurant_')) this.ioSocket?.emit('join_restaurant', room.replace('restaurant_', ''));
+          else if (room.startsWith('user_')) this.ioSocket?.emit('join_customer', room.replace('user_', ''));
+          else if (room.startsWith('order_')) this.ioSocket?.emit('join_order', room.replace('order_', ''));
+          else if (room.startsWith('delivery')) this.ioSocket?.emit('join_delivery');
+        });
+      });
+
+      // Register dynamic listener dispatcher for any event received from Socket.IO
+      this.ioSocket.onAny((eventName: string, data: any) => {
+        this.dispatchLocalEvent(eventName, data);
+      });
+
+      this.ioSocket.on('disconnect', (reason) => {
+        console.warn(`🔌 [Socket.IO Disconnected] Reason: ${reason}`);
+      });
+    } catch (err) {
+      console.warn('Socket.IO connection warning:', err);
+    }
+
+    return this.ioSocket;
+  }
+
+  // --- DISPATCH EVENTS TO ALL REGISTERED REACT LISTENERS ---
+  private dispatchLocalEvent(eventName: string, data: any) {
+    if (eventName && this.listeners.has(eventName)) {
+      this.listeners.get(eventName)?.forEach(cb => {
+        try {
+          cb(data);
+        } catch (e) {
+          console.warn(`Listener error for ${eventName}:`, e);
+        }
+      });
+    }
   }
 
   // --- NATIVE WEBSOCKET ENGINE ---
@@ -87,6 +156,7 @@ class UnifiedRealtimeSocketService {
         const freshToken = getToken() || '';
         const freshUser = getCurrentUser();
         const freshUserId = freshUser?.id || (freshUser as any)?.userId || freshUser?.email || '';
+        this.joinedRooms.add('public');
 
         this.sendNativeEvent('register_connection', {
           token: freshToken,
@@ -110,14 +180,8 @@ class UnifiedRealtimeSocketService {
           const eventName = payload.event || payload.type || payload.action || '';
           const eventData = payload.data !== undefined ? payload.data : payload;
 
-          if (eventName && this.listeners.has(eventName)) {
-            this.listeners.get(eventName)?.forEach(cb => {
-              try {
-                cb(eventData);
-              } catch (e) {
-                console.warn(`Listener error for ${eventName}:`, e);
-              }
-            });
+          if (eventName) {
+            this.dispatchLocalEvent(eventName, eventData);
           }
         } catch (err) {
           // Ignore non-JSON frame responses
@@ -339,6 +403,28 @@ class UnifiedRealtimeSocketService {
 
   public onCartUpdated(callback: (data: { userId: string; cartItems: any[] }) => void): () => void {
     return this.subscribeEvent('cart_updated', callback);
+  }
+
+  public onCMSUpdated(callback: (cms: any) => void): () => void {
+    const unsub1 = this.subscribeEvent('homepage_cms_updated', callback);
+    const unsub2 = this.subscribeEvent('cms_updated', callback);
+    return () => { unsub1(); unsub2(); };
+  }
+
+  public onCategoryUpdated(callback: (category: any) => void): () => void {
+    const unsub1 = this.subscribeEvent('category_updated', callback);
+    const unsub2 = this.subscribeEvent('foodway_category_updated', callback);
+    return () => { unsub1(); unsub2(); };
+  }
+
+  public onProfileUpdated(callback: (user: any) => void): () => void {
+    const unsub1 = this.subscribeEvent('profile_updated', callback);
+    const unsub2 = this.subscribeEvent('foodway_profile_updated', callback);
+    return () => { unsub1(); unsub2(); };
+  }
+
+  public onVendorItemsCancelled(callback: (payload: any) => void): () => void {
+    return this.subscribeEvent('vendor_items_cancelled', callback);
   }
 }
 

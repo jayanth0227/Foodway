@@ -7,6 +7,7 @@ import { comparePassword, hashPassword } from '../utils/hash.utils';
 import userRepository from '../repositories/user.repository';
 import restaurantRepository from '../repositories/restaurant.repository';
 import { generateUserId } from '../utils/idGenerator';
+import socketService from '../services/socket.service';
 
 export const setAuthCookie = (res: Response, token: string) => {
   res.cookie('foodway_session', token, {
@@ -411,6 +412,10 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
 
     const newToken = generateToken(payload);
     setAuthCookie(res, newToken);
+
+    if (socketService) {
+      socketService.emitProfileUpdated(updatedUser).catch(() => {});
+    }
 
     return res.json({
       success: true,

@@ -60,6 +60,13 @@ export const PopularDishes: React.FC = () => {
 
     fetchDishes();
 
+    const handleCMSUpdate = () => {
+      fetchDishes();
+    };
+
+    window.addEventListener('homepage_cms_updated', handleCMSUpdate);
+    window.addEventListener('foodway_menu_updated', handleCMSUpdate);
+
     const syncWishlist = () => {
       const list = getWishlist();
       const favMap: Record<string, boolean> = {};
@@ -67,8 +74,14 @@ export const PopularDishes: React.FC = () => {
       setFavorites(favMap);
     };
 
-    window.addEventListener('foodway_wishlist_updated', syncWishlist);
-    return () => window.removeEventListener('foodway_wishlist_updated', syncWishlist);
+    syncWishlist();
+
+    window.addEventListener('wishlist_updated', syncWishlist);
+    return () => {
+      window.removeEventListener('homepage_cms_updated', handleCMSUpdate);
+      window.removeEventListener('foodway_menu_updated', handleCMSUpdate);
+      window.removeEventListener('wishlist_updated', syncWishlist);
+    };
   }, []);
 
   const toggleFavorite = (dish: any, e: React.MouseEvent) => {

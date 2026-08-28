@@ -451,6 +451,10 @@ app.put('/api/admin/cms/homepage', async (req: Request, res: Response) => {
       } catch (e) { }
     }
 
+    if (socketService) {
+      await socketService.emitCMSUpdated(updatedCMS);
+    }
+
     res.json({ success: true, message: 'Homepage CMS updated successfully', cms: updatedCMS });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to update CMS' });
@@ -2255,9 +2259,45 @@ app.put('/api/admin/orders/:orderId/assign-rider', async (req: Request, res: Res
       return res.status(404).json({ success: false, error: 'Order not found.' });
     }
 
+    // Look up delivery partner user details in users table
+    let riderUser: any = null;
+    if (assignedRider) {
+      try {
+        const uScan = await dynamoDocClient.send(
+          new ScanCommand({
+            TableName: usersTableName,
+            FilterExpression: 'email = :r OR id = :r OR userId = :r OR phone = :r',
+            ExpressionAttributeValues: { ':r': assignedRider }
+          })
+        );
+        if (uScan.Items && uScan.Items.length > 0) {
+          riderUser = uScan.Items[0];
+        }
+      } catch (uErr) {}
+    }
+
+    const riderName = riderUser?.name || riderUser?.email || assignedRider || 'Delivery Partner';
+    const riderPhone = riderUser?.phone || riderUser?.mobile || riderUser?.phoneNumber || 'N/A';
+    const riderEmail = riderUser?.email || (String(assignedRider).includes('@') ? assignedRider : '');
+    const riderId = riderUser?.id || riderUser?.userId || assignedRider;
+
+    const nextStatus = (existing.status === 'PENDING' || existing.orderStatus === 'PENDING') ? 'ASSIGNED' : (existing.status || existing.orderStatus || 'ASSIGNED');
+
     const updated = {
       ...existing,
-      assignedRider,
+      assignedRider: riderName,
+      deliveryUserId: riderId,
+      deliveryPartnerName: riderName,
+      deliveryPartnerPhone: riderPhone,
+      deliveryPartnerEmail: riderEmail,
+      deliveryPartner: {
+        id: riderId,
+        name: riderName,
+        email: riderEmail,
+        phone: riderPhone
+      },
+      status: nextStatus,
+      orderStatus: nextStatus,
       updatedAt: new Date().toISOString()
     };
 
@@ -2268,11 +2308,22 @@ app.put('/api/admin/orders/:orderId/assign-rider', async (req: Request, res: Res
 
     await dynamoDocClient.send(putCmd);
 
+    // Real-Time Socket Emissions to Vendor, Customer, Admin, and Delivery Partner
+    try {
+      await socketService.emitOrderAssigned(updated);
+      await socketService.emitOrderStatusUpdated(updated);
+      await socketService.emitRiderStatusUpdated(updated);
+      await socketService.emitOrderReadyForPickup(updated);
+    } catch (sErr) {
+      console.warn('Socket emission warning on assign-rider:', sErr);
+    }
+
     res.json({
       success: true,
-      message: `Assigned delivery partner ${assignedRider} to order ${orderId}.`,
+      message: `Assigned delivery partner ${riderName} to order ${orderId}.`,
       orderId,
-      assignedRider
+      assignedRider: riderName,
+      order: updated
     });
   } catch (error: any) {
     console.error('Error assigning rider to order:', error);
@@ -2463,10 +2514,23 @@ app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, 
     const scanResp = await dynamoDocClient.send(scanCmd);
     const allOrders = scanResp.Items || [];
 
-    const assignedOrders = allOrders.filter((o: any) => {
-      const rider = (o.assignedRider || '').toLowerCase();
-      return rider.includes(cleanId) || cleanId.includes(rider);
-    });
+    const assignedOrders = allOrders
+      .filter((o: any) => {
+        const rider = (o.assignedRider || '').toLowerCase();
+        const delUser = (o.deliveryUserId || '').toLowerCase();
+        const delName = (o.deliveryPartnerName || '').toLowerCase();
+        const delEmail = (o.deliveryPartnerEmail || '').toLowerCase();
+        return (
+          rider.includes(cleanId) || cleanId.includes(rider) ||
+          delUser.includes(cleanId) || cleanId.includes(delUser) ||
+          delName.includes(cleanId) || cleanId.includes(delName) ||
+          delEmail.includes(cleanId) || cleanId.includes(delEmail)
+        );
+      })
+      .map((o: any) => {
+        const pin = (o.deliveryPin || o.deliveryOtp || String((o.id || o.orderId || '').replace(/\D/g, '').slice(-4) || '4829'));
+        return { ...o, deliveryPin: pin, deliveryOtp: pin };
+      });
 
     res.json({ success: true, orders: assignedOrders });
   } catch (error: any) {
@@ -2474,6 +2538,21 @@ app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, 
     res.status(500).json({ success: false, error: 'Failed to fetch assigned orders.' });
   }
 });
+
+// Helper to ensure every order has a 4-digit Delivery PIN
+const ensureDeliveryPin = (order: any) => {
+  if (order.deliveryPin || order.deliveryOtp) {
+    return String(order.deliveryPin || order.deliveryOtp);
+  }
+  const digits = (order.id || order.orderId || '').replace(/\D/g, '');
+  let pin = digits.length >= 4 ? digits.slice(-4) : '';
+  if (!pin || pin.length < 4 || pin === '0000') {
+    pin = String(Math.floor(1000 + Math.random() * 9000));
+  }
+  order.deliveryPin = pin;
+  order.deliveryOtp = pin;
+  return pin;
+};
 
 // Update Order Status by Delivery Partner
 app.put('/api/delivery-partner/orders/:orderId/status', async (req: Request, res: Response) => {
@@ -2492,10 +2571,56 @@ app.put('/api/delivery-partner/orders/:orderId/status', async (req: Request, res
       return res.status(404).json({ success: false, error: 'Order not found.' });
     }
 
+    ensureDeliveryPin(updated);
     res.json({ success: true, message: `Order status updated to ${upperStatus}.`, order: updated });
   } catch (error: any) {
     console.error('Error updating order status by delivery partner:', error);
     res.status(500).json({ success: false, error: 'Failed to update order status.' });
+  }
+});
+
+// Verify 4-Digit Delivery PIN by Delivery Partner
+app.post('/api/delivery-partner/orders/:orderId/verify-pin', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { pin } = req.body;
+
+    if (!pin) {
+      return res.status(400).json({ success: false, error: '4-digit Delivery PIN is required.' });
+    }
+
+    if (!ordersTableName) {
+      return res.status(400).json({ success: false, error: 'Orders table not configured.' });
+    }
+
+    const scanCmd = new ScanCommand({ TableName: ordersTableName });
+    const scanResp = await dynamoDocClient.send(scanCmd);
+    const existing = (scanResp.Items || []).find((o: any) => o.id === orderId || o.orderId === orderId);
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Order not found.' });
+    }
+
+    const expectedPin = ensureDeliveryPin(existing);
+
+    if (String(pin).trim() !== String(expectedPin).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: `Incorrect PIN (${pin}). Please ask the customer for the correct 4-digit delivery PIN.`
+      });
+    }
+
+    // PIN is correct! Transition order status to DELIVERED
+    const updated = await orderService.updateOrderStatus(orderId, 'DELIVERED' as any, 'DELIVERY');
+
+    res.json({
+      success: true,
+      message: '✅ 4-Digit Delivery PIN Verified! Order completed successfully.',
+      order: updated || { ...existing, status: 'DELIVERED', orderStatus: 'DELIVERED' }
+    });
+  } catch (error: any) {
+    console.error('Error verifying delivery PIN:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify delivery PIN.' });
   }
 });
 

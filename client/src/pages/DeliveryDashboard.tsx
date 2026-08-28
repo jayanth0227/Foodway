@@ -20,6 +20,8 @@ import {
   Moon,
   X,
   AlertTriangle,
+  AlertCircle,
+  KeyRound,
   ChevronRight,
   ChevronDown,
   ChevronUp,
@@ -206,6 +208,47 @@ export const DeliveryDashboard: React.FC = () => {
   // Real-Time Incoming Order Popup Modal State
   const [incomingOrderPopup, setIncomingOrderPopup] = useState<any | null>(null);
 
+  // Delivery OTP Verification State
+  const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
+  const [pinErrors, setPinErrors] = useState<Record<string, string | null>>({});
+
+  const handleVerifyPinAndComplete = async (orderId: string) => {
+    const enteredPin = (pinInputs[orderId] || '').trim();
+    if (!enteredPin || enteredPin.length < 4) {
+      setPinErrors(prev => ({ ...prev, [orderId]: 'Please enter the complete 4-digit PIN.' }));
+      return;
+    }
+
+    setUpdatingOrderId(orderId);
+    setPinErrors(prev => ({ ...prev, [orderId]: null }));
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/delivery-partner/orders/${orderId}/verify-pin`, { pin: enteredPin });
+
+      if (res.data && res.data.success) {
+        setOrders(prev => prev.map(o => {
+          if (o.id === orderId || o.orderId === orderId) {
+            return { ...o, orderStatus: 'DELIVERED', status: 'DELIVERED' };
+          }
+          return o;
+        }));
+
+        setActionSuccess(`✅ 4-Digit Delivery PIN Verified! Order #${orderId} delivered successfully!`);
+        setTimeout(() => setActionSuccess(null), 5000);
+
+        try {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3');
+          audio.play().catch(() => {});
+        } catch (e) {}
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Incorrect 4-digit PIN. Please ask the customer for the correct OTP.';
+      setPinErrors(prev => ({ ...prev, [orderId]: errMsg }));
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   const fetchAssignedOrders = useCallback(async () => {
     if (!user) return;
     setRefreshing(true);
@@ -381,7 +424,7 @@ export const DeliveryDashboard: React.FC = () => {
             className="px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <LogOut size={14} />
-            <span className="hidden sm:inline">Logout</span>
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -519,6 +562,11 @@ export const DeliveryDashboard: React.FC = () => {
                 currentStatus === 'in_transit' ||
                 currentStatus === 'out for delivery' ||
                 currentStatus === 'out_for_delivery';
+
+              const isReadyForPickup =
+                currentStatus === 'ready' ||
+                currentStatus === 'ready_for_pickup' ||
+                currentStatus === 'ready for pickup';
 
               return (
                 <motion.div
@@ -731,38 +779,100 @@ export const DeliveryDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* PRIMARY DELIVERABLE PROGRESSION BUTTON */}
+                  {/* PRIMARY DELIVERABLE PROGRESSION BUTTON WITH 4-DIGIT OTP VERIFICATION */}
                   <div className="pt-1">
                     {isOutForDelivery ? (
-                      <button
-                        onClick={() => handleUpdateOrderStatus(orderId, 'Delivered')}
-                        disabled={isUpdating}
-                        className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 text-black font-black text-xs uppercase tracking-wider shadow-md hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        {isUpdating ? (
-                          <RefreshCw size={16} className="animate-spin" />
-                        ) : (
-                          <>
-                            <CheckCircle2 size={18} />
-                            <span>Complete Delivery to Customer</span>
-                          </>
+                      /* STAGE 3: PACKAGE COLLECTED & IN TRANSIT -> CUSTOMER OTP VERIFICATION SCREEN */
+                      <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-primary/10 to-emerald-500/10 border border-primary/40 space-y-3 text-left">
+                        <div className="flex items-center gap-2 text-xs font-black text-text-primary">
+                          <KeyRound size={16} className="text-primary shrink-0" />
+                          <span>Ask Customer for 4-Digit Delivery Verification PIN (OTP):</span>
+                        </div>
+
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleVerifyPinAndComplete(orderId);
+                          }}
+                          className="flex flex-col sm:flex-row items-center gap-2"
+                        >
+                          <input
+                            type="text"
+                            maxLength={4}
+                            value={pinInputs[orderId] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                              setPinInputs(prev => ({ ...prev, [orderId]: val }));
+                              if (pinErrors[orderId]) setPinErrors(prev => ({ ...prev, [orderId]: null }));
+                            }}
+                            placeholder="Enter 4-Digit PIN"
+                            className="w-full sm:w-48 px-4 py-3 rounded-xl bg-black/60 border border-primary/50 text-center font-mono text-lg font-black text-primary tracking-widest placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+
+                          <button
+                            type="submit"
+                            disabled={isUpdating || (pinInputs[orderId] || '').length < 4}
+                            className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider shadow-md active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            {isUpdating ? (
+                              <RefreshCw size={16} className="animate-spin" />
+                            ) : (
+                              <>
+                                <CheckCircle2 size={18} />
+                                <span>Verify PIN & Complete Delivery</span>
+                              </>
+                            )}
+                          </button>
+                        </form>
+
+                        {pinErrors[orderId] && (
+                          <div className="text-xs font-bold text-rose-400 bg-rose-500/15 p-2.5 rounded-xl border border-rose-500/30 flex items-center gap-2">
+                            <AlertCircle size={14} className="shrink-0 text-rose-400" />
+                            <span>{pinErrors[orderId]}</span>
+                          </div>
                         )}
-                      </button>
+                      </div>
+                    ) : isReadyForPickup ? (
+                      /* STAGE 2: VENDOR HAS MARKED "READY FOR PICKUP" -> RIDER CAN COLLECT ORDER */
+                      <div className="space-y-2">
+                        <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold flex items-center gap-2">
+                          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+                          <span>✅ Vendor has marked order as Ready for Pickup! Collect parcel below:</span>
+                        </div>
+
+                        <button
+                          onClick={() => handleUpdateOrderStatus(orderId, 'Out for Delivery')}
+                          disabled={isUpdating}
+                          className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider shadow-md hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          {isUpdating ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                          ) : (
+                            <>
+                              <Package size={18} />
+                              <span>📦 Collect Order & Start Delivery</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => handleUpdateOrderStatus(orderId, 'Out for Delivery')}
-                        disabled={isUpdating}
-                        className="w-full py-3.5 px-4 rounded-xl bg-primary text-black font-black text-xs uppercase tracking-wider shadow-md hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        {isUpdating ? (
-                          <RefreshCw size={16} className="animate-spin" />
-                        ) : (
-                          <>
-                            <Bike size={18} />
-                            <span>Accept Order & Start Delivery</span>
-                          </>
-                        )}
-                      </button>
+                      /* STAGE 1: VENDOR HAS NOT MARKED READY YET (STILL PREPARING OR ACCEPTED) */
+                      <div className="space-y-2">
+                        <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-extrabold flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Clock size={16} className="shrink-0 text-amber-400 animate-spin" />
+                            <span>⏳ Waiting for Vendor to mark order as "Ready for Pickup"...</span>
+                          </div>
+                        </div>
+
+                        <button
+                          disabled
+                          className="w-full py-3.5 px-4 rounded-xl bg-gray-800/60 border border-glass/40 text-gray-400 font-bold text-xs uppercase tracking-wider shadow-none flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+                        >
+                          <Package size={18} />
+                          <span>📦 Collect Order (Waiting for Vendor Ready Status)</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -1280,6 +1390,47 @@ export const DeliveryDashboard: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* DELIVERY PARTNER MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white backdrop-blur-2xl border-t border-slate-200 dark:border-glass px-2 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.15)] flex items-center justify-around">
+        {[
+          { id: 'ACTIVE', label: 'Active Tasks', icon: Clock, count: activeOrders.length },
+          { id: 'COMPLETED', label: 'History', icon: CheckCircle2, count: completedOrders.length },
+        ].map(item => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-all duration-200 cursor-pointer relative ${isActive
+                  ? 'text-primary font-black scale-105'
+                  : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label={item.label}
+            >
+              <div className="relative">
+                <Icon size={20} className={isActive ? 'text-primary stroke-[2.5]' : ''} />
+                {item.count > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-gradient-to-r from-amber-500 to-primary text-black font-black text-[9px] min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center border border-white dark:border-bg-dark shadow-sm">
+                    {item.count}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-extrabold mt-0.5 tracking-tight truncate">
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div
+                  layoutId="riderBottomTabUnderline"
+                  className="absolute -bottom-1 w-6 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(197,147,99,0.6)]"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 };

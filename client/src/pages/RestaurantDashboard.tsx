@@ -282,10 +282,10 @@ export const RestaurantDashboard: React.FC = () => {
       .toLowerCase();
 
   const openAddCategoryModal = () => {
-    setSelectedSuggestions([]);
+    setSelectedSuggestions([...categories]);
     setNewCategoryName('');
     setCategoryError(null);
-    setIsAddCategoryOpen(true);
+    setActiveTab('categories' as any);
   };
 
   const toggleSuggestion = (cat: string) => {
@@ -695,7 +695,7 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Socket.io Real-Time Room Join & Order Event Subscriptions
   useEffect(() => {
-    const resId = restaurant?.id || '';
+    const resId = restaurant?.id || restaurant?.shopId || restaurant?.restaurantId || user?.shopId || user?.restaurantId || user?.id || '';
     if (resId) {
       socketService.joinRestaurant(resId);
     }
@@ -710,13 +710,14 @@ export const RestaurantDashboard: React.FC = () => {
         restaurant?.restaurantId,
         restaurant?.ownerUserId,
         user?.id,
-        user?.restaurantId
+        user?.restaurantId,
+        user?.shopId
       ].filter(Boolean).map(id => String(id).toLowerCase());
 
       const orderResId = (newOrder.restaurantId || newOrder.shopId || '').toLowerCase();
 
       // Guard: strictly ignore orders belonging to other vendors!
-      if (vendorIds.length > 0 && orderResId && !vendorIds.includes(orderResId)) {
+      if (vendorIds.length > 0 && orderResId && !vendorIds.includes(orderResId) && !vendorIds.some(v => v.includes(orderResId) || orderResId.includes(v))) {
         return;
       }
 
@@ -746,19 +747,28 @@ export const RestaurantDashboard: React.FC = () => {
       logActivity('order', `New order #${formattedOrder.id} received from ${formattedOrder.customerName}!`);
     });
 
-    // Phase 4: Rider status updates listener & Order Delivered updates
+    // Phase 4: Rider status updates listener & Order Delivered updates & Partner Assignment
     const handleStatusChange = (updatedOrder: any) => {
       const orderId = updatedOrder.orderId || updatedOrder.id;
       const newStatus = updatedOrder.status || updatedOrder.orderStatus;
+      const riderInfo = updatedOrder.assignedRider || updatedOrder.deliveryPartnerName || (typeof updatedOrder.deliveryPartner === 'object' ? updatedOrder.deliveryPartner?.name || updatedOrder.deliveryPartner?.email : updatedOrder.deliveryPartner);
+      const riderPhone = updatedOrder.deliveryPartnerPhone || updatedOrder.riderPhone || (typeof updatedOrder.deliveryPartner === 'object' ? updatedOrder.deliveryPartner?.phone : '');
 
       setOrders(prev => prev.map(o => {
         if (o.id === orderId || (o as any).orderId === orderId) {
-          return { ...o, orderStatus: newStatus };
+          return {
+            ...o,
+            orderStatus: newStatus || o.orderStatus,
+            ...(riderInfo ? { assignedRider: riderInfo, deliveryPartnerName: riderInfo, deliveryPartnerPhone: riderPhone } : {})
+          };
         }
         return o;
       }));
 
       // Log delivery activity
+      if (riderInfo) {
+        logActivity('order', `🛵 Delivery partner ${riderInfo} assigned to Order #${orderId}`);
+      }
       if (String(newStatus).toLowerCase() === 'delivered' || String(newStatus).toLowerCase() === 'completed') {
         logActivity('order', `Order #${orderId} delivered successfully! 🎉`);
       }
@@ -766,11 +776,13 @@ export const RestaurantDashboard: React.FC = () => {
 
     const unsubscribeRider = socketService.onRiderStatusUpdated(handleStatusChange);
     const unsubscribeStatus = socketService.onOrderStatusUpdated(handleStatusChange);
+    const unsubscribeAssigned = socketService.onOrderAssigned(handleStatusChange);
 
     return () => {
       unsubscribeCreated();
       unsubscribeRider();
       unsubscribeStatus();
+      unsubscribeAssigned();
     };
   }, [restaurant?.id]);
 
@@ -1181,7 +1193,12 @@ export const RestaurantDashboard: React.FC = () => {
 
   // Filtered Menu Items
   const filteredMenuItems = menuItems.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(menuSearch.toLowerCase()) || item.description.toLowerCase().includes(menuSearch.toLowerCase());
+    if (!item) return false;
+    const nameStr = item.name ? String(item.name).toLowerCase() : '';
+    const descStr = item.description ? String(item.description).toLowerCase() : '';
+    const catStr = item.category ? String(item.category).toLowerCase() : '';
+    const searchStr = (menuSearch || '').toLowerCase();
+    const matchesSearch = !searchStr || nameStr.includes(searchStr) || descStr.includes(searchStr) || catStr.includes(searchStr);
     const matchesCat = menuCategoryFilter === 'All' || item.category === menuCategoryFilter;
     const matchesVeg = menuVegFilter === 'All' || (menuVegFilter === 'Veg' ? item.isVeg : !item.isVeg);
     const matchesAvail = menuAvailabilityFilter === 'All' || (menuAvailabilityFilter === 'Available' ? item.isAvailable : !item.isAvailable);
@@ -1357,27 +1374,21 @@ export const RestaurantDashboard: React.FC = () => {
     if (!matchesSearch) return false;
 
     const statusLower = (o.orderStatus || (o as any).status || '').toString().toLowerCase();
-    const isToday = isTodayOrder(o);
+    const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
     if (orderStatusFilter === 'All') {
-      // Today's active in-progress orders (Pending, Accepted, Preparing, Ready, Out for Delivery)
-      return isToday && (
-        statusLower === 'pending' ||
-        statusLower === 'accepted' ||
-        statusLower === 'preparing' ||
-        statusLower === 'ready' ||
-        statusLower === 'out_for_delivery'
-      );
+      // Active in-progress orders that are NOT finalized yet (Pending, Accepted, Preparing, Ready, Assigned, Out for Delivery)
+      return !isFinalized;
     }
 
     if (orderStatusFilter === 'Completed') {
-      // Today's completed orders
-      return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+      // Only fully delivered/completed orders
+      return statusLower === 'completed' || statusLower === 'delivered';
     }
 
     if (orderStatusFilter === 'Rejected') {
-      // Today's rejected orders
-      return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+      // Rejected or cancelled orders
+      return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
     }
 
     if (orderStatusFilter === 'Order History') {
@@ -1392,22 +1403,16 @@ export const RestaurantDashboard: React.FC = () => {
   const getTabOrderCount = (st: string) => {
     return orders.filter(o => {
       const statusLower = (o.orderStatus || (o as any).status || '').toString().toLowerCase();
-      const isToday = isTodayOrder(o);
+      const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
       if (st === 'All') {
-        return isToday && (
-          statusLower === 'pending' ||
-          statusLower === 'accepted' ||
-          statusLower === 'preparing' ||
-          statusLower === 'ready' ||
-          statusLower === 'out_for_delivery'
-        );
+        return !isFinalized;
       }
       if (st === 'Completed') {
-        return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+        return statusLower === 'completed' || statusLower === 'delivered';
       }
       if (st === 'Rejected') {
-        return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+        return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
       }
       if (st === 'Order History') {
         return true;
@@ -1578,6 +1583,7 @@ export const RestaurantDashboard: React.FC = () => {
   const navItems = [
     { id: 'dashboard', label: t('nav_dashboard'), icon: LayoutDashboard },
     { id: 'menu', label: t('nav_menu'), icon: Utensils },
+    { id: 'categories', label: 'Categories', icon: Folder },
     { id: 'orders', label: t('nav_orders'), icon: ClipboardList, badge: pendingCount > 0 ? pendingCount : null },
     { id: 'profile', label: t('nav_profile'), icon: User },
     { id: 'settings', label: t('nav_settings'), icon: Settings },
@@ -1667,142 +1673,109 @@ export const RestaurantDashboard: React.FC = () => {
           </button>
         </div>
       </aside>
-
-      {/* ==================================================== */}
+           {/* ==================================================== */}
       {/* MOBILE FIXED TOP NAVBAR */}
       {/* ==================================================== */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-bg-dark/95 backdrop-blur-xl border-b border-glass px-4 py-3 flex items-center justify-between shadow-md">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white backdrop-blur-xl border-b border-slate-200 dark:border-glass px-4 py-3 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-            className="p-2 rounded-xl bg-glass border border-glass text-text-primary hover:text-primary transition-all cursor-pointer"
-          >
-            {isMobileSidebarOpen ? <X size={20} /> : <MenuIcon size={20} />}
-          </button>
-          <div>
-            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">SHOP & VENDOR PORTAL</span>
-            <span className="text-xs font-black text-text-primary truncate block max-w-[160px] sm:max-w-xs">{restaurant?.name || 'Shop Console'}</span>
+          <div className="w-9 h-9 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary shrink-0 shadow-xs">
+            <Store size={18} />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">SHOP CONSOLE</span>
+            <span className="text-xs font-black text-slate-900 dark:text-text-primary truncate block max-w-[140px] sm:max-w-xs">{restaurant?.name || 'Shop Portal'}</span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Notification Bell Button */}
+          {/* Mobile Store Open Status Pill */}
+          <button
+            type="button"
+            onClick={handleToggleRestaurantStatus}
+            disabled={isUpdatingStatus}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border flex items-center gap-1.5 cursor-pointer shadow-2xs ${isRestaurantOpen
+                ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                : 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
+              }`}
+          >
+            <div className={`w-2 h-2 rounded-full ${isRestaurantOpen ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+            <span>{isRestaurantOpen ? 'Open' : 'Closed'}</span>
+          </button>
+
+          {/* Mobile Theme Switcher */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-xl bg-slate-100 dark:bg-glass border border-slate-200 dark:border-glass text-text-muted hover:text-primary transition-all cursor-pointer"
+            title="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+
+          {/* Mobile Notification Bell */}
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-            className="relative p-2 rounded-xl bg-white dark:bg-glass border border-slate-200/80 dark:border-glass text-text-primary hover:text-primary transition-all cursor-pointer shadow-2xs"
-            title="Recent Updates & Notifications"
+            className="relative p-2 rounded-xl bg-slate-100 dark:bg-glass border border-slate-200 dark:border-glass text-text-primary hover:text-primary transition-all cursor-pointer shadow-2xs"
+            title="Notifications"
           >
-            <Bell size={16} className="text-primary" />
+            <Bell size={15} className="text-primary" />
             {pendingCount > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[11px] rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-lg shadow-rose-500/40 pointer-events-none z-10">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[10px] rounded-full flex items-center justify-center border border-white dark:border-slate-900 shadow-sm pointer-events-none z-10">
                 {pendingCount > 99 ? '99+' : pendingCount}
               </span>
             )}
           </motion.button>
 
-          {/* Mobile Language Selector Dropdown (Replaces Theme Icon) */}
-          <div className="px-2.5 py-1.5 rounded-xl border border-glass bg-glass flex items-center gap-1.5 shadow-sm">
-            <Globe size={14} className="text-primary shrink-0" />
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as any)}
-              className="bg-transparent text-xs font-black text-text-primary focus:outline-none cursor-pointer uppercase"
-            >
-              <option value="en" className="bg-bg-dark text-text-primary">EN</option>
-              <option value="te" className="bg-bg-dark text-text-primary">TE</option>
-              <option value="hi" className="bg-bg-dark text-text-primary">HI</option>
-            </select>
-          </div>
+          {/* Mobile Logout Button */}
+          <button
+            onClick={handleLogout}
+            className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shadow-2xs"
+            title="Logout Console"
+          >
+            <LogOut size={15} />
+          </button>
         </div>
       </div>
 
-      {/* Mobile Drawer */}
-      <AnimatePresence>
-        {isMobileSidebarOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="lg:hidden fixed inset-0 z-45 bg-black/75 backdrop-blur-xs"
-            />
-
-            {/* Slide-out Drawer Panel (Sleek White & Website Theme Accent) */}
-            <motion.div
-              initial={{ opacity: 0, x: -300 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -300 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="lg:hidden fixed top-0 left-0 bottom-0 z-50 w-72 bg-white dark:bg-bg-darkSec backdrop-blur-2xl border-r border-slate-200/90 dark:border-glass p-6 flex flex-col justify-between shadow-2xl text-slate-800 dark:text-white"
+      {/* ==================================================== */}
+      {/* VENDOR DASHBOARD MOBILE BOTTOM NAVIGATION BAR */}
+      {/* ==================================================== */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white backdrop-blur-2xl border-t border-slate-200 dark:border-glass px-2 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.15)] flex items-center justify-around">
+        {navItems.map(item => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all duration-200 cursor-pointer relative ${isActive
+                  ? 'text-primary font-black scale-105'
+                  : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label={item.label}
             >
-              <div className="space-y-6">
-                {/* Drawer Header */}
-                <div className="flex items-center justify-between border-b border-slate-200/80 dark:border-glass pb-4 pt-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary shrink-0 shadow-xs">
-                      <ChefHat size={20} />
-                    </div>
-                    <div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-primary block">RESTAURANT PORTAL</span>
-                      <span className="text-sm font-black text-slate-900 dark:text-white truncate block max-w-[150px] font-display">{restaurant?.name || 'Console'}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setIsMobileSidebarOpen(false)}
-                    className="p-1.5 rounded-xl bg-slate-100 dark:bg-glass text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                {/* Nav Links */}
-                <div className="space-y-2">
-                  {navItems.map(item => {
-                    const Icon = item.icon;
-                    const isActive = activeTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => { setActiveTab(item.id as any); setIsMobileSidebarOpen(false); }}
-                        className={`w-full flex items-center justify-between px-4 py-3.5 rounded-2xl font-extrabold text-xs transition-all cursor-pointer ${isActive
-                          ? 'bg-primary text-black font-black shadow-lg shadow-primary/25'
-                          : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100/90 dark:bg-glass hover:bg-slate-200/80'
-                          }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon size={18} className={isActive ? 'text-black' : 'text-primary'} />
-                          <span>{item.label}</span>
-                        </div>
-                        {item.badge && (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-black text-primary' : 'bg-primary/20 text-primary'
-                            }`}>
-                            {item.badge}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="relative">
+                <Icon size={20} className={isActive ? 'text-primary stroke-[2.5]' : ''} />
+                {item.badge ? (
+                  <span className="absolute -top-1.5 -right-2 bg-gradient-to-r from-rose-500 to-red-600 text-white font-black text-[9px] min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center border border-white dark:border-bg-dark shadow-sm">
+                    {item.badge}
+                  </span>
+                ) : null}
               </div>
-
-              {/* Logout Button with Confirmation Alert */}
-              <button
-                onClick={() => {
-                  setIsMobileSidebarOpen(false);
-                  handleLogout();
-                }}
-                className="w-full py-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all hover:bg-rose-500/20 cursor-pointer shadow-xs"
-              >
-                <LogOut size={16} />
-                <span>{t('nav_logout')}</span>
-              </button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+              <span className="text-[9.5px] font-extrabold mt-0.5 tracking-tight truncate max-w-[56px]">
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div
+                  layoutId="vendorBottomTabUnderline"
+                  className="absolute -bottom-1 w-5 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(197,147,99,0.6)]"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
 
       {/* ==================================================== */}
       {/* MAIN CONTENT WORKSPACE CONTAINER */}
@@ -3155,6 +3128,161 @@ export const RestaurantDashboard: React.FC = () => {
         )}
 
         {/* ==================================================== */}
+        {/* CATEGORY MANAGEMENT DEDICATED FULL PAGE VIEW */}
+        {/* ==================================================== */}
+        {activeTab === ('categories' as any) && (
+          <div className="space-y-6 animate-fadeIn w-full max-h-[calc(100vh-120px)] overflow-y-auto pr-1 sm:pr-2 pb-12">
+            {/* Page Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('menu')}
+                    className="p-1.5 rounded-xl bg-glass border border-glass text-text-muted hover:text-primary transition-all cursor-pointer mr-1"
+                    title="Back to Menu Management"
+                  >
+                    <ArrowLeft size={16} />
+                  </button>
+                  <span className="text-primary font-bold text-xs uppercase tracking-widest block">Store Catalog</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight mt-1">
+                  Category Management
+                </h1>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Select from suggestions or create custom categories for your shop catalog.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('menu')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-glass bg-glass hover:bg-glass-subtle text-text-primary hover:text-primary font-bold text-xs uppercase tracking-wider transition-all cursor-pointer self-start sm:self-auto"
+              >
+                <Utensils size={15} />
+                <span>Back to Items Menu</span>
+              </button>
+            </div>
+
+            {/* Main Category Management Panel */}
+            <div className="glass-panel border border-glass rounded-2xl p-6 sm:p-8 shadow-luxury max-w-3xl w-full text-text-primary">
+              {categoryError && (
+                <div className="p-4 rounded-xl bg-error/15 border border-error/30 text-rose-400 text-xs font-semibold mb-6 flex gap-2.5 items-center shadow-sm">
+                  <AlertTriangle size={18} className="shrink-0" />
+                  <span>{categoryError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleAddCategory} className="space-y-6 text-xs font-semibold text-text-secondary">
+                {/* Quick Suggestions */}
+                <div>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2.5">
+                    Quick Suggestions (Click to Select / Deselect)
+                  </label>
+                  <div className="flex flex-wrap gap-2.5 p-4 rounded-2xl bg-bg-cardSec border border-glass">
+                    {SUGGESTED_CATEGORIES.map((cat) => {
+                      const isSelected = selectedSuggestions.some(s => s === cat || normCat(s) === normCat(cat));
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => toggleSuggestion(cat)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 border cursor-pointer ${
+                            isSelected
+                              ? 'bg-primary text-black border-primary shadow-md shadow-primary/20 scale-[1.02]'
+                              : 'bg-bg-dark hover:bg-glass-subtle border-glass text-text-secondary hover:text-text-primary'
+                          }`}
+                        >
+                          <span>{cat}</span>
+                          {isSelected && <CheckCircle size={14} className="text-black shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Custom Category Input */}
+                <div>
+                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
+                    Or Enter Custom Category Name
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="e.g. Chef Specials, Tandoori, Soups..."
+                      className="flex-1 bg-bg-cardSec border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSavingCategory}
+                      className="px-6 py-3 bg-primary hover:bg-primary-dark text-black font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-luxury cursor-pointer shrink-0 disabled:opacity-50"
+                    >
+                      {isSavingCategory ? 'Saving...' : 'Save Categories'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Categories List */}
+                {categories.length > 0 && (
+                  <div className="pt-4 border-t border-glass">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
+                        Active Establishment Categories ({categories.length})
+                      </label>
+                      <span className="text-[10px] text-text-muted">Click edit icon to rename or trash icon to delete</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {categories.map((catName) => {
+                        const count = menuItems.filter(m => m && m.category === catName).length;
+                        return (
+                          <div
+                            key={catName}
+                            className="p-3.5 rounded-xl bg-bg-cardSec border border-glass flex items-center justify-between text-xs font-bold text-text-primary hover:border-primary/40 transition-all shadow-sm group"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Folder size={16} className="text-primary shrink-0" />
+                              <span className="truncate">{catName}</span>
+                              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black">
+                                {count} {count === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newName = prompt('Rename Category:', catName);
+                                  if (newName && newName.trim() && newName.trim() !== catName) {
+                                    setEditingCategoryValue(newName.trim());
+                                    handleRenameCategorySubmit(catName);
+                                  }
+                                }}
+                                className="p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-glass transition-colors cursor-pointer"
+                                title="Rename category"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCategorySubmit(catName)}
+                                className="p-1.5 rounded-lg text-text-muted hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                title={`Delete '${catName}' category`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================== */}
         {/* PROFILE TAB */}
         {/* ==================================================== */}
         {activeTab === 'profile' && (
@@ -3570,169 +3698,6 @@ export const RestaurantDashboard: React.FC = () => {
       {/* ADD CATEGORY MODAL */}
       {/* ==================================================== */}
       <AnimatePresence>
-        {isAddCategoryOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg-dark/80 backdrop-blur-md overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="glass-panel border border-glass rounded-2xl p-6 sm:p-8 shadow-luxury max-w-md w-full my-8 text-text-primary"
-            >
-              <div className="flex items-center justify-between border-b border-glass pb-4 mb-6">
-                <div>
-                  <h3 className="text-xl font-bold font-display text-primary tracking-tight">Add Categories</h3>
-                  <p className="text-xs text-text-muted mt-0.5">Select from suggestions or create custom categories.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setIsAddCategoryOpen(false); setSelectedSuggestions([]); setNewCategoryName(''); }}
-                  className="p-2 rounded-lg bg-glass text-text-muted hover:text-primary transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {categoryError && (
-                <div className="p-3.5 rounded-xl bg-error/10 border border-error/20 text-error text-xs font-semibold mb-5 flex gap-2 items-center">
-                  <AlertTriangle size={16} />
-                  <span>{categoryError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleAddCategory} className="space-y-5 text-xs font-semibold text-text-secondary">
-                {/* Category Suggestions Section (Select / Deselect) */}
-                <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
-                    Quick Suggestions (Click to Select / Deselect)
-                  </label>
-                  <div className="flex flex-wrap gap-2 p-3 rounded-xl bg-bg-dark/50 border border-glass">
-                    {SUGGESTED_CATEGORIES.map((cat) => {
-                      const isSelected = selectedSuggestions.some(s => s === cat || normCat(s) === normCat(cat));
-                      return (
-                        <button
-                          key={cat}
-                          type="button"
-                          onClick={() => toggleSuggestion(cat)}
-                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 border cursor-pointer ${isSelected
-                            ? 'bg-primary text-black border-primary shadow-md shadow-primary/20 scale-[1.02]'
-                            : 'bg-glass hover:bg-glass-subtle border-glass text-text-secondary hover:text-text-primary'
-                            }`}
-                        >
-                          <span>{cat}</span>
-                          {isSelected && <CheckCircle size={14} className="text-black shrink-0" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Custom Category Input */}
-                <div>
-                  <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">
-                    Or Enter Custom Category Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    placeholder="e.g. Chef Specials, Tandoori, Soups..."
-                    className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none font-medium text-sm"
-                  />
-                </div>
-
-                {/* Display Current Active Categories with Edit & Delete Controls */}
-                {categories.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest">
-                        Active Categories ({categories.length})
-                      </label>
-                      <span className="text-[10px] text-text-muted">Click edit icon to rename or trash icon to delete</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 p-3.5 rounded-xl bg-bg-dark/50 border border-glass max-h-40 overflow-y-auto">
-                      {categories.map((cat) => (
-                        <div
-                          key={cat}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-primary text-xs font-bold transition-all group"
-                        >
-                          {editingCategoryTarget === cat ? (
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="text"
-                                autoFocus
-                                value={editingCategoryValue}
-                                onChange={(e) => setEditingCategoryValue(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleRenameCategorySubmit(cat);
-                                  } else if (e.key === 'Escape') {
-                                    setEditingCategoryTarget(null);
-                                  }
-                                }}
-                                className="px-2 py-0.5 rounded bg-bg-dark border border-primary text-text-primary text-xs outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleRenameCategorySubmit(cat)}
-                                className="px-2 py-0.5 rounded bg-primary text-black font-extrabold text-[10px] uppercase"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <span>{cat}</span>
-                              <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity pl-1.5 border-l border-primary/20">
-                                <button
-                                  type="button"
-                                  title="Rename Category"
-                                  onClick={() => {
-                                    setEditingCategoryTarget(cat);
-                                    setEditingCategoryValue(cat);
-                                  }}
-                                  className="p-1 hover:text-white transition-colors"
-                                >
-                                  <Edit2 size={12} />
-                                </button>
-                                <button
-                                  type="button"
-                                  title="Delete Category"
-                                  onClick={() => handleDeleteCategorySubmit(cat)}
-                                  className="p-1 hover:text-rose-400 transition-colors"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-4 border-t border-glass flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => { setIsAddCategoryOpen(false); setSelectedSuggestions([]); setNewCategoryName(''); }}
-                    className="flex-1 py-3 rounded-xl border border-glass bg-glass-subtle text-text-secondary font-bold text-xs uppercase tracking-wider"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSavingCategory}
-                    className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all flex items-center justify-center gap-1.5"
-                  >
-                    {isSavingCategory ? 'Saving...' : 'Save Selected'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-
         {/* Logout Confirmation Modal (FEATURE 2) */}
         {isLogoutModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fadeIn">

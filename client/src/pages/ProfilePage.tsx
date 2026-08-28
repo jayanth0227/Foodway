@@ -165,14 +165,14 @@ export const ProfilePage: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigate('/orders')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card-bg border border-border-color text-xs font-semibold text-text-secondary hover:text-primary hover:border-primary/40 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-bg-card border border-glass text-xs font-semibold text-text-secondary hover:text-primary hover:border-primary/40 transition-all shadow-sm"
               >
                 <Package className="w-4 h-4 text-primary" />
                 <span>My Orders</span>
               </button>
               <button
                 onClick={() => navigate('/wishlist')}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-card-bg border border-border-color text-xs font-semibold text-text-secondary hover:text-primary hover:border-primary/40 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-bg-card border border-glass text-xs font-semibold text-text-secondary hover:text-primary hover:border-primary/40 transition-all shadow-sm"
               >
                 <Heart className="w-4 h-4 text-error" />
                 <span>Wishlist</span>
@@ -213,13 +213,13 @@ export const ProfilePage: React.FC = () => {
           ) : (
             <>
               {/* Header Card / Hero Profile Container */}
-              <div className="relative rounded-3xl bg-gradient-to-r from-primary/10 via-card-bg to-card-bg border border-border-color p-6 sm:p-8 overflow-hidden shadow-xl">
+              <div className="relative rounded-3xl bg-gradient-to-r from-primary/10 via-bg-card to-bg-card border border-glass p-6 sm:p-8 overflow-hidden shadow-luxury">
             <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
             <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative z-10">
               {/* Profile Avatar */}
               <div className="relative group">
-                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-primary/40 shadow-2xl bg-card-bg flex items-center justify-center">
+                <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-primary/40 shadow-2xl bg-bg-card flex items-center justify-center">
                   {profileImage || user?.profileImage ? (
                     <img
                       src={profileImage || user?.profileImage}
@@ -234,7 +234,7 @@ export const ProfilePage: React.FC = () => {
                 </div>
                 <button
                   onClick={() => setIsEditingProfile(true)}
-                  className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-primary text-white shadow-lg hover:scale-105 transition-transform"
+                  className="absolute -bottom-2 -right-2 p-2 rounded-xl bg-primary text-white dark:text-black shadow-lg hover:scale-105 transition-transform"
                   title="Change avatar"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -284,7 +284,7 @@ export const ProfilePage: React.FC = () => {
                     setIsEditingProfile(!isEditingProfile);
                     setActiveTab('DETAILS');
                   }}
-                  className="px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-white transition-all text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary hover:bg-primary hover:text-white dark:hover:text-black transition-all text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
                 >
                   <Edit3 className="w-4 h-4" />
                   <span>{isEditingProfile ? 'Cancel Edit' : 'Edit Profile'}</span>
@@ -307,7 +307,7 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           {/* Navigation Segmented Switch Control */}
-          <div className="relative p-1.5 bg-card-bg/80 border border-border-color rounded-2xl flex items-center shadow-sm max-w-md mx-auto sm:mx-0">
+          <div className="relative p-1.5 bg-bg-card border border-glass rounded-2xl flex items-center shadow-sm max-w-md mx-auto sm:mx-0">
             <button
               type="button"
               onClick={() => setActiveTab('DETAILS')}
@@ -365,9 +365,9 @@ export const ProfilePage: React.FC = () => {
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-card-bg border border-border-color rounded-3xl p-6 sm:p-8 shadow-lg space-y-6"
+              className="bg-bg-card border border-glass rounded-3xl p-6 sm:p-8 shadow-luxury space-y-6"
             >
-              <div className="flex items-center justify-between border-b border-border-color/60 pb-4">
+              <div className="flex items-center justify-between border-b border-glass pb-4">
                 <div>
                   <h2 className="text-lg font-bold text-text-primary">Personal Account Info</h2>
                   <p className="text-xs text-text-muted">Update your profile name, mobile number, and avatar image.</p>
@@ -375,7 +375,7 @@ export const ProfilePage: React.FC = () => {
                 {!isEditingProfile && (
                   <button
                     onClick={() => setIsEditingProfile(true)}
-                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     <span>Edit Info</span>
@@ -397,7 +397,7 @@ export const ProfilePage: React.FC = () => {
                         value={name}
                         disabled={!isEditingProfile}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/50 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-cardSec border border-glass text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
                         placeholder="Enter your full name"
                         required
                       />
@@ -416,7 +416,7 @@ export const ProfilePage: React.FC = () => {
                         value={email}
                         disabled={!isEditingProfile}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/50 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-cardSec border border-glass text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
                         placeholder="Enter email address"
                         required
                       />
@@ -435,7 +435,7 @@ export const ProfilePage: React.FC = () => {
                         value={phone}
                         disabled={!isEditingProfile}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/50 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-cardSec border border-glass text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
                         placeholder="+91 9876543210"
                       />
                     </div>
@@ -453,7 +453,7 @@ export const ProfilePage: React.FC = () => {
                         value={profileImage}
                         disabled={!isEditingProfile}
                         onChange={(e) => setProfileImage(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-dark/50 border border-border-color text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-cardSec border border-glass text-sm text-text-primary focus:outline-none focus:border-primary disabled:opacity-60 transition-colors"
                         placeholder="https://..."
                       />
                     </div>
@@ -462,7 +462,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Preset Avatars Selection (Visible when editing) */}
                 {isEditingProfile && (
-                  <div className="space-y-2 pt-2 border-t border-border-color/60">
+                  <div className="space-y-2 pt-2 border-t border-glass">
                     <label className="block text-xs font-bold text-text-muted uppercase tracking-wider">
                       Or Choose Preset Avatar
                     </label>
@@ -472,8 +472,8 @@ export const ProfilePage: React.FC = () => {
                           key={idx}
                           type="button"
                           onClick={() => setProfileImage(url)}
-                          className={`w-12 h-12 rounded-xl overflow-hidden border-2 transition-transform hover:scale-105 ${
-                            profileImage === url ? 'border-primary ring-2 ring-primary/40' : 'border-border-color'
+                          className={`w-12 h-12 rounded-xl overflow-hidden border-2 transition-transform hover:scale-105 cursor-pointer ${
+                            profileImage === url ? 'border-primary ring-2 ring-primary/40' : 'border-glass'
                           }`}
                         >
                           <img src={url} alt={`Avatar ${idx}`} className="w-full h-full object-cover" />
@@ -483,7 +483,7 @@ export const ProfilePage: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setProfileImage('')}
-                          className="px-3 py-1.5 rounded-lg bg-bg-dark text-xs text-text-muted hover:text-error border border-border-color"
+                          className="px-3 py-1.5 rounded-lg bg-bg-cardSec text-xs text-text-muted hover:text-error border border-glass cursor-pointer"
                         >
                           Reset Default
                         </button>
@@ -494,7 +494,7 @@ export const ProfilePage: React.FC = () => {
 
                 {/* Form Buttons */}
                 {isEditingProfile && (
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-border-color">
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-glass">
                     <button
                       type="button"
                       onClick={() => {
@@ -504,14 +504,14 @@ export const ProfilePage: React.FC = () => {
                         setPhone(user?.phone || '');
                         setProfileImage(user?.profileImage || '');
                       }}
-                      className="px-5 py-2.5 rounded-xl border border-border-color text-xs font-bold text-text-secondary hover:bg-bg-dark transition-colors"
+                      className="px-5 py-2.5 rounded-xl border border-glass text-xs font-bold text-text-secondary hover:bg-bg-cardSec transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={isSavingProfile}
-                      className="px-6 py-2.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary/90 transition-all flex items-center gap-2 shadow-lg shadow-primary/20 disabled:opacity-50"
+                      className="px-6 py-2.5 rounded-xl bg-primary text-white dark:text-black text-xs font-bold hover:bg-primary-dark transition-all flex items-center gap-2 shadow-luxury disabled:opacity-50 cursor-pointer"
                     >
                       {isSavingProfile ? (
                         <>
@@ -539,7 +539,7 @@ export const ProfilePage: React.FC = () => {
               className="space-y-6"
             >
               {/* Header and Add Button */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card-bg border border-border-color rounded-3xl p-6 shadow-md">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-bg-card border border-glass rounded-3xl p-6 shadow-luxury">
                 <div>
                   <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
                     <MapPin className="w-5 h-5 text-primary" />
@@ -551,7 +551,7 @@ export const ProfilePage: React.FC = () => {
                 </div>
                 <button
                   onClick={() => navigate('/profile/address/new')}
-                  className="px-5 py-2.5 rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 shrink-0 cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-primary text-white dark:text-black text-xs font-bold flex items-center gap-2 hover:bg-primary-dark transition-all shadow-luxury shrink-0 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add New Address</span>
@@ -560,7 +560,7 @@ export const ProfilePage: React.FC = () => {
 
               {/* Addresses List Grid / Column */}
               {addresses.length === 0 ? (
-                <div className="bg-card-bg border border-dashed border-border-color rounded-3xl p-12 text-center space-y-4">
+                <div className="bg-bg-card border border-dashed border-glass rounded-3xl p-12 text-center space-y-4 shadow-luxury">
                   <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
                     <MapPin className="w-8 h-8" />
                   </div>
@@ -572,9 +572,8 @@ export const ProfilePage: React.FC = () => {
                   </div>
                   <button
                     onClick={() => navigate('/profile/address/new')}
-                    className="px-6 py-2.5 rounded-xl bg-primary text-white text-xs font-bold inline-flex items-center gap-2 hover:bg-primary/90 transition-all shadow-md cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl bg-primary text-white dark:text-black text-xs font-bold inline-flex items-center gap-2 hover:bg-primary-dark transition-all shadow-luxury cursor-pointer"
                   >
-                    {/* <Plus className="w-4 h-4" /> */}
                     <span>Add Address Now</span>
                   </button>
                 </div>
@@ -583,14 +582,14 @@ export const ProfilePage: React.FC = () => {
                   {addresses.map((addr) => (
                     <div
                       key={addr.id}
-                      className={`relative bg-card-bg border rounded-3xl p-6 shadow-md transition-all hover:shadow-xl flex flex-col justify-between ${
-                        addr.isDefault ? 'border-primary/60 ring-1 ring-primary/30' : 'border-border-color'
+                      className={`relative bg-bg-card border rounded-3xl p-6 shadow-luxury transition-all hover:border-primary/40 flex flex-col justify-between ${
+                        addr.isDefault ? 'border-primary/60 ring-1 ring-primary/30' : 'border-glass'
                       }`}
                     >
                       {/* Top Header Badge & Type */}
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="px-3 py-1 rounded-full bg-bg-dark border border-border-color text-text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="px-3 py-1 rounded-full bg-bg-cardSec border border-glass text-text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
                             {addr.label === 'Home' && <Home className="w-3.5 h-3.5 text-primary" />}
                             {addr.label === 'Work' && <Briefcase className="w-3.5 h-3.5 text-secondary" />}
                             {addr.label === 'Other' && <Navigation className="w-3.5 h-3.5 text-info" />}
@@ -599,7 +598,7 @@ export const ProfilePage: React.FC = () => {
 
                           {addr.isDefault ? (
                             <span className="px-2.5 py-0.5 rounded-full bg-success/15 border border-success/30 text-success text-[10px] font-black uppercase flex items-center gap-1">
-                              <Check className="w-3 h-3" />
+                              <Check className="w-3 h-3 stroke-[3]" />
                               Default Address
                             </span>
                           ) : (
@@ -624,7 +623,7 @@ export const ProfilePage: React.FC = () => {
                         </div>
 
                         {/* Street & Location Address */}
-                        <div className="text-xs text-text-secondary leading-relaxed bg-bg-dark/40 p-3 rounded-xl border border-border-color/50">
+                        <div className="text-xs text-text-secondary leading-relaxed bg-bg-cardSec p-3 rounded-xl border border-glass">
                           <p className="font-medium">{addr.street}</p>
                           {addr.area && <p>{addr.area}</p>}
                           <p>{addr.city}{addr.state ? `, ${addr.state}` : ''}, {addr.pincode}</p>
@@ -632,7 +631,7 @@ export const ProfilePage: React.FC = () => {
                             <p className="text-[11px] text-text-muted mt-1 italic">Landmark: {addr.landmark}</p>
                           )}
                           {addr.latitude && addr.longitude && (
-                            <p className="text-[10px] text-primary font-mono mt-1.5 flex items-center gap-1 pt-1 border-t border-border-color/40">
+                            <p className="text-[10px] text-primary font-mono mt-1.5 flex items-center gap-1 pt-1 border-t border-glass">
                               <MapPin className="w-3 h-3 text-primary" />
                               <span>GPS Pinned ({addr.latitude.toFixed(4)}, {addr.longitude.toFixed(4)})</span>
                             </p>
@@ -641,17 +640,17 @@ export const ProfilePage: React.FC = () => {
                       </div>
 
                       {/* Card Actions */}
-                      <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-border-color/60">
+                      <div className="flex items-center justify-end gap-3 pt-4 mt-4 border-t border-glass">
                         <button
                           onClick={() => navigate(`/profile/address/edit/${addr.id}`)}
-                          className="px-3 py-1.5 rounded-lg bg-bg-dark hover:bg-primary/10 border border-border-color hover:border-primary/40 text-xs font-bold text-text-secondary hover:text-primary transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-bg-cardSec hover:bg-primary/10 border border-glass hover:border-primary/40 text-xs font-bold text-text-secondary hover:text-primary transition-all flex items-center gap-1.5 cursor-pointer"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                           <span>Edit</span>
                         </button>
                         <button
                           onClick={() => handleDeleteAddress(addr.id)}
-                          className="px-3 py-1.5 rounded-lg bg-bg-dark hover:bg-error/10 border border-border-color hover:border-error/40 text-xs font-bold text-text-secondary hover:text-error transition-all flex items-center gap-1.5 cursor-pointer"
+                          className="px-3 py-1.5 rounded-lg bg-bg-cardSec hover:bg-error/10 border border-glass hover:border-error/40 text-xs font-bold text-text-secondary hover:text-error transition-all flex items-center gap-1.5 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           <span>Delete</span>
