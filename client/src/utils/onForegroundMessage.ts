@@ -18,13 +18,7 @@ export const setupForegroundMessageListener = (onMessageReceived?: (payload: any
       const title = payload.notification?.title || payload.data?.title || " Foodway Alert";
       const body = payload.notification?.body || payload.data?.body || "You have a new update.";
 
-      // 1. Play alert chime sound
-      try {
-        const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3");
-        audio.play().catch(() => { });
-      } catch (e) { }
-
-      // 2. Show native browser notification even when tab is focused
+      // Show native browser notification even when tab is focused
       if ("Notification" in window && Notification.permission === "granted") {
         try {
           new Notification(title, {

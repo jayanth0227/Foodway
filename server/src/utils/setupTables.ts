@@ -10,7 +10,9 @@ import {
   orderItemsTableName,
   deliveryTableName,
   deliveryLocationsTableName,
-  categoriesTableName
+  categoriesTableName,
+  settingsTableName,
+  reviewsTableName
 } from '../config/aws';
 
 async function verifyOrCreateTable(tableName: string, keySchema: any[], attributeDefinitions: any[], globalSecondaryIndexes?: any[]) {
@@ -196,6 +198,30 @@ export async function ensureAllTablesExist() {
     [{ AttributeName: 'categoryId', KeyType: 'HASH' }],
     [
       { AttributeName: 'categoryId', AttributeType: 'S' },
+      { AttributeName: 'restaurantId', AttributeType: 'S' }
+    ],
+    [
+      {
+        IndexName: 'restaurantId-index',
+        KeySchema: [{ AttributeName: 'restaurantId', KeyType: 'HASH' }],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ]
+  );
+
+  // 9. foodway-settings (PK: settingId)
+  await verifyOrCreateTable(
+    settingsTableName,
+    [{ AttributeName: 'settingId', KeyType: 'HASH' }],
+    [{ AttributeName: 'settingId', AttributeType: 'S' }]
+  );
+
+  // 10. foodway-reviews (PK: reviewId)
+  await verifyOrCreateTable(
+    reviewsTableName,
+    [{ AttributeName: 'reviewId', KeyType: 'HASH' }],
+    [
+      { AttributeName: 'reviewId', AttributeType: 'S' },
       { AttributeName: 'restaurantId', AttributeType: 'S' }
     ],
     [

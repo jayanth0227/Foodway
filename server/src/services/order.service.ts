@@ -118,6 +118,10 @@ export class OrderService {
     return orderRepository.findByRestaurantId(restaurantId);
   }
 
+  async getOrderById(orderId: string): Promise<IOrder | null> {
+    return orderRepository.findByOrderId(orderId);
+  }
+
   async getOrdersByCustomer(customerId: string): Promise<IOrder[]> {
     return orderRepository.findByCustomerId(customerId);
   }

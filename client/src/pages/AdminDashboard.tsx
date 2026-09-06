@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import { getCurrentUser, clearSession } from '../utils/auth.utils';
@@ -256,32 +257,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     return diffMs <= 48 * 3600 * 1000;
   };
 
-  const getItemVariantLabel = (it: any): string | null => {
-    if (!it) return null;
+  const getItemVariantLabel = (it: any): string => {
+    if (!it) return '1 Pc';
     if (it.variantLabel && typeof it.variantLabel === 'string' && it.variantLabel.trim() !== '') {
       return it.variantLabel.trim();
     }
-    const v = it.selectedVariant || it.variant;
+    const v = it.selectedVariant || it.variant || (Array.isArray(it.variants) && it.variants.length > 0 ? it.variants[0] : null);
     if (v) {
       if (typeof v === 'string' && v.trim() !== '') return v.trim();
       if (typeof v === 'object') {
-        const name = v.name || v.label || v.variantName || v.portionName || v.title;
+        const label = v.label || v.name || v.variantName || v.portionName || v.title;
         const qty = v.quantity || v.qty || v.weight || v.packSize;
         const unit = v.unit || v.type || '';
         const qtyUnit = (qty || unit) ? `${qty || ''} ${unit}`.trim() : '';
 
-        if (name && qtyUnit && name !== qtyUnit) return `${name} (${qtyUnit})`;
-        if (name) return name;
+        if (label && qtyUnit && label.toLowerCase() !== qtyUnit.toLowerCase()) {
+          if (label.toLowerCase().includes(qtyUnit.toLowerCase())) return label;
+          return `${label} (${qtyUnit})`;
+        }
+        if (label) return label;
         if (qtyUnit) return qtyUnit;
       }
     }
     if (it.portion) return String(it.portion);
     if (it.portionSize) return String(it.portionSize);
-    if (it.unit && it.quantity && String(it.unit).trim() !== '') return `${it.quantity} ${it.unit}`;
-    if (it.unit && String(it.unit).trim() !== '') return String(it.unit);
-    if (it.size) return String(it.size);
+    if (it.packSize) return String(it.packSize);
     if (it.weight) return String(it.weight);
-    return null;
+    if (it.size) return String(it.size);
+
+    const qty = it.quantity || it.qty;
+    const unit = (it.unit || it.unitType || '').toString().trim();
+    if (qty && unit) return `${qty} ${unit}`;
+    if (unit) return `1 ${unit}`;
+
+    const itemName = String(it.name || it.itemName || it.foodName || it.title || '');
+    const itemDesc = String(it.description || '');
+    const qtyMatch = (itemName + ' ' + itemDesc).match(/\b(\d+\s*(?:pcs|pc|pieces|piece|gms|gm|g|kg|ml|l|litre|litres|plate|plates|items|pack|packs|box|boxes))\b/i);
+    if (qtyMatch && qtyMatch[1]) {
+      return qtyMatch[1].trim();
+    }
+
+    return '1 Pc';
   };
 
   const filteredOrders = orders.filter(o => {
@@ -492,39 +508,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     localStorage.setItem('admin_activities', JSON.stringify(activities));
   }, [activities]);
 
-  // Helper: Play Synth Beep Alert for Admin Console
-  const playAdminOrderBeepSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') ctx.resume();
 
-        const playTone = (freq: number, start: number, dur: number) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          gain.gain.setValueAtTime(0.45, ctx.currentTime + start);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(ctx.currentTime + start);
-          osc.stop(ctx.currentTime + start + dur);
-        };
-
-        // 3 crisp synth alert beeps (784Hz -> 1046Hz -> 1567Hz)
-        playTone(784, 0.0, 0.2);
-        playTone(1046.5, 0.22, 0.2);
-        playTone(1567.98, 0.44, 0.35);
-      }
-    } catch (e) {}
-
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(() => {});
-    } catch (e) {}
-  };
 
   useEffect(() => {
     if (isLoading) return;
@@ -570,39 +554,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
     const unsubscribeOrderCreated = socketService.onOrderCreated((newOrder: any) => {
       fetchAdminOrders();
-      playAdminOrderBeepSound();
     });
 
     const unsubscribeOrderAssigned = socketService.onOrderAssigned(() => {
       fetchAdminOrders();
-      playAdminOrderBeepSound();
     });
 
-    const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
+    const handleAdminOrderUpdate = (updatedOrder: any) => {
+      if (!updatedOrder) return;
+      console.log('⚡ [Admin Dashboard Realtime Order Update]:', updatedOrder);
       const targetId = updatedOrder.orderId || updatedOrder.id;
+      const parentId = updatedOrder.parentOrderId;
       const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
-      
-      setOrders(prev => prev.map(o => {
-        if (o.id === targetId || (o as any).orderId === targetId) {
-          return { ...o, orderStatus: nextStatus, status: nextStatus };
-        }
-        return o;
-      }));
-      playAdminOrderBeepSound();
-    });
 
-    const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
-      const targetId = updatedOrder.orderId || updatedOrder.id;
-      const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
-      
-      setOrders(prev => prev.map(o => {
-        if (o.id === targetId || (o as any).orderId === targetId) {
-          return { ...o, orderStatus: nextStatus, status: nextStatus };
-        }
-        return o;
-      }));
-      playAdminOrderBeepSound();
-    });
+      if (nextStatus) {
+        setOrders(prev => prev.map(o => {
+          const oId = o.id || o.orderId;
+          const oParentId = o.parentOrderId;
+          const isMatch = (
+            oId === targetId ||
+            o.id === targetId ||
+            o.orderId === targetId ||
+            (parentId && (oId === parentId || oParentId === parentId)) ||
+            (targetId && oParentId === targetId)
+          );
+          if (isMatch) {
+            return {
+              ...o,
+              orderStatus: nextStatus,
+              status: nextStatus,
+              ...(updatedOrder.assignedRider ? { assignedRider: updatedOrder.assignedRider } : {}),
+              ...(updatedOrder.deliveryPartner ? { deliveryPartner: updatedOrder.deliveryPartner } : {})
+            };
+          }
+          return o;
+        }));
+      }
+
+      // Fetch fresh order details from backend to ensure sub-orders & item details remain synced
+      fetchAdminOrders();
+    };
+
+    const unsubscribeStatus = socketService.onOrderStatusUpdated(handleAdminOrderUpdate);
+    const unsubscribeRider = socketService.onRiderStatusUpdated(handleAdminOrderUpdate);
+    const unsubscribePickup = socketService.onOrderReadyForPickup(handleAdminOrderUpdate);
+
+    const handleWindowOrderUpdate = (e: any) => {
+      handleAdminOrderUpdate(e.detail);
+    };
+
+    window.addEventListener('foodway_order_updated', handleWindowOrderUpdate);
+    window.addEventListener('vendor_items_cancelled', handleWindowOrderUpdate);
 
     // Real-Time Delivery Partner Duty Status Listener (ON_DUTY vs OFF_DUTY / OFFLINE)
     const handleDutyUpdate = (data: any) => {
@@ -641,9 +643,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       unsubscribeOrderAssigned();
       unsubscribeStatus();
       unsubscribeRider();
+      unsubscribePickup();
       unsubscribeDuty();
+      window.removeEventListener('foodway_order_updated', handleWindowOrderUpdate);
+      window.removeEventListener('vendor_items_cancelled', handleWindowOrderUpdate);
     };
-  }, []);
+  }, [isLoading, user, isAuthenticated]);
 
   async function fetchAdminRestaurants() {
     try {
@@ -1027,6 +1032,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     const targetRider = riderName || selectedRiders[orderId];
     if (!targetRider) return;
 
+    // Guard: Prevent assigning OFF DUTY delivery partners
+    const partnerObj = dbDeliveryPartners.find(p => (p.name || p.email) === targetRider || p.id === targetRider);
+    if (partnerObj && (partnerObj.dutyStatus === 'OFF_DUTY' || partnerObj.dutyStatus === 'OFFLINE' || partnerObj.isOnDuty === false)) {
+      showToast('error', `Cannot assign order: Delivery partner "${targetRider}" is currently OFF DUTY.`);
+      return;
+    }
+
     setOrders(prev => prev.map(o => {
       if (o.id === orderId || (o as any).orderId === orderId) {
         return { 
@@ -1039,11 +1051,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     }));
 
     try {
-      await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: targetRider });
-      showToast('success', `Assigned delivery partner "${targetRider}" to Order #${orderId}.`);
-      addActivity('order_assigned', `Order #${orderId} assigned to delivery partner "${targetRider}".`);
-    } catch (e) {
+      const res = await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: targetRider });
+      if (res.data.success) {
+        showToast('success', `Assigned delivery partner "${targetRider}" to Order #${orderId}.`);
+        addActivity('order_assigned', `Order #${orderId} assigned to delivery partner "${targetRider}".`);
+      } else {
+        showToast('error', res.data.error || `Failed to assign partner "${targetRider}".`);
+        fetchAdminOrders();
+      }
+    } catch (e: any) {
       console.error('Error assigning rider to order:', e);
+      const errMsg = e.response?.data?.error || `Failed to assign delivery partner "${targetRider}".`;
+      showToast('error', errMsg);
+      fetchAdminOrders();
     }
   };
 
@@ -1072,12 +1092,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     setIsLogoutModalOpen(true);
   };
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setIsLogoutModalOpen(false);
-    clearSession();
-    localStorage.removeItem('adminAuth');
-    sessionStorage.removeItem('adminAuth');
-    logout();
+    await logout();
     navigate('/login', { replace: true });
   };
 
@@ -1326,7 +1343,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       {/* Main Content Area */}
       <main 
         data-lenis-prevent
-        className="flex-grow min-w-0 min-h-screen lg:h-screen pt-20 lg:pt-10 px-4 md:px-8 pb-28 lg:pb-10 z-10 relative lg:overflow-y-auto max-w-7xl mx-auto w-full"
+        className="flex-grow min-w-0 min-h-screen lg:h-screen pt-24 lg:pt-10 px-4 md:px-8 pb-32 lg:pb-10 z-10 relative lg:overflow-y-auto max-w-7xl mx-auto w-full"
       >
         <ErrorBoundary>
           {/* ==================================================== */}
@@ -1725,10 +1742,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                           .filter(dish => selectedVendorCategory === 'All' || (dish.category || '').toLowerCase() === selectedVendorCategory.toLowerCase())
                           .map(dish => (
                             <div key={dish.id} className="flex gap-4 p-3.5 rounded-xl border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
-                              <img
-                                src={dish.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80'}
-                                alt={dish.name}
+                              <ItemImageOrIcon
+                                image={dish.image}
+                                name={dish.name}
+                                category={dish.category}
+                                isVeg={dish.isVeg}
                                 className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
+                                containerClassName="w-16 h-16 rounded-lg border border-glass shrink-0 shadow-sm"
+                                iconSize={20}
+                                showCategoryLabel={false}
                               />
                               <div className="min-w-0 flex-grow flex flex-col justify-between">
                                 <div>
@@ -2631,16 +2653,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                                               <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 font-black text-[11px] font-mono">
                                                 QTY: {qty}
                                               </span>
-                                              {variantLabel ? (
-                                                <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-black text-[11px] font-mono flex items-center gap-1">
-                                                  <Package size={11} className="shrink-0" />
-                                                  <span>{variantLabel}</span>
-                                                </span>
-                                              ) : (
-                                                <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 font-bold text-[10px] font-mono">
-                                                  Standard Portion
-                                                </span>
-                                              )}
+                                              <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-black text-[11px] font-mono flex items-center gap-1">
+                                                <Package size={11} className="shrink-0" />
+                                                <span>{variantLabel || 'Standard Portion'}</span>
+                                              </span>
                                               {price !== undefined && (
                                                 <span className="text-text-muted font-bold text-[11px]">
                                                   • ₹{Number.isInteger(price) ? price : price.toFixed(2)} each

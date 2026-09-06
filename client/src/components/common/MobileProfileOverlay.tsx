@@ -459,13 +459,25 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, x: '100%' }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: '100%' }}
-          transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          className="fixed inset-0 z-[100000] bg-bg-dark text-text-primary h-[100dvh] flex flex-col font-sans lg:hidden"
-        >
+        <>
+          {/* Ambient Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[99999] bg-black/65 backdrop-blur-sm lg:hidden"
+          />
+
+          {/* Premium Bottom Slide-Up Sheet Modal */}
+          <motion.div
+            initial={{ opacity: 0, y: '100%', scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: '100%', scale: 0.97 }}
+            transition={{ type: 'spring', damping: 32, stiffness: 300, mass: 0.8 }}
+            className="fixed inset-0 z-[100000] bg-bg-dark text-text-primary h-[100dvh] flex flex-col font-sans lg:hidden overflow-hidden shadow-2xl"
+          >
           {/* 1. Top Header Bar */}
           <div className="sticky top-0 z-30 bg-bg-card/95 dark:bg-bg-cardSec/95 backdrop-blur-md border-b border-glass px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center space-x-3">
@@ -1487,6 +1499,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
             )}
           </AnimatePresence>
         </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

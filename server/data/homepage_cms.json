@@ -21,40 +21,40 @@
     "subtitle": "From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.",
     "features": [
       {
-        "id": "feat-1",
-        "title": "Fresh & Quality Food",
         "badge": "FRESH",
-        "description": "We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care."
+        "description": "We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care.",
+        "id": "feat-1",
+        "title": "Fresh & Quality Food"
       },
       {
-        "id": "feat-2",
-        "title": "Fast Delivery",
         "badge": "20-30 MINS",
-        "description": "Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting."
+        "description": "Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting.",
+        "id": "feat-2",
+        "title": "Fast Delivery"
       },
       {
-        "id": "feat-3",
-        "title": "Live Order Tracking",
         "badge": "LIVE",
-        "description": "Track your order in real time from restaurant confirmation until it arrives at your home."
+        "description": "Track your order in real time from restaurant confirmation until it arrives at your home.",
+        "id": "feat-3",
+        "title": "Live Order Tracking"
       }
     ]
   },
   "faqs": [
     {
-      "id": "faq-1",
       "question": "How do I place an order?",
-      "answer": "Browse restaurants, select your favorite dishes, add them to your cart, and proceed to checkout with live order tracking."
+      "answer": "Browse restaurants, select your favorite dishes, add them to your cart, and proceed to checkout with live order tracking.",
+      "id": "faq-1"
     },
     {
-      "id": "faq-3",
       "question": "Can I track my order?",
-      "answer": "Yes! Real-time GPS order tracking and status updates are visible directly on your active order screen."
+      "answer": "Yes! Real-time GPS order tracking and status updates are visible directly on your active order screen.",
+      "id": "faq-3"
     },
     {
-      "id": "faq-4",
       "question": "Which areas do you currently serve?",
-      "answer": "We deliver fast and fresh across Ravulapalem and surrounding towns in Konaseema."
+      "answer": "We deliver fast and fresh across Ravulapalem and surrounding towns in Konaseema.",
+      "id": "faq-4"
     }
   ],
   "contactDetails": {

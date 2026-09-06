@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Utensils, Store, Search, Calendar, ArrowUpDown, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Utensils, Store, Search, Calendar, ArrowUpDown, X, ChevronDown, ChevronUp, Star, MessageSquare, Lock, XCircle, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
@@ -11,6 +11,8 @@ import { API_BASE_URL } from '../utils/api';
 import socketService from '../services/socket.service';
 import { DeliveryTransitVisualTracker } from '../components/common/DeliveryTransitVisualTracker';
 import { MobileOrderCardSkeleton } from '../components/common/MobileSkeletonLoader';
+import { getItemVariantLabel } from '../utils/variantUtils';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 
 export const CustomerOrdersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -19,9 +21,18 @@ export const CustomerOrdersPage: React.FC = () => {
   const { t } = useLanguage();
 
   const [orders, setOrders] = useState<any[]>([]);
+  const [liveDishesMap, setLiveDishesMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'HISTORY'>('ACTIVE');
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
+
+  const handleBack = () => {
+    if (window.history.state && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/restaurants');
+    }
+  };
 
   const toggleOrderExpand = (id: string) => {
     setExpandedOrderIds(prev => {
@@ -43,39 +54,7 @@ export const CustomerOrdersPage: React.FC = () => {
     }
   }, [orders]);
 
-  // Helper: Play Pleasant Audio Beep Alarm for Customer Status Updates
-  const playOrderAlertBeep = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') ctx.resume();
 
-        const playTone = (freq: number, start: number, dur: number) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          gain.gain.setValueAtTime(0.5, ctx.currentTime + start);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(ctx.currentTime + start);
-          osc.stop(ctx.currentTime + start + dur);
-        };
-
-        // 3 pleasant confirmation beeps (C5 -> E5 -> G5)
-        playTone(523.25, 0.0, 0.15);
-        playTone(659.25, 0.18, 0.15);
-        playTone(783.99, 0.36, 0.3);
-      }
-    } catch (e) {}
-
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(() => {});
-    } catch (e) {}
-  };
 
   useEffect(() => {
     if (user) {
@@ -109,7 +88,6 @@ export const CustomerOrdersPage: React.FC = () => {
           }
           return o;
         }));
-        playOrderAlertBeep();
       };
 
       const unsubscribeStatus = socketService.onOrderStatusUpdated(handleOrderUpdate);
@@ -136,6 +114,19 @@ export const CustomerOrdersPage: React.FC = () => {
       } else {
         setOrders([]);
       }
+
+      try {
+        const dishResp = await axios.get(`${API_BASE_URL}/public/dishes`);
+        const dishList = Array.isArray(dishResp.data) ? dishResp.data : (dishResp.data?.dishes || []);
+        const dMap: Record<string, any> = {};
+        dishList.forEach((d: any) => {
+          if (d.id) dMap[d.id] = d;
+          if (d.menuItemId) dMap[d.menuItemId] = d;
+          if (d.name) dMap[d.name.toLowerCase().trim()] = d;
+          if (d.foodName) dMap[d.foodName.toLowerCase().trim()] = d;
+        });
+        setLiveDishesMap(dMap);
+      } catch (e) {}
     } catch (err) {
       console.warn('Error fetching customer orders from DB:', err);
       setOrders([]);
@@ -220,6 +211,61 @@ export const CustomerOrdersPage: React.FC = () => {
     isOpen: boolean;
     items: string[];
   } | null>(null);
+
+  // Rating & Review Modal State
+  const [reviewModalOrder, setReviewModalOrder] = useState<any | null>(null);
+  const [selectedRating, setSelectedRating] = useState<number>(5);
+  const [feedbackText, setFeedbackText] = useState<string>('');
+  const [submittingReview, setSubmittingReview] = useState<boolean>(false);
+  const [reviewSuccessToast, setReviewSuccessToast] = useState<string | null>(null);
+
+  // Cancellation Modal State
+  const [cancelModalOrder, setCancelModalOrder] = useState<any | null>(null);
+  const [cancelLoading, setCancelLoading] = useState<boolean>(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const isOrderCancellableByCustomer = (order: any) => {
+    const statusUpper = (order?.status || order?.orderStatus || '').toUpperCase();
+    const cancellableStatuses = ['PENDING', 'PLACED', 'ORDER_PLACED', 'UNACCEPTED'];
+    return cancellableStatuses.includes(statusUpper);
+  };
+
+  const handleConfirmCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+    const targetId = cancelModalOrder.id || cancelModalOrder.orderId;
+    setCancelLoading(true);
+    setCancelError(null);
+
+    try {
+      const response = await axios.put(`${API_BASE_URL}/orders/${targetId}/status`, {
+        status: 'CANCELLED',
+        cancelledBy: 'CUSTOMER'
+      });
+
+      if (response.data && response.data.success) {
+        setOrders(prev => prev.map(o => {
+          if ((o.id || o.orderId) === targetId) {
+            return {
+              ...o,
+              status: 'CANCELLED',
+              orderStatus: 'CANCELLED',
+              cancellationNotice: 'Order cancelled by customer.'
+            };
+          }
+          return o;
+        }));
+        setCancelModalOrder(null);
+      } else {
+        setCancelError(response.data?.error || 'Failed to cancel order. Please try again.');
+      }
+    } catch (err: any) {
+      console.error('Error cancelling order:', err);
+      const errMsg = err.response?.data?.error || 'Order cannot be cancelled after the store has accepted it.';
+      setCancelError(errMsg);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
 
   const handleReorder = async (order: any) => {
     const orderId = order.id || order.orderId;
@@ -384,7 +430,7 @@ export const CustomerOrdersPage: React.FC = () => {
           description: liveDish.description || '',
           price: freshPrice,
           category: liveDish.category || 'Main Course',
-          image: liveDish.image || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+          image: liveDish.image || item.image || '',
           type: liveDish.type || 'non-veg',
           isVeg: liveDish.isVeg !== undefined ? liveDish.isVeg : true,
           isAvailable: true,
@@ -436,7 +482,7 @@ export const CustomerOrdersPage: React.FC = () => {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-bg-dark pt-32 pb-20 px-4 text-center">
+      <div className="min-h-screen bg-bg-dark pt-20 pb-20 px-4 text-center">
         <div className="max-w-md mx-auto glass-panel border border-amber-500/40 rounded-3xl p-8 space-y-4">
           <AlertCircle size={44} className="mx-auto text-amber-500" />
           <h2 className="text-2xl font-black font-display text-text-primary">Login Required</h2>
@@ -458,18 +504,18 @@ export const CustomerOrdersPage: React.FC = () => {
         <title>My Orders | MK Delivery Services</title>
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-28 pb-24 px-4 sm:px-6 lg:px-12 relative overflow-hidden transition-colors">
+      <div className="min-h-screen bg-bg-dark pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-4 sm:px-6 lg:px-12 relative overflow-hidden transition-colors">
         {/* Ambient background decoration */}
         <div className="absolute top-20 right-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
-        <div className="max-w-5xl mx-auto space-y-8 relative z-10">
+        <div className="max-w-5xl mx-auto space-y-4 relative z-10">
 
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-3.5">
             <div className="space-y-1">
               {/* DESKTOP ONLY: Explore Restaurants Back Link */}
               <button
-                onClick={() => navigate('/restaurants')}
+                onClick={handleBack}
                 className="hidden sm:flex text-xs font-bold text-text-muted hover:text-primary transition-colors items-center gap-1 mb-2 cursor-pointer"
               >
                 <ArrowLeft size={14} />
@@ -479,7 +525,7 @@ export const CustomerOrdersPage: React.FC = () => {
               {/* Title Section: Mobile shows Back Arrow button beside My Orders */}
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => navigate('/restaurants')}
+                  onClick={handleBack}
                   className="sm:hidden p-2 rounded-2xl bg-glass border border-glass text-text-primary hover:text-primary transition-all cursor-pointer shadow-sm active:scale-95 flex items-center justify-center shrink-0"
                   title="Back to Restaurants"
                   aria-label="Back to Restaurants"
@@ -591,8 +637,8 @@ export const CustomerOrdersPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
-              {displayedOrders.map((order) => {
-                const orderId = order.orderId || order.id || 'ORD-000';
+              {displayedOrders.map((order, idx) => {
+                const orderId = order.orderId || order.id || `ORD-${idx}`;
                 const itemsList = Array.isArray(order.items) && order.items.length > 0
                   ? order.items
                   : Array.isArray(order.rawItems) ? order.rawItems : [];
@@ -608,6 +654,8 @@ export const CustomerOrdersPage: React.FC = () => {
 
                 const isExpanded = expandedOrderIds.has(orderId);
                 const orderTotal = Number(order.totalAmount || order.total || 0);
+                const statusUpper = (order.status || order.orderStatus || '').toUpperCase();
+                const isCompleted = statusUpper === 'DELIVERED' || statusUpper === 'COMPLETED' || activeTab === 'HISTORY';
 
                 return (
                   <motion.div
@@ -718,46 +766,29 @@ export const CustomerOrdersPage: React.FC = () => {
                                   const itemQty = Number(item.quantity || 1);
                                   const itemPrice = Number(item.price || 0);
                                   const itemTotal = itemPrice * itemQty;
-                                  const itemImage = item.image || item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=300';
-                                  
-                                  const variantLabel = (() => {
-                                    if (item.variantLabel && typeof item.variantLabel === 'string' && item.variantLabel.trim() !== '') {
-                                      return item.variantLabel.trim();
-                                    }
-                                    const v = item.selectedVariant || item.variant;
-                                    if (v) {
-                                      if (typeof v === 'string' && v.trim() !== '') return v.trim();
-                                      if (typeof v === 'object') {
-                                        const name = v.name || v.label || v.variantName || v.portionName || v.title;
-                                        const qty = v.quantity || v.qty || v.weight || v.packSize;
-                                        const unit = v.unit || v.type || '';
-                                        const qtyUnit = (qty || unit) ? `${qty || ''} ${unit}`.trim() : '';
-
-                                        if (name && qtyUnit && name !== qtyUnit) return `${name} (${qtyUnit})`;
-                                        if (name) return name;
-                                        if (qtyUnit) return qtyUnit;
-                                      }
-                                    }
-                                    if (item.portion) return String(item.portion);
-                                    if (item.portionSize) return String(item.portionSize);
-                                    if (item.unit && item.quantity && String(item.unit).trim() !== '') return `${item.quantity} ${item.unit}`;
-                                    if (item.unit && String(item.unit).trim() !== '') return String(item.unit);
-                                    if (item.size) return String(item.size);
-                                    if (item.weight) return String(item.weight);
-                                    return null;
-                                  })();
+                                  const targetId = item.id || item.menuItemId || item.itemId;
+                                  const targetName = (itemName || '').toLowerCase().trim();
+                                  const liveDish = liveDishesMap[targetId] || liveDishesMap[targetName];
+                                  const itemImage = (liveDish && liveDish.image && !liveDish.image.includes('photo-1546069901-ba9599a7e63c'))
+                                    ? liveDish.image
+                                    : (item.image || item.foodImage || liveDish?.image || '');
+                                  const variantLabel = getItemVariantLabel(item);
 
                                   return (
                                     <div
-                                      key={idx}
+                                      key={item.id || item.menuItemId || `item-${idx}`}
                                       className="p-3 rounded-xl bg-glass/60 border border-glass flex items-center justify-between gap-3 hover:border-primary/40 transition-all shadow-sm"
                                     >
                                       <div className="flex items-center gap-3 min-w-0 flex-1">
-                                        <img
-                                          src={itemImage}
-                                          alt={itemName}
-                                          className="rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
-                                          style={{ width: '52px', height: '52px', minWidth: '52px', minHeight: '52px' }}
+                                        <ItemImageOrIcon
+                                          image={itemImage}
+                                          name={itemName}
+                                          category={item.category || liveDish?.category}
+                                          isVeg={item.isVeg}
+                                          className="w-[52px] h-[52px] rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                          containerClassName="w-[52px] h-[52px] rounded-xl border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                          iconSize={18}
+                                          showCategoryLabel={false}
                                         />
                                         <div className="min-w-0 space-y-1 flex-1">
                                           <h4 className="text-xs sm:text-sm font-black text-text-primary truncate">
@@ -767,16 +798,10 @@ export const CustomerOrdersPage: React.FC = () => {
                                             <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 font-black text-[11px] font-mono shadow-xs">
                                               QTY: {itemQty}
                                             </span>
-                                            {variantLabel ? (
-                                              <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-black text-[11px] font-mono shadow-xs flex items-center gap-1">
-                                                <Package size={11} className="shrink-0" />
-                                                <span>{variantLabel}</span>
-                                              </span>
-                                            ) : (
-                                              <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 font-bold text-[10px] font-mono">
-                                                Standard Portion
-                                              </span>
-                                            )}
+                                            <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-black text-[11px] font-mono shadow-xs flex items-center gap-1">
+                                              <Package size={11} className="shrink-0" />
+                                              <span>{variantLabel}</span>
+                                            </span>
                                             <span className="text-text-muted font-bold text-[11px]">
                                               • ₹{Number.isInteger(itemPrice) ? itemPrice : itemPrice.toFixed(2)} each
                                             </span>
@@ -796,7 +821,7 @@ export const CustomerOrdersPage: React.FC = () => {
                             )}
                           </div>
 
-                          {/* Footer Info & Pricing & REORDER Button */}
+                          {/* Footer Info & Pricing & Buttons */}
                           <div className="pt-4 border-t border-glass flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="flex items-center justify-between sm:justify-start gap-4 text-xs font-semibold w-full sm:w-auto">
                               <div>
@@ -816,14 +841,54 @@ export const CustomerOrdersPage: React.FC = () => {
                               </div>
                             </div>
 
-                            <button
-                              disabled={reorderLoadingId === (order.id || order.orderId)}
-                              onClick={() => handleReorder(order)}
-                              className="px-4 py-2.5 rounded-xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0 disabled:opacity-50"
-                            >
-                              <RefreshCw size={14} className={reorderLoadingId === (order.id || order.orderId) ? 'animate-spin' : ''} />
-                              <span>{reorderLoadingId === (order.id || order.orderId) ? 'Checking Prices...' : 'REORDER'}</span>
-                            </button>
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                              {/* Customer Cancel Order Button / Locked Badge */}
+                              {!isCompleted && !['CANCELLED', 'REJECTED', 'REJECT'].includes((order.status || '').toUpperCase()) && (
+                                isOrderCancellableByCustomer(order) ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCancelError(null);
+                                      setCancelModalOrder(order);
+                                    }}
+                                    className="px-3.5 py-2.5 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/40 hover:bg-rose-500/30 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 shrink-0"
+                                  >
+                                    <XCircle size={15} />
+                                    <span>CANCEL ORDER</span>
+                                  </button>
+                                ) : (
+                                  <div className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/30 font-extrabold text-xs flex items-center gap-1.5 shrink-0" title="Order accepted by store - cancellation is locked">
+                                    <Lock size={14} className="text-amber-500" />
+                                    <span>Accepted by Store (Cannot cancel)</span>
+                                  </div>
+                                )
+                              )}
+
+                              {/* Rate & Review Button for Completed/Delivered Orders */}
+                              {isCompleted && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReviewModalOrder(order);
+                                    setSelectedRating(order.rating || 5);
+                                    setFeedbackText(order.feedback || order.reviewText || '');
+                                  }}
+                                  className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 shrink-0"
+                                >
+                                  <Star size={14} className="fill-amber-400 text-amber-400" />
+                                  <span>{order.rating ? `RATED ${order.rating}★` : 'RATE ORDER'}</span>
+                                </button>
+                              )}
+
+                              <button
+                                disabled={reorderLoadingId === (order.id || order.orderId)}
+                                onClick={() => handleReorder(order)}
+                                className="px-4 py-2.5 rounded-xl bg-primary text-black hover:bg-primary/90 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md active:scale-95 shrink-0 disabled:opacity-50"
+                              >
+                                <RefreshCw size={14} className={reorderLoadingId === (order.id || order.orderId) ? 'animate-spin' : ''} />
+                                <span>{reorderLoadingId === (order.id || order.orderId) ? 'Checking Prices...' : 'REORDER'}</span>
+                              </button>
+                            </div>
                           </div>
                         </motion.div>
                       )}
@@ -872,6 +937,255 @@ export const CustomerOrdersPage: React.FC = () => {
               ))}
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* RATING & REVIEW MODAL */}
+      <AnimatePresence>
+        {reviewModalOrder && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setReviewModalOrder(null)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md cursor-pointer"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative z-10 w-full max-w-md bg-bg-darkSec border border-glass rounded-3xl p-6 shadow-2xl space-y-5 text-left my-auto"
+            >
+              <div className="flex items-center justify-between border-b border-glass pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                    <Star size={22} className="fill-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black font-display text-text-primary">
+                      Rate & Review Order
+                    </h3>
+                    <p className="text-[11px] text-text-muted font-mono">
+                      #{reviewModalOrder.id || reviewModalOrder.orderId}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReviewModalOrder(null)}
+                  className="p-2 rounded-xl bg-glass border border-glass text-text-muted hover:text-text-primary cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Star Rating Selection */}
+              <div className="space-y-2 text-center">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider block">
+                  How was your experience?
+                </label>
+                <div className="flex items-center justify-center gap-2 py-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setSelectedRating(star)}
+                      className="p-1.5 transition-transform hover:scale-125 cursor-pointer"
+                    >
+                      <Star
+                        size={32}
+                        className={star <= selectedRating ? 'fill-amber-400 text-amber-400 drop-shadow-md' : 'text-text-muted/40'}
+                      />
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs font-black text-amber-400 block font-display">
+                  {selectedRating === 5 && '🌟 Excellent! Loved it!'}
+                  {selectedRating === 4 && '😊 Very Good!'}
+                  {selectedRating === 3 && '👍 Good'}
+                  {selectedRating === 2 && '😐 Average'}
+                  {selectedRating === 1 && '😞 Poor'}
+                </span>
+              </div>
+
+              {/* Feedback Text Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-primary block flex items-center gap-1.5">
+                  <MessageSquare size={14} className="text-primary" />
+                  <span>Write your feedback / review (optional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="Share details about the food quality, taste, packaging, or delivery..."
+                  className="w-full p-3 rounded-2xl bg-bg-dark border border-glass text-xs text-text-primary placeholder:text-text-muted/60 outline-none focus:border-primary/50 transition-all font-medium resize-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReviewModalOrder(null)}
+                  className="flex-1 py-3 rounded-xl bg-glass border border-glass text-text-muted font-bold text-xs uppercase tracking-wider cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingReview}
+                  onClick={async () => {
+                    if (!reviewModalOrder) return;
+                    const targetOrderId = reviewModalOrder.id || reviewModalOrder.orderId;
+                    setSubmittingReview(true);
+                    try {
+                      const response = await axios.post(`${API_BASE_URL}/orders/${targetOrderId}/review`, {
+                        rating: selectedRating,
+                        feedback: feedbackText,
+                        reviewText: feedbackText,
+                        customerName: user?.name || reviewModalOrder.customer?.name || reviewModalOrder.customerName || 'Valued Patron'
+                      });
+
+                      if (response.data && response.data.success) {
+                        setOrders(prev => prev.map(o => {
+                          if ((o.id || o.orderId) === targetOrderId) {
+                            return { ...o, rating: selectedRating, feedback: feedbackText, reviewText: feedbackText };
+                          }
+                          return o;
+                        }));
+                        setReviewSuccessToast('Thank you! Your rating and review have been saved to database.');
+                        setTimeout(() => setReviewSuccessToast(null), 4000);
+                        setReviewModalOrder(null);
+                        setFeedbackText('');
+                      }
+                    } catch (err) {
+                      console.error('Error submitting review:', err);
+                    } finally {
+                      setSubmittingReview(false);
+                    }
+                  }}
+                  className="flex-[2] py-3 rounded-xl bg-primary text-black font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {submittingReview ? <RefreshCw size={16} className="animate-spin" /> : <Star size={16} className="fill-black" />}
+                  <span>{submittingReview ? 'Saving...' : 'Submit Rating'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SUCCESS TOAST BANNER */}
+      <AnimatePresence>
+        {reviewSuccessToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="fixed top-24 right-4 sm:right-8 z-[99999] max-w-md w-full p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 backdrop-blur-xl shadow-2xl flex items-center justify-between gap-3 text-left"
+          >
+            <div className="flex items-center gap-2.5 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+              <CheckCircle2 size={18} className="shrink-0 text-emerald-500" />
+              <span>{reviewSuccessToast}</span>
+            </div>
+            <button onClick={() => setReviewSuccessToast(null)} className="text-text-muted hover:text-text-primary p-1 cursor-pointer">
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* CANCEL ORDER CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {cancelModalOrder && (
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                if (!cancelLoading) setCancelModalOrder(null);
+              }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-md cursor-pointer"
+            />
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative z-10 w-full max-w-md bg-bg-darkSec border border-glass rounded-3xl p-6 shadow-2xl space-y-5 text-left my-auto"
+            >
+              <div className="flex items-center justify-between border-b border-glass pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-500">
+                    <XCircle size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black font-display text-text-primary">
+                      Cancel Order?
+                    </h3>
+                    <p className="text-[11px] text-text-muted font-mono">
+                      #{cancelModalOrder.id || cancelModalOrder.orderId}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={cancelLoading}
+                  onClick={() => setCancelModalOrder(null)}
+                  className="p-2 rounded-xl bg-glass border border-glass text-text-muted hover:text-text-primary cursor-pointer disabled:opacity-50"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Policy Explanation Banner */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-black text-amber-500 uppercase tracking-wider">
+                  <Info size={15} />
+                  <span>Cancellation Policy</span>
+                </div>
+                <p className="text-xs text-text-secondary leading-relaxed font-medium">
+                  You can cancel your order <strong className="text-amber-400 font-bold">only until the store accepts it</strong>. Once accepted by the store, cancellation is locked.
+                </p>
+              </div>
+
+              {cancelError && (
+                <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-400 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0 text-rose-500" />
+                  <span>{cancelError}</span>
+                </div>
+              )}
+
+              <p className="text-xs text-text-muted font-medium">
+                Are you sure you want to cancel order <strong className="text-text-primary">#{cancelModalOrder.id || cancelModalOrder.orderId}</strong>?
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={cancelLoading}
+                  onClick={() => setCancelModalOrder(null)}
+                  className="flex-1 py-3 rounded-xl bg-glass border border-glass text-text-muted font-bold text-xs uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                >
+                  No, Keep Order
+                </button>
+                <button
+                  type="button"
+                  disabled={cancelLoading}
+                  onClick={handleConfirmCancelOrder}
+                  className="flex-[1.5] py-3 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {cancelLoading ? <RefreshCw size={16} className="animate-spin" /> : <XCircle size={16} />}
+                  <span>{cancelLoading ? 'Cancelling...' : 'Yes, Cancel Order'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </>

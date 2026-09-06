@@ -150,7 +150,7 @@ export const ProfilePage: React.FC = () => {
         <meta name="description" content="View and update your personal details and delivery addresses on Foodway." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
         <div className="max-w-6xl mx-auto space-y-8">
           
           {/* Back Navigation Bar */}
@@ -292,8 +292,8 @@ export const ProfilePage: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
+                    await logout();
                     navigate('/login', { replace: true });
                   }}
                   className="px-4 py-2.5 rounded-xl bg-error/10 border border-error/30 text-error hover:bg-error hover:text-white transition-all text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"

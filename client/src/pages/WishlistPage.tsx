@@ -50,12 +50,18 @@ export const WishlistPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-28 px-4 sm:px-8 max-w-6xl mx-auto">
+    <div className="min-h-screen bg-bg-dark text-text-primary pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-4 sm:px-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              if (window.history.state && window.history.state.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/');
+              }
+            }}
             className="p-2.5 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 text-text-secondary hover:text-primary transition-all duration-300"
             aria-label="Back"
           >

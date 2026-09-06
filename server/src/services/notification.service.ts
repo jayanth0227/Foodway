@@ -297,10 +297,12 @@ export class NotificationService {
     try {
       const { orderId, restaurantId, restaurantName } = params;
 
-      // Scan all delivery partners in usersTableName with role DELIVERY_PARTNER
+      // Scan all delivery partners in usersTableName with role DELIVERY_PARTNER or DELIVERY or RIDER
       const allUsers = await userRepository.scan();
       const deliveryPartners = allUsers.filter(
-        (u) => (u.role === 'DELIVERY_PARTNER' || u.role === 'DELIVERY') && u.fcmToken
+        (u: any) =>
+          (u.role === 'DELIVERY_PARTNER' || u.role === 'DELIVERY' || u.role === 'RIDER' || (u.userId && u.userId.startsWith('DEL-'))) &&
+          u.fcmToken
       );
 
       for (const partner of deliveryPartners) {
@@ -320,6 +322,41 @@ export class NotificationService {
       }
     } catch (error) {
       console.error(' Failed to send Delivery Partner Notification (non-blocking):', error);
+    }
+  }
+
+  /**
+   * Send FCM Push Notification to assigned rider when Admin assigns an order.
+   */
+  async notifyRiderOrderAssigned(params: {
+    orderId: string;
+    riderId: string;
+    riderEmail?: string;
+    restaurantName?: string;
+  }): Promise<void> {
+    try {
+      const { orderId, riderId, riderEmail, restaurantName } = params;
+      const allUsers = await userRepository.scan();
+      const riderUser = allUsers.find(
+        (u: any) =>
+          (u.id === riderId || u.userId === riderId || u.email === riderEmail || (u.email && u.email === riderId)) &&
+          u.fcmToken
+      );
+
+      if (riderUser && riderUser.fcmToken) {
+        await sendNotification({
+          token: riderUser.fcmToken,
+          title: '🛵 Order Assigned to You',
+          body: `Order #${orderId} from ${restaurantName || 'Restaurant'} has been assigned to you by Admin.`,
+          data: {
+            orderId,
+            type: 'ORDER_ASSIGNED',
+          },
+          link: '/delivery/dashboard',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send Rider Order Assigned Notification (non-blocking):', error);
     }
   }
 

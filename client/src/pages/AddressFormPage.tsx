@@ -326,7 +326,7 @@ export const AddressFormPage: React.FC = () => {
         <meta name="description" content="Add or edit your saved delivery addresses with Leaflet map location picker on Foodway." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
         <div className="max-w-4xl mx-auto space-y-8">
 
           {/* Back to Profile Button */}

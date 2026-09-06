@@ -54,6 +54,7 @@ import axios from 'axios';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { API_BASE_URL } from '../utils/api';
+import ItemImageOrIcon, { isNoUserImage } from '../components/common/ItemImageOrIcon';
 
 // Leaflet Imports
 import 'leaflet/dist/leaflet.css';
@@ -311,35 +312,50 @@ export const RestaurantDashboard: React.FC = () => {
     setExpandedOrdersMap(prev => ({ ...prev, [orderId]: !prev[orderId] }));
   };
 
-  const getItemVariantLabel = (it: any): string | null => {
-    if (!it) return null;
+  const getItemVariantLabel = (it: any): string => {
+    if (!it) return '1 Pc';
 
     if (it.variantLabel && typeof it.variantLabel === 'string' && it.variantLabel.trim() !== '') {
       return it.variantLabel.trim();
     }
 
-    const v = it.selectedVariant || it.variant;
+    const v = it.selectedVariant || it.variant || (Array.isArray(it.variants) && it.variants.length > 0 ? it.variants[0] : null);
     if (v) {
       if (typeof v === 'string' && v.trim() !== '') return v.trim();
       if (typeof v === 'object') {
-        const name = v.name || v.label || v.variantName || v.portionName || v.title;
+        const label = v.label || v.name || v.variantName || v.portionName || v.title;
         const qty = v.quantity || v.qty || v.weight || v.packSize;
         const unit = v.unit || v.type || '';
         const qtyUnit = (qty || unit) ? `${qty || ''} ${unit}`.trim() : '';
 
-        if (name && qtyUnit && name !== qtyUnit) return `${name} (${qtyUnit})`;
-        if (name) return name;
+        if (label && qtyUnit && label.toLowerCase() !== qtyUnit.toLowerCase()) {
+          if (label.toLowerCase().includes(qtyUnit.toLowerCase())) return label;
+          return `${label} (${qtyUnit})`;
+        }
+        if (label) return label;
         if (qtyUnit) return qtyUnit;
       }
     }
 
     if (it.portion) return String(it.portion);
     if (it.portionSize) return String(it.portionSize);
-    if (it.unit && it.quantity) return `${it.quantity} ${it.unit}`;
-    if (it.unit) return String(it.unit);
-    if (it.size) return String(it.size);
+    if (it.packSize) return String(it.packSize);
     if (it.weight) return String(it.weight);
-    return null;
+    if (it.size) return String(it.size);
+
+    const qty = it.quantity || it.qty;
+    const unit = (it.unit || it.unitType || '').toString().trim();
+    if (qty && unit) return `${qty} ${unit}`;
+    if (unit) return `1 ${unit}`;
+
+    const itemName = String(it.name || it.itemName || it.foodName || it.title || '');
+    const itemDesc = String(it.description || '');
+    const qtyMatch = (itemName + ' ' + itemDesc).match(/\b(\d+\s*(?:pcs|pc|pieces|piece|gms|gm|g|kg|ml|l|litre|litres|plate|plates|items|pack|packs|box|boxes))\b/i);
+    if (qtyMatch && qtyMatch[1]) {
+      return qtyMatch[1].trim();
+    }
+
+    return '1 Pc';
   };
 
   // Profile Form State
@@ -533,7 +549,7 @@ export const RestaurantDashboard: React.FC = () => {
       setIsRestaurantOpen(restProfile.isOpen);
     }
     loadRestaurantData(restProfile.id || activeUser.id);
-  }, []);
+  }, [isLoading, user, isAuthenticated]);
 
   // Load Menu, Categories, Orders and Restaurant Status
   const loadRestaurantData = async (resId: string) => {
@@ -624,50 +640,7 @@ export const RestaurantDashboard: React.FC = () => {
     }
   };
 
-  // Helper: Play Loud Synthesizer Beep Alarm & Audio Sound Alert
-  const playOrderBuzzSound = () => {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        const audioCtx = new AudioContextClass();
-        if (audioCtx.state === 'suspended') {
-          audioCtx.resume();
-        }
-        
-        const playBeep = (freq: number, startTime: number, duration: number) => {
-          const osc = audioCtx.createOscillator();
-          const gain = audioCtx.createGain();
-          
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
-          
-          gain.gain.setValueAtTime(0.5, audioCtx.currentTime + startTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTime + duration);
-          
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          
-          osc.start(audioCtx.currentTime + startTime);
-          osc.stop(audioCtx.currentTime + startTime + duration);
-        };
 
-        // 4 Loud Rapid Beep Chirps (880Hz -> 1046Hz -> 1318Hz -> 1760Hz)
-        playBeep(880, 0.0, 0.18);
-        playBeep(1046.5, 0.22, 0.18);
-        playBeep(1318.5, 0.44, 0.18);
-        playBeep(1760.0, 0.66, 0.35);
-      }
-    } catch (e) {
-      console.warn('Web Audio beep synth error:', e);
-    }
-
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(err => {
-        console.warn('HTML5 Audio playback prevented by browser autoplay policy:', err);
-      });
-    } catch (e) {}
-  };
 
   // Helper: Trigger Native Browser Push Notification
   const triggerBrowserNotification = (orderId: string, customerName: string, total: number) => {
@@ -737,9 +710,6 @@ export const RestaurantDashboard: React.FC = () => {
       // Prepend order to top of list instantly without page refresh!
       setOrders(prev => [formattedOrder, ...prev.filter(o => o.id !== formattedOrder.id)]);
       setIncomingOrderPopup(formattedOrder);
-
-      // Play loud synthesizer buzz alarm sound
-      playOrderBuzzSound();
 
       // Send Native Browser Push Notification
       triggerBrowserNotification(formattedOrder.id, formattedOrder.customerName, formattedOrder.total);
@@ -940,12 +910,11 @@ export const RestaurantDashboard: React.FC = () => {
     setIsLogoutModalOpen(true);
   };
 
-  const confirmLogout = () => {
-    clearSession();
-    if (authLogout) {
-      authLogout();
-    }
+  const confirmLogout = async () => {
     setIsLogoutModalOpen(false);
+    if (authLogout) {
+      await authLogout();
+    }
     navigate('/login', { replace: true });
   };
 
@@ -1062,8 +1031,7 @@ export const RestaurantDashboard: React.FC = () => {
     const cleanName = (name || '').trim();
     const cleanDesc = (description || '').trim();
     const cleanPrepTime = (prepTime || '').trim() || '15 mins';
-    const defaultImg = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800';
-    const finalImage = (image || '').trim() || defaultImg;
+    const finalImage = (image || '').trim();
     const cleanCategory = category || categories[0] || 'General';
 
     if (!cleanName) {
@@ -1225,24 +1193,26 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'pending') {
       return (
-        <div className="flex items-center gap-2 justify-end whitespace-nowrap shrink-0">
+        <div className="flex items-center gap-1.5 justify-end flex-wrap sm:flex-nowrap">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Accepted')}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1 shadow-sm transition-all cursor-pointer"
             title="Accept Order"
           >
             <Check size={14} />
-            <span>Accept Order</span>
+            <span className="hidden sm:inline">Accept Order</span>
+            <span className="sm:hidden">Accept</span>
           </button>
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Rejected')}
-            className="px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 transition-all cursor-pointer"
             title="Reject Order"
           >
             <X size={14} />
-            <span>Reject</span>
+            <span className="hidden sm:inline">Reject</span>
+            <span className="sm:hidden">Reject</span>
           </button>
         </div>
       );
@@ -1250,20 +1220,21 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'accepted') {
       return (
-        <div className="flex items-center gap-2 justify-end whitespace-nowrap shrink-0">
+        <div className="flex items-center gap-1.5 justify-end flex-wrap sm:flex-nowrap">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Preparing')}
-            className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             title="Start Preparing Food in Kitchen"
           >
             <ChefHat size={14} />
-            <span>Start Preparing</span>
+            <span className="hidden sm:inline">Start Preparing</span>
+            <span className="sm:hidden">Prepare</span>
           </button>
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Rejected')}
-            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+            className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs flex items-center gap-1 cursor-pointer"
             title="Reject Order"
           >
             <X size={13} />
@@ -1274,15 +1245,16 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'preparing') {
       return (
-        <div className="flex items-center gap-2 justify-end whitespace-nowrap shrink-0">
+        <div className="flex items-center gap-1.5 justify-end">
           <button
             type="button"
             onClick={() => updateOrderStatus(o.id, 'Ready')}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             title="Mark Food Ready for Pickup / Delivery"
           >
             <CheckCircle size={14} />
-            <span>Food Ready for Pickup</span>
+            <span className="hidden sm:inline">Food Ready for Pickup</span>
+            <span className="sm:hidden">Mark Ready</span>
           </button>
         </div>
       );
@@ -1290,10 +1262,11 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'ready') {
       return (
-        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
-          <span className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-amber-500/15 text-amber-500 border border-amber-500/30 uppercase whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-xs">
+        <div className="flex items-center justify-end">
+          <span className="px-2.5 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black bg-amber-500/15 text-amber-500 border border-amber-500/30 uppercase flex items-center gap-1.5 shadow-xs">
             <Package size={14} className="shrink-0 text-amber-500 animate-pulse" />
-            <span>Food Ready (Awaiting Delivery Partner)</span>
+            <span className="hidden sm:inline">Food Ready (Awaiting Delivery Partner)</span>
+            <span className="sm:hidden">Ready (Awaiting Driver)</span>
           </span>
         </div>
       );
@@ -1301,8 +1274,8 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'out_for_delivery' || status === 'out for delivery') {
       return (
-        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
-          <span className="px-3 py-1.5 rounded-xl text-[11px] font-black bg-indigo-500/15 text-indigo-500 dark:text-indigo-400 border border-indigo-500/30 uppercase whitespace-nowrap shrink-0 flex items-center gap-1.5 shadow-xs">
+        <div className="flex items-center justify-end">
+          <span className="px-2.5 sm:px-3 py-1.5 rounded-xl text-[10px] sm:text-[11px] font-black bg-indigo-500/15 text-indigo-500 dark:text-indigo-400 border border-indigo-500/30 uppercase flex items-center gap-1.5 shadow-xs">
             <Package size={14} className="shrink-0 text-indigo-500" />
             <span>Out for Delivery</span>
           </span>
@@ -1312,8 +1285,8 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'rejected' || status === 'cancelled') {
       return (
-        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase whitespace-nowrap shrink-0">
+        <div className="flex items-center justify-end">
+          <span className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-xl text-[10px] sm:text-[11px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 uppercase">
             <XCircle size={13} className="shrink-0" />
             <span>Rejected</span>
           </span>
@@ -1323,8 +1296,8 @@ export const RestaurantDashboard: React.FC = () => {
 
     if (status === 'completed' || status === 'delivered') {
       return (
-        <div className="flex items-center justify-end whitespace-nowrap shrink-0">
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase whitespace-nowrap shrink-0">
+        <div className="flex items-center justify-end">
+          <span className="inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 rounded-xl text-[10px] sm:text-[11px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase">
             <CheckCircle size={13} className="shrink-0" />
             <span>Completed</span>
           </span>
@@ -1782,7 +1755,7 @@ export const RestaurantDashboard: React.FC = () => {
       {/* ==================================================== */}
       <main
         data-lenis-prevent="true"
-        className="flex-1 p-4 sm:p-6 lg:p-8 pt-20 lg:pt-8 pb-28 lg:pb-8 lg:h-screen lg:overflow-y-auto w-full min-w-0"
+        className="flex-1 p-4 sm:p-6 lg:p-8 pt-24 lg:pt-8 pb-32 lg:pb-8 lg:h-screen lg:overflow-y-auto w-full min-w-0"
       >
         {/* ==================================================== */}
         {/* DASHBOARD TAB */}
@@ -2476,21 +2449,20 @@ export const RestaurantDashboard: React.FC = () => {
 
                       {/* Preview Card */}
                       <div className="flex items-center gap-3 p-3 rounded-xl border border-glass/60 bg-bg-dark/40">
-                        {foodForm.image ? (
-                          <img
-                            src={foodForm.image}
-                            alt="Preview"
-                            className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-lg border border-dashed border-glass flex items-center justify-center text-text-muted text-[10px] shrink-0">
-                            No Image
-                          </div>
-                        )}
+                        <ItemImageOrIcon
+                          image={foodForm.image}
+                          name={foodForm.name || 'New Item'}
+                          category={foodForm.category}
+                          isVeg={foodForm.isVeg}
+                          className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
+                          containerClassName="w-16 h-16 rounded-lg border border-glass shrink-0 shadow-sm"
+                          iconSize={20}
+                          showCategoryLabel={false}
+                        />
                         <div className="min-w-0 flex-grow">
                           <span className="text-[9px] font-bold uppercase tracking-wider text-text-muted block">Image Preview</span>
                           <span className="text-[10px] text-text-secondary truncate block font-mono mt-0.5" title={foodForm.image}>
-                            {foodForm.image ? (foodForm.image.startsWith('data:') ? 'Local Image File' : foodForm.image) : 'Default fallback image will be used.'}
+                            {!isNoUserImage(foodForm.image) ? (foodForm.image!.startsWith('data:') ? 'Local Image File' : foodForm.image) : 'No custom image (suitable category icon will be shown)'}
                           </span>
                         </div>
                       </div>
@@ -2633,10 +2605,14 @@ export const RestaurantDashboard: React.FC = () => {
                     <div>
                       {/* Cover Image & Category Badges */}
                       <div className="relative h-36 w-full overflow-hidden bg-bg-dark">
-                        <img
-                          src={item.image}
-                          alt={item.name}
+                        <ItemImageOrIcon
+                          image={item.image}
+                          name={item.name}
+                          category={item.category}
+                          isVeg={item.isVeg}
                           className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                          containerClassName="w-full h-full"
+                          iconSize={32}
                         />
                         <div className="absolute top-2 left-2 flex gap-1.5">
                           <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${item.isVeg ? 'bg-emerald-500/90 text-white' : 'bg-rose-600/90 text-white'
@@ -2793,7 +2769,7 @@ export const RestaurantDashboard: React.FC = () => {
         {/* ORDERS TAB */}
         {/* ==================================================== */}
         {activeTab === 'orders' && (
-          <div className="space-y-6 animate-fadeIn w-full">
+          <div className="space-y-6 animate-fadeIn w-full pb-24 sm:pb-8">
             <div className="border-b border-glass pb-6">
               <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Live Operations</span>
               <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Orders Management</h1>
@@ -2957,7 +2933,7 @@ export const RestaurantDashboard: React.FC = () => {
                           </div>
 
                           {/* Right Header Actions: Total Price, Accept/Reject Buttons, Toggle Button */}
-                          <div className="flex items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 pt-3 sm:pt-0 border-glass/40">
+                          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-3 sm:pt-0 border-glass/40 w-full sm:w-auto">
                             <div className="text-left sm:text-right shrink-0">
                               <span className="text-[10px] text-text-muted font-black uppercase tracking-wider block leading-none">
                                 Total Order
@@ -2967,18 +2943,19 @@ export const RestaurantDashboard: React.FC = () => {
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end ml-auto sm:ml-0">
                               {renderRestaurantOrderAction(o)}
 
                               <button
                                 type="button"
                                 onClick={() => toggleOrderExpand(o.id)}
-                                className={`px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${isExpanded
+                                className={`px-3 py-1.5 sm:py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 border shadow-sm ${isExpanded
                                   ? 'bg-primary text-black border-primary'
                                   : 'bg-glass text-text-primary hover:border-primary/50 border-glass'
                                   }`}
                               >
-                                <span>{isExpanded ? 'Hide Details' : 'View Items'}</span>
+                                <span className="hidden sm:inline">{isExpanded ? 'Hide Details' : 'View Items'}</span>
+                                <span className="sm:hidden">{isExpanded ? 'Hide' : 'Items'}</span>
                                 {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                               </button>
                             </div>
@@ -3043,7 +3020,7 @@ export const RestaurantDashboard: React.FC = () => {
                                       const qty = it.quantity || it.qty || 1;
                                       const price = it.price ? Number(it.price) : undefined;
                                       const variantLabel = getItemVariantLabel(it);
-                                      const img = it.image || it.dishImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200';
+                                      const img = it.image || it.dishImage || '';
 
                                       return (
                                         <div
@@ -3051,19 +3028,24 @@ export const RestaurantDashboard: React.FC = () => {
                                           className="p-3.5 rounded-2xl bg-bg-cardSec/90 border border-glass flex items-center justify-between gap-4 shadow-sm hover:border-primary/40 transition-all"
                                         >
                                           <div className="flex items-center gap-3.5 min-w-0">
-                                            <img
-                                              src={img}
-                                              alt={foodName}
+                                            <ItemImageOrIcon
+                                              image={img}
+                                              name={foodName}
+                                              category={it.category}
+                                              isVeg={it.isVeg}
                                               className="w-12 h-12 rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                              containerClassName="w-12 h-12 rounded-xl border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                              iconSize={18}
+                                              showCategoryLabel={false}
                                             />
                                             <div className="space-y-1 min-w-0">
                                               <h4 className="font-black text-xs sm:text-sm text-text-primary truncate">
                                                 {foodName}
                                               </h4>
                                               {variantLabel ? (
-                                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[11px] font-black tracking-wide">
-                                                  <span>Variant / Portion:</span>
-                                                  <strong className="text-white">{variantLabel}</strong>
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 text-[11px] font-extrabold tracking-wide">
+                                                  <span className="opacity-90">Variant / Portion:</span>
+                                                  <strong className="text-amber-950 dark:text-white font-black">{variantLabel}</strong>
                                                 </span>
                                               ) : (
                                                 <span className="text-[10px] text-text-muted font-medium italic">Standard Portion</span>
@@ -3072,7 +3054,7 @@ export const RestaurantDashboard: React.FC = () => {
                                           </div>
 
                                           <div className="text-right shrink-0 space-y-1">
-                                            <span className="px-3 py-1 rounded-xl bg-primary/20 text-primary border border-primary/30 text-xs font-black inline-block">
+                                            <span className="px-3 py-1 rounded-xl bg-primary text-black dark:bg-primary/20 dark:text-primary border border-primary/40 text-xs font-black inline-block shadow-xs">
                                               x{qty}
                                             </span>
                                             {price !== undefined && (

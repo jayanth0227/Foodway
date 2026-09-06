@@ -1,11 +1,16 @@
 import nodemailer from 'nodemailer';
+import { transporter as configuredTransporter } from '../config/email';
 
-// Create Nodemailer Transporter with fast 4-second timeout
-const createTransporter = () => {
+// Helper to get active Nodemailer transporter
+const getTransporter = () => {
+  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.EMAIL_PASS;
   const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
-  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+
+  if (configuredTransporter) {
+    return configuredTransporter;
+  }
 
   if (smtpUser && smtpPass) {
     return nodemailer.createTransport({
@@ -16,30 +21,27 @@ const createTransporter = () => {
         user: smtpUser,
         pass: smtpPass
       },
-      connectionTimeout: 4000,
-      greetingTimeout: 4000,
-      socketTimeout: 4000
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000
     });
   }
 
-  // Fallback dev transporter
   return nodemailer.createTransport({
     host: 'smtp.ethereal.email',
     port: 587,
     auth: {
       user: 'ethereal.user@ethereal.email',
       pass: 'ethereal_pass'
-    },
-    connectionTimeout: 3000,
-    greetingTimeout: 3000,
-    socketTimeout: 3000
+    }
   });
 };
 
 export const sendPasswordResetOtpEmail = async (toEmail: string, otpCode: string, userName?: string): Promise<boolean> => {
   try {
-    const transporter = createTransporter();
-    const fromAddress = process.env.EMAIL_FROM || '"MK Delivery Services" <no-reply@mkdelivery.com>';
+    const transporter = getTransporter();
+    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const fromAddress = process.env.EMAIL_FROM || (smtpUser ? `"MK Delivery Services" <${smtpUser}>` : '"MK Delivery Services" <no-reply@mkdelivery.com>');
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #faf8f6;">
@@ -50,7 +52,7 @@ export const sendPasswordResetOtpEmail = async (toEmail: string, otpCode: string
         <div style="background-color: #ffffff; padding: 24px; border-radius: 12px; border: 1px solid #eee;">
           <h3 style="color: #1a1a1a; margin-top: 0;">Password Reset Request</h3>
           <p style="color: #555; font-size: 14px; line-height: 1.5;">
-            Hello ${userName || 'Valued Partner'},<br/>
+            Hello ${userName || 'Valued User'},<br/>
             We received a request to reset the password for your MK Delivery account associated with <strong>${toEmail}</strong>.
           </p>
           <div style="text-align: center; margin: 25px 0;">
@@ -69,24 +71,19 @@ export const sendPasswordResetOtpEmail = async (toEmail: string, otpCode: string
       </div>
     `;
 
-    // Send with timeout race so API call never hangs
-    const sendPromise = transporter.sendMail({
+    const info = await transporter.sendMail({
       from: fromAddress,
       to: toEmail,
-      subject: `Your Password Reset OTP: ${otpCode} - MK Delivery`,
+      subject: `Your Password Reset OTP: ${otpCode} - MK Delivery Services`,
       html: htmlContent
     });
 
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('SMTP_TIMEOUT')), 3500)
-    );
-
-    await Promise.race([sendPromise, timeoutPromise]);
-    console.log(`[Email Service] Password Reset OTP ${otpCode} sent to ${toEmail}.`);
+    console.log(`📧 [Email Service] Password Reset OTP ${otpCode} successfully sent to ${toEmail}. MessageId: ${info.messageId}`);
     return true;
   } catch (error: any) {
+    console.error(`❌ [Email Service Error] Failed to send email to ${toEmail}:`, error?.message || error);
     console.log(`\n========================================`);
-    console.log(`🔐 [PASSWORD RESET OTP GENERATED] Target Email: ${toEmail}`);
+    console.log(`🔐 [PASSWORD RESET OTP FALLBACK LOG] Target Email: ${toEmail}`);
     console.log(`🔑 6-DIGIT OTP CODE: ${otpCode}`);
     console.log(`========================================\n`);
     return true;

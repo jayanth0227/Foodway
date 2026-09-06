@@ -15,7 +15,9 @@ import {
   Phone, 
   MapPin, 
   Layers, 
-  Utensils 
+  Utensils,
+  Search,
+  X
 } from 'lucide-react';
 
 export const AdminCMSManager: React.FC = () => {
@@ -23,6 +25,7 @@ export const AdminCMSManager: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [allDishes, setAllDishes] = useState<any[]>([]);
+  const [dishSearchQuery, setDishSearchQuery] = useState('');
 
   // CMS State
   const [heroStats, setHeroStats] = useState({
@@ -39,11 +42,11 @@ export const AdminCMSManager: React.FC = () => {
 
   const [whyChooseUs, setWhyChooseUs] = useState({
     title: 'Why Choose MK Delivery..!',
-    subtitle: 'From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.',
+    subtitle: 'From fresh hot meals to groceries, pooja essentials, and daily necessities, discover how we deliver all your essential needs right to your doorstep.',
     features: [
-      { id: 'feat-1', title: 'Fresh & Quality Food', badge: 'FRESH', description: 'We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care.' },
-      { id: 'feat-2', title: 'Fast Delivery', badge: '20-30 MINS', description: 'Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting.' },
-      { id: 'feat-3', title: 'Live Order Tracking', badge: 'LIVE', description: 'Track your order in real time from restaurant confirmation until it arrives at your home.' }
+      { id: 'feat-1', title: 'All Essentials & Fresh Meals', badge: 'ALL-IN-ONE', description: 'Order groceries, fresh food, pooja items, bakery treats, and daily household essentials from trusted local shops.' },
+      { id: 'feat-2', title: 'Express Superfast Delivery', badge: '20-30 MINS', description: 'Get your food, groceries, vegetables, and daily necessities delivered lightning fast across Konaseema.' },
+      { id: 'feat-3', title: 'Live Order Tracking', badge: 'LIVE', description: 'Track your essential order in real time from store confirmation until our delivery partner reaches your doorstep.' }
     ]
   });
 
@@ -263,108 +266,87 @@ export const AdminCMSManager: React.FC = () => {
         </div>
 
         <div>
-          <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-2">
-            Pick Featured Dishes ({flavoursConfig.featuredItemIds?.length || 0} selected)
-          </label>
-          <div className="max-h-60 overflow-y-auto border border-glass rounded-xl p-3 bg-bg-dark/50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {allDishes.map((dish) => {
-              const isSelected = flavoursConfig.featuredItemIds?.includes(dish.id || dish._id);
-              return (
-                <label
-                  key={dish.id || dish._id}
-                  className={`flex items-center space-x-2.5 p-2 rounded-lg cursor-pointer transition-colors border ${
-                    isSelected ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-glass/10 border-glass text-text-secondary hover:bg-glass/20'
-                  }`}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+            <label className="text-xs font-bold text-text-muted uppercase tracking-wider block">
+              Pick Featured Dishes ({flavoursConfig.featuredItemIds?.length || 0} selected)
+            </label>
+
+            {/* Dish Search Bar */}
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" size={14} />
+              <input
+                type="text"
+                value={dishSearchQuery}
+                onChange={(e) => setDishSearchQuery(e.target.value)}
+                placeholder="Search item, price, store, or category..."
+                className="w-full bg-bg-dark border border-glass rounded-xl pl-8 pr-8 py-2 text-xs text-text-primary outline-none focus:border-primary font-medium transition-all"
+              />
+              {dishSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setDishSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary p-0.5"
+                  title="Clear search"
                 >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => toggleFeaturedDish(dish.id || dish._id)}
-                    className="accent-primary w-4 h-4 rounded"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold truncate">{dish.name}</p>
-                    <p className="text-[10px] text-text-muted truncate">₹{dish.price} • {dish.restaurantName || 'Konaseema'}</p>
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* 3. WHY CHOOSE MK DELIVERY */}
-      <div className="glass-panel border border-glass rounded-2xl p-6 space-y-4">
-        <div className="flex items-center space-x-3 border-b border-glass pb-3">
-          <Layers className="text-primary" size={20} />
-          <h2 className="text-base font-bold font-display text-text-primary">3. Why Choose MK Delivery Features</h2>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-1.5">Section Title</label>
-            <input
-              type="text"
-              value={whyChooseUs.title}
-              onChange={(e) => setWhyChooseUs(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full bg-bg-dark border border-glass rounded-xl px-4 py-2.5 text-xs text-text-primary outline-none focus:border-primary font-semibold"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-bold text-text-muted uppercase tracking-wider block mb-1.5">Section Description</label>
-            <input
-              type="text"
-              value={whyChooseUs.subtitle}
-              onChange={(e) => setWhyChooseUs(prev => ({ ...prev, subtitle: e.target.value }))}
-              className="w-full bg-bg-dark border border-glass rounded-xl px-4 py-2.5 text-xs text-text-primary outline-none focus:border-primary font-semibold"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-3 pt-2">
-          {whyChooseUs.features.map((feat, idx) => (
-            <div key={feat.id || idx} className="p-4 border border-glass rounded-xl bg-bg-dark/40 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="text-[10px] font-bold text-text-muted uppercase block mb-1">Feature Title</label>
-                <input
-                  type="text"
-                  value={feat.title}
-                  onChange={(e) => updateFeatureItem(feat.id, 'title', e.target.value)}
-                  className="w-full bg-bg-dark border border-glass rounded-lg px-3 py-1.5 text-xs text-text-primary outline-none focus:border-primary font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-text-muted uppercase block mb-1">Badge Text</label>
-                <input
-                  type="text"
-                  value={feat.badge}
-                  onChange={(e) => updateFeatureItem(feat.id, 'badge', e.target.value)}
-                  className="w-full bg-bg-dark border border-glass rounded-lg px-3 py-1.5 text-xs text-text-primary outline-none focus:border-primary font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-text-muted uppercase block mb-1">Description</label>
-                <input
-                  type="text"
-                  value={feat.description}
-                  onChange={(e) => updateFeatureItem(feat.id, 'description', e.target.value)}
-                  className="w-full bg-bg-dark border border-glass rounded-lg px-3 py-1.5 text-xs text-text-primary outline-none focus:border-primary font-semibold"
-                />
-              </div>
+                  <X size={13} />
+                </button>
+              )}
             </div>
-          ))}
+          </div>
+
+          <div className="max-h-64 overflow-y-auto border border-glass rounded-xl p-3 bg-bg-dark/50 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {(() => {
+              const query = dishSearchQuery.trim().toLowerCase();
+              const filtered = allDishes.filter((dish) => {
+                if (!query) return true;
+                const nameMatch = dish.name?.toLowerCase().includes(query);
+                const restMatch = dish.restaurantName?.toLowerCase().includes(query);
+                const catMatch = dish.category?.toLowerCase().includes(query);
+                const priceMatch = dish.price?.toString().includes(query);
+                return nameMatch || restMatch || catMatch || priceMatch;
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="col-span-full py-8 text-center text-text-muted text-xs font-medium">
+                    No dishes found matching "<span className="text-primary font-semibold">{dishSearchQuery}</span>"
+                  </div>
+                );
+              }
+
+              return filtered.map((dish) => {
+                const isSelected = flavoursConfig.featuredItemIds?.includes(dish.id || dish._id);
+                return (
+                  <label
+                    key={dish.id || dish._id}
+                    className={`flex items-center space-x-2.5 p-2 rounded-lg cursor-pointer transition-colors border ${
+                      isSelected ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-glass/10 border-glass text-text-secondary hover:bg-glass/20'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleFeaturedDish(dish.id || dish._id)}
+                      className="accent-primary w-4 h-4 rounded shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold truncate">{dish.name}</p>
+                      <p className="text-[10px] text-text-muted truncate">₹{dish.price} • {dish.restaurantName || 'Konaseema'}</p>
+                    </div>
+                  </label>
+                );
+              });
+            })()}
+          </div>
         </div>
       </div>
 
-      {/* 4. FREQUENTLY ASKED QUESTIONS (FAQS) */}
+      {/* 3. FREQUENTLY ASKED QUESTIONS (FAQS) */}
       <div className="glass-panel border border-glass rounded-2xl p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-glass pb-3">
           <div className="flex items-center space-x-3">
             <HelpCircle className="text-primary" size={20} />
-            <h2 className="text-base font-bold font-display text-text-primary">4. Frequently Asked Questions (FAQs)</h2>
+            <h2 className="text-base font-bold font-display text-text-primary">3. Frequently Asked Questions (FAQs)</h2>
           </div>
 
           <button

@@ -248,7 +248,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       id="home"
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center pt-20 sm:pt-28 pb-12 sm:pb-20 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
+      className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center pt-24 sm:pt-28 pb-20 sm:pb-28 lg:pb-24 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
     >
 
 
@@ -456,34 +456,52 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             </button>
           </motion.div>
 
-          {/* Stats Indicators */}
+          {/* Stats Indicators / Count Badges */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.6 }}
-            className="grid grid-cols-3 gap-2 pt-3 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto lg:gap-4"
+            className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-4 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto"
           >
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
-              <User className="text-primary shrink-0" size={14} />
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                <User size={15} className="sm:w-4 sm:h-4" />
+              </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.customers || '20K+'}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Customers</span>
+                <span className="text-xs sm:text-sm font-black font-display text-slate-900 dark:text-text-primary leading-tight truncate">
+                  {heroStats.customers || '20K+'}
+                </span>
+                <span className="text-[8px] sm:text-[9.5px] font-extrabold text-slate-500 dark:text-text-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                  Customers
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
-              <Store className="text-primary shrink-0" size={14} />
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                <Store size={15} className="sm:w-4 sm:h-4" />
+              </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.restaurants || '500+'}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Restaurants</span>
+                <span className="text-xs sm:text-sm font-black font-display text-slate-900 dark:text-text-primary leading-tight truncate">
+                  {heroStats.restaurants || '500+'}
+                </span>
+                <span className="text-[8px] sm:text-[9.5px] font-extrabold text-slate-500 dark:text-text-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                  Restaurants
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
-              <Clock className="text-primary shrink-0" size={14} />
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                <Clock size={15} className="sm:w-4 sm:h-4" />
+              </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.deliveryTime || '30 min'}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Delivery</span>
+                <span className="text-xs sm:text-sm font-black font-display text-slate-900 dark:text-text-primary leading-tight truncate">
+                  {heroStats.deliveryTime || '30 min'}
+                </span>
+                <span className="text-[8px] sm:text-[9.5px] font-extrabold text-slate-500 dark:text-text-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                  Delivery
+                </span>
               </div>
             </div>
           </motion.div>

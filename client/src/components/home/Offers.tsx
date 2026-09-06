@@ -59,6 +59,7 @@ export const Offers: React.FC = () => {
           slidesPerView={1}
           autoplay={{ delay: 5000, disableOnInteraction: false }}
           pagination={{ clickable: true }}
+          loop={OFFERS.length > 3}
           breakpoints={{
             640: { slidesPerView: 2 },
             1024: { slidesPerView: 3 },

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../hooks/useAuth';
+import ItemImageOrIcon from './ItemImageOrIcon';
 
 export const FloatingCartBar: React.FC = () => {
   const { totalItemsCount, totalAmount, lastAddedItem, setCartOpen } = useCart();
@@ -24,16 +25,17 @@ export const FloatingCartBar: React.FC = () => {
   const isVendorOrAdminRole = ['SHOP', 'RESTAURANT', 'VENDOR', 'ADMIN', 'DELIVERY', 'DRIVER'].includes(userRole);
 
   // Hide on auth (login/register), portal dashboards, or on checkout/cart pages
+  const normPath = (location.pathname || '').replace(/\/+$/, '').toLowerCase();
   const isAuthOrPortalRoute =
-    location.pathname === '/login' ||
-    location.pathname === '/register' ||
-    location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/restaurant/dashboard') ||
-    location.pathname.startsWith('/shop/dashboard') ||
-    location.pathname.startsWith('/vendor') ||
-    location.pathname.startsWith('/delivery') ||
-    location.pathname === '/cart' ||
-    location.pathname === '/checkout';
+    normPath === '/login' ||
+    normPath === '/register' ||
+    normPath.startsWith('/admin') ||
+    normPath.startsWith('/restaurant/dashboard') ||
+    normPath.startsWith('/shop/dashboard') ||
+    normPath.startsWith('/vendor/dashboard') ||
+    normPath.startsWith('/delivery') ||
+    normPath === '/cart' ||
+    normPath === '/checkout';
 
   // Only show popup for customer users on customer pages when cart is not empty
   if (isVendorOrAdminRole || isAuthOrPortalRoute || totalItemsCount === 0 || isDismissed) {
@@ -45,7 +47,7 @@ export const FloatingCartBar: React.FC = () => {
   };
 
   const displayName = lastAddedItem?.name || (lastAddedItem as any)?.restaurantName || 'Foodway Cart';
-  const displayImage = lastAddedItem?.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200';
+  const displayImage = lastAddedItem?.image || '';
 
   return (
     <AnimatePresence>
@@ -66,10 +68,15 @@ export const FloatingCartBar: React.FC = () => {
           <div className="flex items-center gap-2.5 min-w-0 flex-1 pl-0.5">
             {/* Circular Food/Restaurant Thumbnail */}
             <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-slate-200 dark:border-white/15 shrink-0 bg-slate-100 dark:bg-white/5 shadow-xs">
-              <img
-                src={displayImage}
-                alt={displayName}
+              <ItemImageOrIcon
+                image={displayImage}
+                name={displayName}
+                category={(lastAddedItem as any)?.category}
+                isVeg={(lastAddedItem as any)?.isVeg}
                 className="w-full h-full object-cover"
+                containerClassName="w-full h-full"
+                iconSize={16}
+                showCategoryLabel={false}
               />
             </div>
 

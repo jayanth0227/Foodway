@@ -53,12 +53,12 @@ export const Categories: React.FC = () => {
 
         {/* Section Header */}
         <div className="flex items-end justify-between mb-4 sm:mb-6 pb-3 border-b border-glass/40 gap-3">
-          <div className="space-y-0.5 sm:space-y-1 text-left max-w-xl">
+          <div className="space-y-0.5 sm:space-y-1 text-left max-w-2xl">
             <h2 className="text-lg sm:text-3xl md:text-4xl font-extrabold font-display text-gradient-gold tracking-tight">
-              Discover Stores & Cuisines
+              Discover Stores & Essentials
             </h2>
             <p className="hidden sm:block text-xs sm:text-sm text-text-secondary font-medium leading-relaxed">
-              Browse food, groceries, bakery, fruits, beverages, and more from trusted local partners.
+              Order fresh food, groceries, pooja essentials, fruits & vegetables, bakery, dairy, and household care from trusted local partners.
             </p>
           </div>
 
@@ -82,7 +82,7 @@ export const Categories: React.FC = () => {
           <div className="text-center py-10 sm:py-12 glass-panel border border-glass rounded-2xl p-6 sm:p-8 max-w-md mx-auto space-y-2">
             <Utensils size={32} className="mx-auto text-text-muted opacity-50" />
             <h3 className="font-bold text-sm sm:text-base text-text-primary">No Categories Found</h3>
-            <p className="text-xs text-text-muted">Categories added by partner restaurants will automatically appear here.</p>
+            <p className="text-xs text-text-muted">Categories added by partner merchant stores will automatically appear here.</p>
           </div>
         ) : (
           <motion.div
@@ -100,20 +100,28 @@ export const Categories: React.FC = () => {
                 <motion.div
                   key={category.id || category.name}
                   variants={itemVariants}
-                  className="group premium-card p-3.5 sm:p-5 md:p-6 flex flex-col justify-between cursor-pointer rounded-2xl sm:rounded-3xl border border-glass hover:border-primary/50 transition-all duration-300 shadow-sm hover:shadow-luxury"
+                  className="group relative p-3.5 sm:p-5 md:p-6 flex flex-col justify-between cursor-pointer rounded-2xl sm:rounded-3xl border border-glass hover:border-primary/50 bg-bg-cardSec/80 hover:bg-bg-cardSec transition-all duration-300 shadow-sm hover:shadow-luxury overflow-hidden"
                   onClick={() => navigate(`/categories?category=${encodeURIComponent(cleanName)}`)}
                 >
                   {/* Card background glowing indicator */}
-                  <div className="absolute top-0 right-0 w-24 h-24 rounded-full bg-primary/5 blur-[25px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+                  <div className="absolute top-0 right-0 w-24 h-24 rounded-full bg-primary/10 blur-[30px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
                   <div className="space-y-2.5 sm:space-y-4">
-                    {/* Rounded Image Container */}
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl sm:rounded-2xl overflow-hidden border border-glass group-hover:border-primary/40 group-hover:shadow-[0_0_20px_rgba(197,147,99,0.15)] transition-all duration-500 shrink-0">
-                      <img
-                        src={category.image || "/images/category-placeholder.png"}
-                        alt={cleanName}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                      />
+                    {/* Top Row: Image Thumbnail + Category Badge */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-18 md:h-18 rounded-xl sm:rounded-2xl overflow-hidden border border-glass group-hover:border-primary/40 group-hover:shadow-[0_0_20px_rgba(197,147,99,0.15)] transition-all duration-500 shrink-0 bg-black/40">
+                        <img
+                          src={category.image || "/images/category-placeholder.png"}
+                          alt={cleanName}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                        />
+                      </div>
+
+                      {category.badge && (
+                        <span className="hidden sm:inline-block px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-wider bg-primary/15 border border-primary/30 text-primary shrink-0">
+                          {category.badge}
+                        </span>
+                      )}
                     </div>
 
                     {/* Text Description */}
@@ -129,7 +137,7 @@ export const Categories: React.FC = () => {
 
                   {/* Footer item counter */}
                   <div className="flex items-center justify-between pt-2.5 sm:pt-4 md:pt-5 border-t border-glass mt-3 sm:mt-4 md:mt-5 text-text-muted group-hover:text-text-secondary transition-colors text-[9px] sm:text-[10px] font-bold tracking-wider uppercase">
-                    <span>Explore Items</span>
+                    <span>Explore Stores</span>
                     <ArrowRight size={12} className="text-primary group-hover:translate-x-1 transition-transform duration-300" />
                   </div>
                 </motion.div>

@@ -22,18 +22,21 @@ import {
   CheckCircle2,
   IndianRupee,
   AlertTriangle,
-  AlertCircle
+  AlertCircle,
+  Package
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../hooks/useAuth';
 import { API_BASE_URL } from '../utils/api';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 import { getCurrentUser, getToken, saveSession } from '../utils/auth.utils';
 import socketService from '../services/socket.service';
 import authService from '../services/auth.service';
 import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
 import type { Address } from '../types/auth.types';
+import { getItemVariantLabel } from '../utils/variantUtils';
 
 export const CartPage: React.FC = () => {
   const navigate = useNavigate();
@@ -369,6 +372,7 @@ export const CartPage: React.FC = () => {
   const rawCalculatedFee = Math.round(effectiveDistance * deliveryFeePerKm);
   const deliveryFee = baseDeliveryFee ? Math.max(baseDeliveryFee, rawCalculatedFee) : rawCalculatedFee;
   const grandTotal = Math.max(0, totalAmount + deliveryFee);
+  const isDistanceTooFar = effectiveDistance > 20.0;
 
   // Handle Order Submission
   const handlePlaceOrder = async (e: React.FormEvent) => {
@@ -394,6 +398,11 @@ export const CartPage: React.FC = () => {
       return;
     }
 
+    if (isDistanceTooFar) {
+      alert(`Order cannot be placed: Delivery distance is ${effectiveDistance.toFixed(1)} km, which exceeds the maximum allowed radius of 20 km. Please select a closer store or update your delivery address.`);
+      return;
+    }
+
     setIsPlacingOrder(true);
     try {
       const targetRestaurantId = (cartItems[0]?.dish as any)?.restaurantId || 'RES_DEFAULT';
@@ -412,21 +421,7 @@ export const CartPage: React.FC = () => {
         items: cartItems.map(item => {
           const v = item.selectedVariant;
           const effectivePrice = v ? Number(v.price) : Number(item.dish.price);
-
-          let variantLabel: string | undefined = undefined;
-          if (v) {
-            if (typeof v === 'string') {
-              variantLabel = v;
-            } else if (typeof v === 'object') {
-              const name = v.name || v.label || v.variantName;
-              const qtyStr = (v.quantity || v.qty) ? `${v.quantity || v.qty} ${v.unit || ''}`.trim() : (v.unit || '');
-              if (name && qtyStr && name !== qtyStr) {
-                variantLabel = `${name} (${qtyStr})`;
-              } else {
-                variantLabel = name || qtyStr || undefined;
-              }
-            }
-          }
+          const variantLabel = getItemVariantLabel({ ...item.dish, selectedVariant: v });
 
           return {
             id: item.dish.id,
@@ -437,7 +432,7 @@ export const CartPage: React.FC = () => {
             quantity: item.quantity,
             image: item.dish.image,
             selectedVariant: v || null,
-            variantLabel: variantLabel || (v ? `${v.quantity || ''} ${v.unit || ''}`.trim() : undefined),
+            variantLabel,
             restaurantId: (item.dish as any).restaurantId || targetRestaurantId,
             restaurantName: (item.dish as any).restaurantName || targetRestaurantName
           };
@@ -475,7 +470,7 @@ export const CartPage: React.FC = () => {
         <meta name="description" content="Review your cart items, select saved delivery addresses, apply discount coupons, and checkout securely." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-40 sm:pb-44 lg:pb-24 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
+      <div className="min-h-screen bg-bg-dark text-text-primary pt-24 sm:pt-28 lg:pt-28 pb-44 lg:pb-24 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
         <div className="max-w-7xl mx-auto space-y-8">
 
           {/* Clean Page Header */}
@@ -485,8 +480,10 @@ export const CartPage: React.FC = () => {
                 onClick={() => {
                   if (mobileStep === 2) {
                     setMobileStep(1);
-                  } else {
+                  } else if (window.history.state && window.history.state.idx > 0) {
                     navigate(-1);
+                  } else {
+                    navigate('/');
                   }
                 }}
                 className="w-10 h-10 rounded-2xl bg-bg-card border border-glass text-text-secondary hover:text-primary flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
@@ -683,10 +680,15 @@ export const CartPage: React.FC = () => {
                           <div className="flex items-start gap-3.5 sm:gap-4">
                             {/* Dish Image */}
                             <div className="relative w-20 h-20 sm:w-24 sm:h-24 aspect-square rounded-2xl overflow-hidden border border-glass shrink-0 bg-bg-dark">
-                              <img
-                                src={item.dish.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400'}
-                                alt={item.dish.name}
+                              <ItemImageOrIcon
+                                image={item.dish.image}
+                                name={item.dish.name}
+                                category={item.dish.category}
+                                isVeg={item.dish.isVeg}
                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                containerClassName="w-full h-full"
+                                iconSize={24}
+                                showCategoryLabel={false}
                               />
                             </div>
 
@@ -705,11 +707,10 @@ export const CartPage: React.FC = () => {
                                       {item.dish.category}
                                     </span>
                                   )}
-                                  {item.selectedVariant && item.selectedVariant.name && (
-                                    <span className="inline-block text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
-                                      {item.selectedVariant.name}
-                                    </span>
-                                  )}
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-300 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 shadow-xs">
+                                    <Package size={10} className="shrink-0" />
+                                    <span>{getItemVariantLabel({ ...item.dish, selectedVariant: item.selectedVariant })}</span>
+                                  </span>
                                 </div>
 
                               {/* Remove Item Trash Button */}
@@ -1017,7 +1018,19 @@ export const CartPage: React.FC = () => {
                     </div>
 
                     {/* Submit CTA Action Button (with clear top spacing gap) */}
-                    <div className="pt-3 sm:pt-4">
+                    <div className="pt-3 sm:pt-4 space-y-3">
+                      {isDistanceTooFar && (
+                        <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-start gap-3 text-xs text-rose-600 dark:text-rose-400">
+                          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <span className="font-black text-xs uppercase tracking-wider block leading-tight">Delivery Out of Range ({effectiveDistance.toFixed(1)} km)</span>
+                            <p className="text-[11px] opacity-95 leading-normal font-medium">
+                              This store is <strong>{effectiveDistance.toFixed(1)} km</strong> away from your delivery address. Orders can only be booked within a <strong>20 km radius</strong> limit.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       {!isAuthenticated || !user ? (
                         <div className="space-y-2.5">
                           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-600 dark:text-amber-400">
@@ -1040,13 +1053,15 @@ export const CartPage: React.FC = () => {
                       ) : (
                         <button
                           type="submit"
-                          disabled={isPlacingOrder || isStoreClosed || unavailableCartItems.length > 0}
-                          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                          disabled={isPlacingOrder || isStoreClosed || unavailableCartItems.length > 0 || isDistanceTooFar}
+                          className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md ${
                             isStoreClosed
                               ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 cursor-not-allowed'
                               : unavailableCartItems.length > 0
                               ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 cursor-not-allowed'
-                              : 'bg-primary hover:bg-primary-dark text-white active:scale-98'
+                              : isDistanceTooFar
+                              ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 cursor-not-allowed'
+                              : 'bg-primary hover:bg-primary-dark text-white active:scale-98 cursor-pointer'
                           }`}
                         >
                           {isPlacingOrder ? (
@@ -1063,6 +1078,11 @@ export const CartPage: React.FC = () => {
                             <>
                               <AlertCircle className="w-5 h-5 text-amber-500" />
                               <span>Remove Unavailable Items To Proceed</span>
+                            </>
+                          ) : isDistanceTooFar ? (
+                            <>
+                              <AlertTriangle className="w-5 h-5 text-rose-500" />
+                              <span>Distance Exceeds 20 KM — Cannot Book</span>
                             </>
                           ) : (
                             <>

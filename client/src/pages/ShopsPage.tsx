@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { Search, MapPin, Star, Clock, Store, Plus, Heart, ArrowLeft } from 'lucide-react';
+import { Search, MapPin, Star, Clock, Store, Plus, Heart, ArrowLeft, Navigation } from 'lucide-react';
 import shopService from '../services/shop.service';
 import { MobileShopCardSkeleton } from '../components/common/MobileSkeletonLoader';
 import { useLanguage } from '../context/LanguageContext';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
-import { formatShopAddress } from '../utils/categoryUtils';
+import { formatShopAddress, calculateDistanceAndRating } from '../utils/categoryUtils';
 
 export const ShopsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,7 +17,6 @@ export const ShopsPage: React.FC = () => {
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>(initialQuery);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
     const favMap: Record<string, boolean> = {};
@@ -81,15 +80,16 @@ export const ShopsPage: React.FC = () => {
     });
   };
 
-  const categories = ['All', 'Sweets & Bakery', 'Groceries', 'Fruits & Vegetables', 'Dairy & Milk', 'Beverages', 'Prepared Food'];
+  const handleBack = () => {
+    navigate('/');
+  };
 
   const filteredShops = shops.filter((shop) => {
     const sName = (shop.name || shop.shopName || '').toLowerCase();
-    const sCat = (shop.shopType || shop.category || shop.cuisine || '').toLowerCase();
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = sName.includes(q) || sCat.includes(q);
-    const matchesCat = selectedCategory === 'All' || sCat.includes(selectedCategory.toLowerCase());
-    return matchesSearch && matchesCat;
+    const sCat = `${shop.shopType || ''} ${shop.category || ''} ${shop.cuisine || ''}`.toLowerCase();
+    const sAddr = (shop.address || '').toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
+    return !q || sName.includes(q) || sCat.includes(q) || sAddr.includes(q);
   });
 
   return (
@@ -99,16 +99,16 @@ export const ShopsPage: React.FC = () => {
         <meta name="description" content="Browse all verified partner shops, sweets stores, vegetable marts, dairies, and supermarkets." />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-24 sm:pt-32 pb-24 sm:pb-16 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
-        <div className="absolute top-20 left-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
+      <div className="min-h-screen bg-bg-dark pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
+        <div className="absolute top-10 left-10 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-10 right-10 w-[500px] h-[500px] rounded-full bg-amber-500/5 blur-[150px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto space-y-5 sm:space-y-8 relative z-10">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4 border-b border-glass pb-4 sm:pb-6 pt-2 sm:pt-4">
-            <div className="space-y-2 sm:space-y-3">
+        <div className="max-w-7xl mx-auto space-y-3.5 sm:space-y-4 relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5 sm:gap-4 border-b border-glass pb-3 sm:pb-3.5 pt-0">
+            <div className="space-y-1 sm:space-y-1.5">
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={handleBack}
                   className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-glass border border-glass text-primary hover:border-primary/50 flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm shrink-0"
                   aria-label="Back to Home"
                   title="Back to Home Screen"
@@ -116,7 +116,7 @@ export const ShopsPage: React.FC = () => {
                   <ArrowLeft size={20} className="text-primary" />
                 </button>
 
-                <h1 className="text-2xl sm:text-5xl font-black font-display text-gradient-gold tracking-tight leading-tight">
+                <h1 className="text-2xl sm:text-4xl font-black font-display text-gradient-gold tracking-tight leading-tight">
                   Shops & Supermarkets
                 </h1>
               </div>
@@ -127,37 +127,22 @@ export const ShopsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center justify-end shrink-0 sm:self-end">
-              <span className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-glass border border-glass text-[11px] sm:text-xs font-bold text-text-primary shadow-xs">
+              <span className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-glass border border-glass text-[11px] sm:text-xs font-bold text-text-primary shadow-xs">
                 {shops.length} Registered Merchant Stores
               </span>
             </div>
           </div>
 
-          <div className="glass-panel border border-glass rounded-2xl p-3.5 sm:p-6 flex flex-col md:flex-row gap-3.5 sm:gap-4 items-center justify-between shadow-luxury">
-            <div className="relative w-full md:w-96">
+          <div className="glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex items-center justify-between shadow-luxury">
+            <div className="relative w-full">
               <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
               <input
                 type="text"
                 placeholder="Search shops by name, category, or location..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 rounded-xl bg-bg-dark/70 border border-glass text-xs sm:text-sm text-text-primary placeholder:text-text-muted/60 outline-none focus:border-primary/50 transition-all font-semibold"
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-bg-dark/70 border border-glass text-xs sm:text-sm text-text-primary placeholder:text-text-muted/60 outline-none focus:border-primary/50 transition-all font-semibold"
               />
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0 scrollbar-none">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${selectedCategory === cat
-                    ? 'bg-primary text-black font-black shadow-md'
-                    : 'bg-glass hover:bg-glass-subtle text-text-secondary border border-glass'
-                    }`}
-                >
-                  {cat}
-                </button>
-              ))}
             </div>
           </div>
 
@@ -168,7 +153,7 @@ export const ShopsPage: React.FC = () => {
               <Store size={48} className="mx-auto text-text-muted opacity-40" />
               <h3 className="font-bold text-xl text-text-primary">No Merchant Stores Found</h3>
               <p className="text-xs text-text-muted">
-                Try clearing your search query or choosing a different shop category filter.
+                Try searching for a different shop name, item, or location.
               </p>
             </div>
           ) : (
@@ -177,9 +162,7 @@ export const ShopsPage: React.FC = () => {
                 const shopId = shop.id || shop.shopId || shop.restaurantId;
                 const shopName = shop.shopName || shop.name || 'Partner Store';
                 const shopImage = shop.image || shop.logo || shop.bannerImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800';
-                const shopCat = shop.shopType || shop.category || shop.cuisine || 'General Store';
-                const shopRating = shop.rating || 4.5;
-                const shopTime = shop.deliveryTime || '15-25 MINS';
+                const { distanceStr, ratingDisplay, isNew } = calculateDistanceAndRating(shop);
                 const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive' || shop.status === 'INACTIVE' || shop.status === 'OFFLINE' || shop.status === 'offline' || shop.status === 'CLOSED';
                 const isOpen = !isClosed;
                 const isFav = !!favorites[shopId];
@@ -211,8 +194,8 @@ export const ShopsPage: React.FC = () => {
 
                       <div className="absolute bottom-0 right-0 z-10 bg-white dark:bg-[#1a1715] px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-tl-xl sm:rounded-tl-2xl border-t border-l border-slate-200 dark:border-glass shadow-xl text-right">
                         <div className="flex items-center justify-end gap-1 sm:gap-1.5 text-slate-900 dark:text-white font-extrabold text-[11px] sm:text-xs tracking-tight">
-                          <Clock size={12} className="text-primary stroke-[2.5]" />
-                          <span className="text-slate-900 dark:text-white font-black">{shopTime.toUpperCase()}</span>
+                          <Navigation size={12} className="text-primary stroke-[2.5]" />
+                          <span className="text-slate-900 dark:text-white font-black">{distanceStr}</span>
                         </div>
                         <div className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider mt-0.5 flex items-center justify-end gap-1 ${isOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-500'
                           }`}>
@@ -230,8 +213,8 @@ export const ShopsPage: React.FC = () => {
                             {shopName}
                           </h3>
                           <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/40 shrink-0">
-                            <Star size={11} className="fill-emerald-600 text-emerald-600" />
-                            <span className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">{shopRating}</span>
+                            {!isNew && <Star size={11} className="fill-emerald-600 text-emerald-600" />}
+                            <span className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">{ratingDisplay}</span>
                           </div>
                         </div>
 
@@ -246,7 +229,7 @@ export const ShopsPage: React.FC = () => {
 
                       <div className="pt-2.5 sm:pt-3 border-t border-slate-100 dark:border-glass flex items-center justify-between sm:justify-end">
                         <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate max-w-[120px] sm:hidden">
-                          {shopCat}
+                          {shop.cuisine || shop.category || shop.shopType || 'Store'}
                         </span>
                         <button
                           type="button"

@@ -91,6 +91,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       setIsLoading(true);
       isLoggingOutRef.current = false;
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('foodway_explicit_logout');
+      }
       const res = await authService.login({ email, password });
 
       if (res.success && res.user) {
@@ -120,25 +123,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isLoggingOutRef.current = true;
 
     try {
-      socketService.disconnect();
-    } catch (e) {}
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('foodway_explicit_logout', 'true');
+      }
 
-    clearSession();
-    setUser(null);
-    setRole(null);
-    setToken(null);
-    try {
-      await authService.logout();
-    } catch (e) {}
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('foodway_explicit_logout', 'true');
-      window.location.href = '/login';
+      clearSession();
+      setUser(null);
+      setRole(null);
+      setToken(null);
+
+      try {
+        socketService.disconnect();
+      } catch (e) {}
+
+      try {
+        await authService.logout();
+      } catch (e) {}
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('foodway_explicit_logout', 'true');
+      }
+    } finally {
+      isLoggingOutRef.current = false;
+      setIsLoading(false);
     }
   };
 
   const handleRegister = async (name: string, email: string, password?: string, phone?: string) => {
     try {
       setIsLoading(true);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('foodway_explicit_logout');
+      }
       const res = await authService.register({ name, email, password, phone });
       if (res.success && res.user) {
         const activeToken = res.token || 'active_session';
@@ -164,8 +180,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const refreshAuth = async () => {
     try {
+      const isLoggedOut = typeof window !== 'undefined' && localStorage.getItem('foodway_explicit_logout') === 'true';
+      if (isLoggedOut || isLoggingOutRef.current) return;
+
       const res = await authService.getCurrentUser();
-      if (res && res.success && res.user) {
+      if (res && res.success && res.user && localStorage.getItem('foodway_explicit_logout') !== 'true') {
         const activeToken = res.token || token || 'active_session';
         saveSession(activeToken, res.user);
         setUser(res.user);

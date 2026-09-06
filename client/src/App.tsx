@@ -29,12 +29,14 @@ import { AddressFormPage } from './pages/AddressFormPage';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { PublicCustomerRoute } from './components/auth/PublicCustomerRoute';
 import { OfflineDetector } from './components/common/OfflineDetector';
-
+import { OrderBuzzerBanner } from './components/common/OrderBuzzerBanner';
 
 import { requestNotificationPermission } from "./utils/requestNotificationPermission";
 import { setupForegroundMessageListener } from "./utils/onForegroundMessage";
 import { QueryProvider } from './context/QueryContext';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
+
+import { ItemDetailsPage } from './pages/ItemDetailsPage';
 
 const AppContent: React.FC = () => {
   const navigate = useNavigate();
@@ -92,16 +94,19 @@ const AppContent: React.FC = () => {
     document.documentElement.scrollTop = 0;
   }, [location.pathname, location.search]);
 
-  const isPortalRoute = location.pathname.startsWith('/admin') ||
-    location.pathname.startsWith('/shop/dashboard') ||
-    location.pathname.startsWith('/restaurant/dashboard') ||
-    location.pathname.startsWith('/delivery') ||
-    location.pathname === '/login' ||
-    location.pathname === '/register';
+  const normPath = (location.pathname || '').replace(/\/+$/, '').toLowerCase();
+
+  const isPortalRoute = normPath.startsWith('/admin') ||
+    normPath.startsWith('/shop/dashboard') ||
+    normPath.startsWith('/restaurant/dashboard') ||
+    normPath.startsWith('/delivery') ||
+    normPath === '/login' ||
+    normPath === '/register';
 
   return (
     <div className="relative min-h-screen bg-bg-dark text-text-primary selection:bg-primary/30 selection:text-primary overflow-x-hidden transition-colors duration-400">
       {/* Global Elements */}
+      <OrderBuzzerBanner />
       {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
       <CartSidebar />
       <FloatingCartBar />
@@ -113,6 +118,8 @@ const AppContent: React.FC = () => {
           <Route path="/" element={<PublicCustomerRoute><Home onOpenAuth={openAuthModal} /></PublicCustomerRoute>} />
           <Route path="/categories" element={<PublicCustomerRoute><CategoriesPage /></PublicCustomerRoute>} />
           <Route path="/dishes" element={<PublicCustomerRoute><DishesPage /></PublicCustomerRoute>} />
+          <Route path="/item/:dishId" element={<PublicCustomerRoute><ItemDetailsPage /></PublicCustomerRoute>} />
+          <Route path="/dishes/:dishId" element={<PublicCustomerRoute><ItemDetailsPage /></PublicCustomerRoute>} />
           <Route path="/items" element={<PublicCustomerRoute><DishesPage /></PublicCustomerRoute>} />
           <Route path="/restaurants" element={<PublicCustomerRoute><ShopsPage /></PublicCustomerRoute>} />
           <Route path="/shops" element={<PublicCustomerRoute><ShopsPage /></PublicCustomerRoute>} />

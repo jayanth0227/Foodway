@@ -129,7 +129,7 @@ export class ShopService {
       name,
       price,
       rating: Number(raw.rating || 4.8),
-      image: raw.image || raw.foodImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500',
+      image: raw.image || raw.foodImage || '',
       type: raw.isVeg ? 'veg' : 'non-veg',
       isVeg: raw.isVeg !== false,
       category: raw.category || 'General',

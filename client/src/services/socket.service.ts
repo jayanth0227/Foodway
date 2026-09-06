@@ -30,6 +30,7 @@ class UnifiedRealtimeSocketService {
 
     if (this.ioSocket) {
       try {
+        this.ioSocket.removeAllListeners();
         this.ioSocket.disconnect();
       } catch (e) {}
       this.ioSocket = null;
@@ -37,6 +38,8 @@ class UnifiedRealtimeSocketService {
 
     if (this.nativeWS) {
       try {
+        this.nativeWS.onopen = null;
+        this.nativeWS.onmessage = null;
         this.nativeWS.onclose = null;
         this.nativeWS.onerror = null;
         this.nativeWS.close();
@@ -285,6 +288,9 @@ class UnifiedRealtimeSocketService {
     }
     const token = getToken() || '';
     const user = getCurrentUser();
+    if (this.ioSocket && this.ioSocket.connected) {
+      this.ioSocket.emit('join_admin');
+    }
     this.sendNativeEvent('join_admin', { room: roomKey, token, userId: user?.id });
     this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
@@ -298,6 +304,9 @@ class UnifiedRealtimeSocketService {
     }
     const token = getToken() || '';
     const user = getCurrentUser();
+    if (this.ioSocket && this.ioSocket.connected) {
+      this.ioSocket.emit('join_restaurant', cleanId);
+    }
     this.sendNativeEvent('join_restaurant', { restaurantId: cleanId, room: roomKey, token, userId: user?.id });
     this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
@@ -311,6 +320,9 @@ class UnifiedRealtimeSocketService {
     }
     const token = getToken() || '';
     const user = getCurrentUser();
+    if (this.ioSocket && this.ioSocket.connected) {
+      this.ioSocket.emit('join_customer', cleanId);
+    }
     this.sendNativeEvent('join_customer', { customerId: cleanId, room: roomKey, token, userId: user?.id || cleanId });
     this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id || cleanId });
   }
@@ -324,6 +336,9 @@ class UnifiedRealtimeSocketService {
     }
     const token = getToken() || '';
     const user = getCurrentUser();
+    if (this.ioSocket && this.ioSocket.connected) {
+      this.ioSocket.emit('join_order', cleanId);
+    }
     this.sendNativeEvent('join_order', { orderId: cleanId, room: roomKey, token, userId: user?.id });
     this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }
@@ -335,6 +350,9 @@ class UnifiedRealtimeSocketService {
     }
     const token = getToken() || '';
     const user = getCurrentUser();
+    if (this.ioSocket && this.ioSocket.connected) {
+      this.ioSocket.emit('join_delivery', deliveryId);
+    }
     this.sendNativeEvent('join_delivery', { deliveryId: deliveryId || 'riders', room: roomKey, token, userId: user?.id });
     this.sendNativeEvent('join_room', { room: roomKey, token, userId: user?.id });
   }

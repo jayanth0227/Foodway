@@ -159,8 +159,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
     }
   };
 
-  const handleLogoutClick = () => {
-    logout();
+  const handleLogoutClick = async () => {
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -382,9 +383,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
       {/* Fixed Edge-to-Edge Solid Bottom Navigation Bar for Mobile/Tablet */}
       {!(
-        location.pathname.startsWith('/admin') ||
-        location.pathname.startsWith('/restaurant') ||
-        location.pathname.startsWith('/delivery') ||
+        (location.pathname || '').toLowerCase().startsWith('/admin') ||
+        (location.pathname || '').toLowerCase().startsWith('/restaurant/dashboard') ||
+        (location.pathname || '').toLowerCase().startsWith('/shop/dashboard') ||
+        (location.pathname || '').toLowerCase().startsWith('/delivery') ||
+        (location.pathname || '').toLowerCase() === '/login' ||
+        (location.pathname || '').toLowerCase() === '/register' ||
         isProfileModalOpen
       ) && (
         <nav

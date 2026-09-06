@@ -90,6 +90,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCartOpen, setCartOpen] = useState(false);
   const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number; variantLabel?: string; timestamp?: number } | null>(null);
 
+  // Vendor Conflict Modal State (Enforces single-vendor orders per transaction)
+  const [vendorConflict, setVendorConflict] = useState<{
+    newDish: DishItem;
+    newVariant?: any;
+    existingVendorName: string;
+    newVendorName: string;
+  } | null>(null);
+
   // React to User Auth State Changes & Sync Active Cart Across Local Storage & DB
   useEffect(() => {
     const activeUser = user || getCurrentUser();
@@ -288,6 +296,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (dish.isAvailable === false || (dish as any).isOpen === false || (dish as any).restaurantIsOpen === false) {
       alert('This shop is currently closed or offline and not accepting orders.');
+      return;
+    }
+
+    // Single-Vendor Cart Enforcement: Detect multi-vendor cart conflicts
+    const newDishVendorId = String(
+      dish.restaurantId ||
+      (dish as any).shopId ||
+      (dish as any).restaurantId ||
+      (dish as any).restaurant ||
+      (dish as any).vendorId ||
+      ''
+    ).toLowerCase().trim();
+
+    const existingCartItem = cartItems.find(item => item && item.dish);
+    const existingVendorId = existingCartItem ? String(
+      existingCartItem.dish.restaurantId ||
+      (existingCartItem.dish as any).shopId ||
+      (existingCartItem.dish as any).restaurantId ||
+      (existingCartItem.dish as any).restaurant ||
+      (existingCartItem.dish as any).vendorId ||
+      ''
+    ).toLowerCase().trim() : '';
+
+    if (cartItems.length > 0 && newDishVendorId && existingVendorId && newDishVendorId !== existingVendorId) {
+      const existingVendorName = existingCartItem?.dish.restaurantName || (existingCartItem?.dish as any).shopName || (existingCartItem?.dish as any).restaurant || 'another restaurant';
+      const newVendorName = dish.restaurantName || (dish as any).shopName || (dish as any).restaurant || 'this restaurant';
+      setVendorConflict({
+        newDish: dish,
+        newVariant: selectedVariant,
+        existingVendorName,
+        newVendorName
+      });
       return;
     }
 
@@ -520,6 +560,67 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             >
               <X size={18} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Conflict Modal: Single Vendor Order Enforcement */}
+      {vendorConflict && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 dark:bg-black/85 backdrop-blur-xl animate-fade-in select-none">
+          <div className="bg-white dark:bg-[#151921] border border-amber-200/80 dark:border-white/10 p-6 sm:p-8 rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.25)] max-w-md w-full text-center relative overflow-hidden transform transition-all animate-scale-up">
+            {/* Background Orbs */}
+            <div className="absolute -top-16 -right-16 w-36 h-36 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
+            <div className="absolute -bottom-16 -left-16 w-36 h-36 bg-rose-500/15 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="relative mx-auto mb-4 w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 shadow-inner">
+              <ShoppingBag size={30} />
+            </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px] font-black uppercase tracking-wider mb-2">
+              Single Restaurant Order Only
+            </div>
+
+            <h3 className="text-xl sm:text-2xl font-black font-display text-slate-900 dark:text-white tracking-tight mb-2">
+              Replace Cart Items?
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-300 font-medium leading-relaxed mb-6">
+              Your cart already contains items from <strong className="text-amber-600 dark:text-amber-400">{vendorConflict.existingVendorName}</strong>. You can only order from one restaurant per order.
+              <br /><br />
+              Would you like to clear your cart and add items from <strong className="text-emerald-600 dark:text-emerald-400">{vendorConflict.newVendorName}</strong> instead?
+            </p>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={() => {
+                  const { newDish, newVariant } = vendorConflict;
+                  const variantToUse = newVariant || (newDish.variants && newDish.variants.length > 0 ? newDish.variants[0] : newDish.selectedVariant);
+                  const itemKey = variantToUse ? `${newDish.id}-${variantToUse.id || variantToUse.variantId}` : newDish.id;
+                  const effectivePrice = variantToUse ? Number(variantToUse.price) : Number(newDish.price);
+                  const variantLabel = variantToUse ? `${variantToUse.quantity} ${variantToUse.unit}` : undefined;
+
+                  setCartItems([{ dish: newDish, quantity: 1, selectedVariant: variantToUse, itemKey }]);
+                  setLastAddedItem({
+                    name: newDish.name,
+                    quantity: 1,
+                    image: newDish.image,
+                    price: effectivePrice,
+                    variantLabel,
+                    timestamp: Date.now()
+                  });
+                  setVendorConflict(null);
+                }}
+                className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-extrabold text-sm shadow-lg shadow-amber-500/25 transition-all cursor-pointer"
+              >
+                Clear Cart & Add Item
+              </button>
+
+              <button
+                onClick={() => setVendorConflict(null)}
+                className="w-full py-3 px-5 rounded-2xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-gray-300 font-bold text-xs transition-all cursor-pointer"
+              >
+                Keep Existing Cart
+              </button>
+            </div>
           </div>
         </div>
       )}

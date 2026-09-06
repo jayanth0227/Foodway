@@ -22,6 +22,8 @@ import { API_BASE_URL } from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
+import { ItemDetailsModal } from '../components/common/ItemDetailsModal';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 
 const FALLBACK_KONASEEMA_DISHES = [
   {
@@ -179,6 +181,7 @@ export const DishesPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
 
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -292,13 +295,13 @@ export const DishesPage: React.FC = () => {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-24 px-4 sm:px-6 lg:px-12 relative">
+      <div className="min-h-screen bg-bg-dark pt-18 sm:pt-20 lg:pt-20 pb-32 lg:pb-16 px-4 sm:px-6 lg:px-12 relative">
         {/* Ambient Glow */}
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/10 rounded-full blur-[150px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto relative z-10 space-y-6">
+        <div className="max-w-7xl mx-auto relative z-10 space-y-4">
           {/* Header Navigation Bar */}
-          <div className="shrink-0 space-y-4 pt-2 sm:pt-0 pb-4 border-b border-glass bg-bg-dark z-20">
+          <div className="shrink-0 space-y-3 pt-0 pb-3 border-b border-glass bg-bg-dark z-20">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               {/* Back Button & Title */}
               <div className="flex items-center gap-3.5 flex-1 min-w-0">
@@ -354,7 +357,7 @@ export const DishesPage: React.FC = () => {
 
           {/* Dishes Grid */}
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <div key={i} className="h-72 rounded-2xl bg-glass/20 animate-pulse border border-glass" />
               ))}
@@ -377,7 +380,7 @@ export const DishesPage: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
               {filteredDishes.map((dish) => {
                 const isFav = !!favorites[dish.id];
                 const isOutOfStock = dish.isAvailable === false || dish.status === 'disabled';
@@ -389,19 +392,24 @@ export const DishesPage: React.FC = () => {
                     layout
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 ${
+                    onClick={() => navigate(`/item/${dish.id || dish.menuItemId}`, { state: { dish } })}
+                    className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 cursor-pointer ${
                       isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
                     }`}
                   >
                     <div>
                       {/* Image Thumbnail */}
                       <div className="relative h-32 sm:h-36 rounded-xl sm:rounded-2xl overflow-hidden border border-glass mb-3 bg-black/40">
-                        <img
-                          src={dish.image}
-                          alt={dish.name}
+                        <ItemImageOrIcon
+                          image={dish.image}
+                          name={dish.name}
+                          category={dish.category}
+                          isVeg={dish.isVeg || dish.type === 'veg'}
                           className={`w-full h-full object-cover transition-transform duration-700 ease-out ${
                             isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
                           }`}
+                          containerClassName="w-full h-full"
+                          iconSize={30}
                         />
 
                         {/* Top Badges */}

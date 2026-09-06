@@ -8,6 +8,7 @@ import userRepository from '../repositories/user.repository';
 import restaurantRepository from '../repositories/restaurant.repository';
 import { generateUserId } from '../utils/idGenerator';
 import socketService from '../services/socket.service';
+import { sendPasswordResetOtpEmail } from '../services/email.service';
 
 export const setAuthCookie = (res: Response, token: string) => {
   res.cookie('foodway_session', token, {
@@ -441,6 +442,183 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
       success: false,
       error: 'Failed to update profile.',
       details: error.message
+    });
+  }
+};
+
+// Store OTPs in memory with expiration timestamp
+interface OtpRecord {
+  otp: string;
+  expiresAt: number;
+  identifier: string;
+  email: string;
+}
+
+const otpMemoryStore = new Map<string, OtpRecord>();
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { identifier } = req.body;
+    const cleanId = (identifier || '').trim().toLowerCase();
+
+    if (!cleanId) {
+      return res.status(400).json({ success: false, error: 'Email address or mobile number is required.' });
+    }
+
+    // Check if user exists in database
+    let user = await userRepository.findByIdentifier(cleanId);
+    if (!user) {
+      user = await userRepository.findByEmail(cleanId);
+    }
+
+    let targetEmail = user?.email || (cleanId.includes('@') ? cleanId : null);
+    let targetName = user?.name || 'Valued User';
+
+    // If user not found in users table, check shops table for vendor email
+    if (!user && !targetEmail) {
+      const allShops = await restaurantRepository.findAll();
+      const matchShop = allShops.find(s => 
+        (s.email && s.email.toLowerCase() === cleanId) || 
+        (s.phone && s.phone === cleanId) ||
+        (s.ownerUserId && s.ownerUserId.toLowerCase() === cleanId)
+      );
+      if (matchShop) {
+        targetEmail = matchShop.email;
+        targetName = (matchShop as any).name || matchShop.restaurantName || 'Valued Partner';
+      }
+    }
+
+    if (!targetEmail) {
+      return res.status(404).json({
+        success: false,
+        error: 'No registered account found matching that email or mobile number.'
+      });
+    }
+
+    // Generate 6-digit numeric OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // Valid for 10 minutes
+
+    // Save to OTP memory store
+    otpMemoryStore.set(cleanId, {
+      otp: otpCode,
+      expiresAt,
+      identifier: cleanId,
+      email: targetEmail
+    });
+
+    if (targetEmail.toLowerCase() !== cleanId) {
+      otpMemoryStore.set(targetEmail.toLowerCase(), {
+        otp: otpCode,
+        expiresAt,
+        identifier: cleanId,
+        email: targetEmail
+      });
+    }
+
+    // Send email with OTP
+    await sendPasswordResetOtpEmail(targetEmail, otpCode, targetName);
+
+    return res.json({
+      success: true,
+      message: `A 6-digit verification code has been sent to ${targetEmail}.`,
+      email: targetEmail
+    });
+  } catch (error: any) {
+    console.error('Forgot Password Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request.'
+    });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { identifier, otp, newPassword } = req.body;
+    const cleanId = (identifier || '').trim().toLowerCase();
+    const cleanOtp = (otp || '').trim();
+    const password = (newPassword || '').trim();
+
+    if (!cleanId || !cleanOtp || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Identifier, verification code, and new password are required.'
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'Password must be at least 6 characters long.'
+      });
+    }
+
+    const otpRecord = otpMemoryStore.get(cleanId);
+    if (!otpRecord) {
+      return res.status(400).json({
+        success: false,
+        error: 'No active password reset request found. Please request a new verification code.'
+      });
+    }
+
+    if (Date.now() > otpRecord.expiresAt) {
+      otpMemoryStore.delete(cleanId);
+      return res.status(400).json({
+        success: false,
+        error: 'Verification code has expired. Please request a new code.'
+      });
+    }
+
+    if (otpRecord.otp !== cleanOtp) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid 6-digit verification code. Please check and try again.'
+      });
+    }
+
+    // Hash the new password
+    const hashedPassword = await hashPassword(password);
+
+    // 1. Update in userRepository
+    let user = await userRepository.findByIdentifier(cleanId);
+    if (!user && otpRecord.email) {
+      user = await userRepository.findByEmail(otpRecord.email);
+    }
+
+    if (user) {
+      await userRepository.update(user.userId, { password: hashedPassword });
+    }
+
+    // 2. Also update in restaurant/shop repository if vendor account
+    const allShops = await restaurantRepository.findAll();
+    const matchingShops = allShops.filter(s =>
+      (s.email && s.email.toLowerCase() === (user?.email?.toLowerCase() || otpRecord.email.toLowerCase())) ||
+      (s.ownerUserId && user && s.ownerUserId === user.userId)
+    );
+
+    for (const shop of matchingShops) {
+      await restaurantRepository.update(shop.shopId, {
+        password: hashedPassword,
+        vendorPassword: password
+      } as any);
+    }
+
+    // Clear OTP from memory store
+    otpMemoryStore.delete(cleanId);
+    if (otpRecord.email) {
+      otpMemoryStore.delete(otpRecord.email.toLowerCase());
+    }
+
+    return res.json({
+      success: true,
+      message: 'Password has been reset successfully! You can now log in with your new password.'
+    });
+  } catch (error: any) {
+    console.error('Reset Password Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to reset password. Please try again.'
     });
   }
 };

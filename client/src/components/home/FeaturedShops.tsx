@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, MapPin, ArrowRight, Store, Clock, Star, Plus } from 'lucide-react';
+import { Heart, MapPin, ArrowRight, Store, Clock, Star, Plus, Navigation } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import shopService from '../../services/shop.service';
 import { MobileShopCardSkeleton } from '../common/MobileSkeletonLoader';
 import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
-import { formatShopAddress } from '../../utils/categoryUtils';
+import { formatShopAddress, calculateDistanceAndRating } from '../../utils/categoryUtils';
 
 export const FeaturedShops: React.FC = () => {
   const navigate = useNavigate();
@@ -126,9 +126,8 @@ export const FeaturedShops: React.FC = () => {
               const shopId = shop.id || shop.shopId || shop.restaurantId;
               const shopName = shop.shopName || shop.name || shop.restaurantName || 'Partner Store';
               const shopImage = shop.image || shop.logo || shop.bannerImage || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800';
-              const shopCuisine = shop.shopType || shop.cuisine || 'General Store';
-              const shopRating = shop.rating || 4.5;
-              const shopTime = shop.deliveryTime || '15-25 MINS';
+              const shopCuisine = shop.shopType || shop.cuisine || shop.category || 'General Store';
+              const { distanceStr, ratingDisplay, isNew } = calculateDistanceAndRating(shop);
               const isClosed = shop.isOpen === false || shop.isOpen === 'false' || shop.status === 'closed' || shop.status === 'inactive';
               const isOpen = !isClosed;
               const isFav = !!favorites[shopId];
@@ -161,8 +160,8 @@ export const FeaturedShops: React.FC = () => {
 
                     <div className="absolute bottom-0 right-0 z-10 bg-white dark:bg-[#1a1715] px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-tl-xl sm:rounded-tl-2xl border-t border-l border-slate-200 dark:border-glass shadow-xl text-right">
                       <div className="flex items-center justify-end gap-1 sm:gap-1.5 text-slate-900 dark:text-white font-extrabold text-[11px] sm:text-xs tracking-tight">
-                        <Clock size={12} className="text-primary stroke-[2.5]" />
-                        <span className="text-slate-900 dark:text-white font-black">{shopTime.toUpperCase()}</span>
+                        <Navigation size={12} className="text-primary stroke-[2.5]" />
+                        <span className="text-slate-900 dark:text-white font-black">{distanceStr}</span>
                       </div>
                       <div className={`text-[9px] sm:text-[10px] font-black uppercase tracking-wider mt-0.5 flex items-center justify-end gap-1 ${isOpen ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-500'
                         }`}>
@@ -180,8 +179,8 @@ export const FeaturedShops: React.FC = () => {
                           {shopName}
                         </h3>
                         <div className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-200/60 dark:border-emerald-800/40 shrink-0">
-                          <Star size={11} className="fill-emerald-600 text-emerald-600" />
-                          <span className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">{shopRating}</span>
+                          {!isNew && <Star size={11} className="fill-emerald-600 text-emerald-600" />}
+                          <span className="font-extrabold text-xs text-emerald-600 dark:text-emerald-400">{ratingDisplay}</span>
                         </div>
                       </div>
 

@@ -29,6 +29,8 @@ import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getMergedCategories, DEFAULT_CULINARY_CATEGORIES, getTranslatedCategoryName, type CategoryItem } from '../utils/categoryUtils';
 import { MobileShopCardSkeleton, MobileGridSkeleton, DishCardSkeleton } from '../components/common/MobileSkeletonLoader';
+import { ItemDetailsModal } from '../components/common/ItemDetailsModal';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 
 export const CategoriesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -55,6 +57,7 @@ export const CategoriesPage: React.FC = () => {
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'veg' | 'non-veg'>('all');
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [selectedVariantsMap, setSelectedVariantsMap] = useState<Record<string, any>>({});
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
 
   const [activeBannerIdx, setActiveBannerIdx] = useState(0);
 
@@ -75,7 +78,7 @@ export const CategoriesPage: React.FC = () => {
   // Synchronize state with URL query param safely
   useEffect(() => {
     const catFromUrl = getSafeCategoryFromUrl();
-    if (catFromUrl && catFromUrl !== selectedCategory) {
+    if (catFromUrl !== selectedCategory) {
       setSelectedCategory(catFromUrl);
     }
   }, [searchParams]);
@@ -134,13 +137,13 @@ export const CategoriesPage: React.FC = () => {
   const handleSelectCategory = (catName: string) => {
     setIsCategorySwitching(true);
     setSelectedCategory(catName);
-    setSearchParams({ category: catName });
+    setSearchParams({ category: catName }, { replace: !!selectedCategory });
     setTimeout(() => setIsCategorySwitching(false), 200);
   };
 
   const handleClearCategory = () => {
     setSelectedCategory(null);
-    setSearchParams({});
+    setSearchParams({}, { replace: true });
   };
 
   const currentCategoryObj = culinaryCategories.find(
@@ -188,7 +191,7 @@ export const CategoriesPage: React.FC = () => {
         </title>
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-24 px-3 sm:px-6 lg:px-12 relative transition-colors">
+      <div className="min-h-screen bg-bg-dark pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-3 sm:px-6 lg:px-12 relative transition-colors">
         {/* Ambient background glow */}
         <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/10 rounded-full blur-[150px] pointer-events-none" />
 
@@ -211,7 +214,7 @@ export const CategoriesPage: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
-                      onClick={() => navigate('/categories')}
+                      onClick={handleClearCategory}
                       className="p-2.5 rounded-2xl bg-glass border border-glass hover:border-primary/50 text-text-primary flex items-center justify-center transition-all cursor-pointer shadow-sm group shrink-0 active:scale-95 hover:bg-glass-subtle"
                       aria-label="Back to Categories"
                     >
@@ -340,7 +343,7 @@ export const CategoriesPage: React.FC = () => {
 
                       return (
                         <button
-                          key={cat.id}
+                          key={cat.id || `cat-${cat.name}`}
                           type="button"
                           onClick={() => handleSelectCategory(cat.name)}
                           className={`flex items-center gap-2 px-3 py-1.5 rounded-full shrink-0 cursor-pointer transition-all duration-300 border snap-start ${active
@@ -392,10 +395,10 @@ export const CategoriesPage: React.FC = () => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {matchingDishes.map((dish) => {
-                      const dishId = dish.id || dish.menuItemId;
+                    {matchingDishes.map((dish, idx) => {
+                      const dishId = dish.id || dish.menuItemId || `dish-${idx}`;
                       const dishName = dish.name || dish.foodName || 'Item';
-                      const dishImage = dish.image || dish.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800';
+                      const dishImage = dish.image || dish.foodImage || '';
                       const dishDesc = dish.description || '';
                       const isVeg = dish.isVeg !== false;
                       const isAvailable = dish.isAvailable !== false && dish.status !== 'UNAVAILABLE' && dish.status !== 'disabled';
@@ -431,16 +434,21 @@ export const CategoriesPage: React.FC = () => {
                           key={dishId}
                           initial={false}
                           animate={{ opacity: 1, y: 0 }}
-                          className={`bg-bg-card border-2 rounded-3xl overflow-hidden shadow-md hover:shadow-luxury-hover sm:hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between group relative ${!isAvailable ? 'opacity-80 border-glass' : 'border-glass hover:border-primary/60'
+                          onClick={() => navigate(`/item/${dishObj.id}`, { state: { dish: dishObj } })}
+                          className={`bg-bg-card border-2 rounded-3xl overflow-hidden shadow-md hover:shadow-luxury-hover sm:hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between group relative cursor-pointer ${!isAvailable ? 'opacity-80 border-glass' : 'border-glass hover:border-primary/60'
                             }`}
                         >
                           <div>
                             {/* Clean Food Banner Image Container */}
                             <div className="relative aspect-[16/10] w-full overflow-hidden bg-black/90">
-                              <img
-                                src={dishImage}
-                                alt={dishName}
+                              <ItemImageOrIcon
+                                image={dishImage}
+                                name={dishName}
+                                category={dish.category || selectedCategory}
+                                isVeg={isVeg}
                                 className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ${!isAvailable ? 'grayscale brightness-90 opacity-75' : ''}`}
+                                containerClassName="w-full h-full"
+                                iconSize={32}
                               />
 
                               {/* Diagonal Cross SOLD OUT Overlay Ribbon */}
@@ -551,7 +559,10 @@ export const CategoriesPage: React.FC = () => {
                                 {qtyInCart === 0 ? (
                                   <button
                                     type="button"
-                                    onClick={() => addToCart(dishObj, activeVariant)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      addToCart(dishObj, activeVariant);
+                                    }}
                                     className="px-5 py-2 rounded-xl bg-white dark:bg-bg-card border border-glass text-primary font-black text-xs uppercase tracking-wider shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
                                   >
                                     <Plus size={14} className="stroke-[3] text-primary" />
@@ -561,7 +572,10 @@ export const CategoriesPage: React.FC = () => {
                                   <div className="flex items-center bg-white dark:bg-bg-card border border-glass text-primary rounded-xl px-2 py-1 shadow-sm font-black">
                                     <button
                                       type="button"
-                                      onClick={() => reduceQuantity(itemKey)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        reduceQuantity(itemKey);
+                                      }}
                                       className="w-6 h-6 rounded-lg hover:bg-glass text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                                       title="Decrease quantity"
                                     >
@@ -572,7 +586,10 @@ export const CategoriesPage: React.FC = () => {
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => addToCart(dishObj, activeVariant)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        addToCart(dishObj, activeVariant);
+                                      }}
                                       className="w-6 h-6 rounded-lg hover:bg-glass text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                                       title="Increase quantity"
                                     >
@@ -657,7 +674,7 @@ export const CategoriesPage: React.FC = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                     {culinaryCategories.map((category: any) => (
                       <motion.div
-                        key={category.id}
+                        key={category.id || `category-${category.name}`}
                         initial={false}
                         animate={{ opacity: 1, y: 0 }}
                         onClick={() => handleSelectCategory(category.name)}

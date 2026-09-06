@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import socketService from '../services/socket.service';
 
 export const AdminOrderDetailsPage: React.FC = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -48,6 +49,40 @@ export const AdminOrderDetailsPage: React.FC = () => {
       fetchOrderDetails(orderId);
     }
     fetchDeliveryPartners();
+
+    socketService.joinAdmin();
+
+    const handleOrderUpdate = (updatedOrder: any) => {
+      if (!updatedOrder || !orderId) return;
+      const targetId = updatedOrder.orderId || updatedOrder.id || updatedOrder.parentOrderId;
+      if (
+        targetId && (
+          targetId === orderId ||
+          targetId.toLowerCase() === orderId.toLowerCase()
+        )
+      ) {
+        console.log('⚡ [Admin Order Details Realtime Update]:', updatedOrder);
+        const newStatus = updatedOrder.status || updatedOrder.orderStatus;
+        if (newStatus) {
+          setOrder((prev: any) => (prev ? { ...prev, status: newStatus, orderStatus: newStatus, ...updatedOrder } : prev));
+        }
+        fetchOrderDetails(orderId);
+      }
+    };
+
+    const unsubStatus = socketService.onOrderStatusUpdated(handleOrderUpdate);
+    const unsubRider = socketService.onRiderStatusUpdated(handleOrderUpdate);
+    const unsubAssigned = socketService.onOrderAssigned(handleOrderUpdate);
+
+    const handleWindowEvent = (e: any) => handleOrderUpdate(e.detail);
+    window.addEventListener('foodway_order_updated', handleWindowEvent);
+
+    return () => {
+      unsubStatus();
+      unsubRider();
+      unsubAssigned();
+      window.removeEventListener('foodway_order_updated', handleWindowEvent);
+    };
   }, [orderId]);
 
   const allRiderOptions = Array.from(new Set(
@@ -91,12 +126,25 @@ export const AdminOrderDetailsPage: React.FC = () => {
 
   const handleAssignRider = async (riderName: string) => {
     if (!orderId) return;
+
+    // Check if delivery partner is OFF DUTY
+    const partnerObj = dbPartners.find(p => (p.name || p.email) === riderName || p.id === riderName);
+    if (partnerObj && (partnerObj.dutyStatus === 'OFF_DUTY' || partnerObj.dutyStatus === 'OFFLINE' || partnerObj.isOnDuty === false)) {
+      alert(`Cannot assign order: Delivery partner "${riderName}" is currently OFF DUTY.`);
+      return;
+    }
+
     setUpdatingStatus(true);
     try {
-      await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: riderName });
-      setOrder((prev: any) => (prev ? { ...prev, assignedRider: riderName } : prev));
-    } catch (e) {
+      const res = await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: riderName });
+      if (res.data.success) {
+        setOrder((prev: any) => (prev ? { ...prev, assignedRider: riderName } : prev));
+      } else {
+        alert(res.data.error || 'Failed to assign rider.');
+      }
+    } catch (e: any) {
       console.error('Error assigning rider to order:', e);
+      alert(e.response?.data?.error || 'Error assigning rider.');
     } finally {
       setUpdatingStatus(false);
     }

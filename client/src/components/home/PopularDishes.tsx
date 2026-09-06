@@ -8,6 +8,8 @@ import type { DishItem } from '../../utils/mockData';
 import { API_BASE_URL } from '../../utils/api';
 import { HomeDishCardSkeleton } from './HomePageSkeleton';
 import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
+import { ItemDetailsModal } from '../common/ItemDetailsModal';
+import ItemImageOrIcon from '../common/ItemImageOrIcon';
 
 const FALLBACK_KONASEEMA_DISHES: any[] = [];
 
@@ -25,6 +27,7 @@ export const PopularDishes: React.FC = () => {
   });
 
   const [cmsConfig, setCmsConfig] = useState<any>(null);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchDishes = async () => {
@@ -130,19 +133,24 @@ export const PopularDishes: React.FC = () => {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 ${
+        onClick={() => navigate(`/item/${dish.id || dish.menuItemId}`, { state: { dish } })}
+        className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 cursor-pointer ${
           isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
         }`}
       >
         <div>
           {/* Dish Image Container */}
           <div className="relative h-32 sm:h-36 rounded-xl sm:rounded-2xl overflow-hidden border border-glass mb-3 bg-black/40">
-            <img
-              src={dish.image}
-              alt={dish.name}
+            <ItemImageOrIcon
+              image={dish.image}
+              name={dish.name}
+              category={dish.category}
+              isVeg={dish.isVeg || dish.type === 'veg'}
               className={`w-full h-full object-cover transition-transform duration-700 ease-out ${
                 isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
               }`}
+              containerClassName="w-full h-full"
+              iconSize={30}
             />
 
             {/* Top Overlay Badges */}
