@@ -481,11 +481,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const deleteDeliveryPartner = async (id: string) => {
     if (!window.confirm('Are you sure you want to remove this Delivery Partner from the database?')) return;
     try {
-      await axios.delete(`${API_BASE_URL}/admin/delivery-partners/${id}`);
-      showToast('success', 'Delivery Partner removed.');
+      setDbDeliveryPartners(prev => prev.filter(p => p.id !== id && p.userId !== id));
+      const res = await axios.delete(`${API_BASE_URL}/admin/delivery-partners/${encodeURIComponent(id)}`);
+      if (res.data.success) {
+        showToast('success', 'Delivery Partner removed.');
+      } else {
+        showToast('error', res.data.error || 'Failed to remove partner.');
+      }
       fetchDeliveryPartners();
-    } catch (err) {
-      console.error('Error deleting partner:', err);
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Error deleting delivery partner.');
+      fetchDeliveryPartners();
     }
   };
 
@@ -562,7 +568,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
     const handleAdminOrderUpdate = (updatedOrder: any) => {
       if (!updatedOrder) return;
-      console.log('⚡ [Admin Dashboard Realtime Order Update]:', updatedOrder);
       const targetId = updatedOrder.orderId || updatedOrder.id;
       const parentId = updatedOrder.parentOrderId;
       const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
@@ -608,7 +613,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
     // Real-Time Delivery Partner Duty Status Listener (ON_DUTY vs OFF_DUTY / OFFLINE)
     const handleDutyUpdate = (data: any) => {
-      console.log('⚡ [Socket Event: PARTNER_DUTY_UPDATED]:', data);
       const targetDuty = data.dutyStatus || (data.isOnDuty ? 'ON_DUTY' : 'OFF_DUTY');
 
       setDbDeliveryPartners(prev => {

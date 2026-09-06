@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import buzzerService from '../services/buzzer.service';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -272,7 +273,14 @@ export const DeliveryDashboard: React.FC = () => {
     }
   }, [user]);
 
+  const isOnDutyRef = useRef(isOnDuty);
   useEffect(() => {
+    isOnDutyRef.current = isOnDuty;
+  }, [isOnDuty]);
+
+  useEffect(() => {
+    buzzerService.setupAutoUnlock();
+    buzzerService.unlockAudio();
     fetchAssignedOrders();
 
     if (user) {
@@ -305,10 +313,18 @@ export const DeliveryDashboard: React.FC = () => {
       fetchDutyStatus();
 
       const isAssignedToThisPartner = (order: any) => {
-        if (!user || !order || !isOnDuty) return false;
-        const uId = (user.id || '').trim().toLowerCase();
-        const uName = (user.name || '').trim().toLowerCase();
-        const uEmail = (user.email || '').trim().toLowerCase();
+        const activeDuty = isOnDutyRef.current || isOnDuty || localStorage.getItem('delivery_partner_duty') !== 'false';
+        if (!user || !order || !activeDuty) return false;
+
+        let storedUser: any = null;
+        try {
+          const uStr = localStorage.getItem('foodway_user') || localStorage.getItem('user');
+          if (uStr) storedUser = JSON.parse(uStr);
+        } catch (e) {}
+
+        const uId = (user.id || (user as any).userId || storedUser?.id || storedUser?.userId || '').trim().toLowerCase();
+        const uName = (user.name || storedUser?.name || '').trim().toLowerCase();
+        const uEmail = (user.email || storedUser?.email || '').trim().toLowerCase();
 
         const rider = (order.assignedRider || '').trim().toLowerCase();
         const delUser = (order.deliveryUserId || order.riderId || '').trim().toLowerCase();
@@ -333,8 +349,6 @@ export const DeliveryDashboard: React.FC = () => {
           return;
         }
 
-        console.log('⚡ [Socket Event: INSTANT REALTIME ORDER POPUP]:', newPickupOrder);
-        
         // Instant update state without refreshing page
         setOrders(prev => [newPickupOrder, ...prev.filter(o => (o.id !== newPickupOrder.id && o.orderId !== newPickupOrder.orderId))]);
       };

@@ -2942,17 +2942,68 @@ app.get('/api/delivery-partner/duty-status/:partnerIdentifier', async (req: Requ
 app.delete('/api/admin/delivery-partners/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const cleanId = decodeURIComponent(id || '').trim().toLowerCase();
+
     if (usersTableName) {
-      await dynamoDocClient.send(
-        new DeleteCommand({
-          TableName: usersTableName,
-          Key: { userId: id }
-        })
+      const scanCmd = new ScanCommand({ TableName: usersTableName });
+      const scanResp = await dynamoDocClient.send(scanCmd);
+      const items = scanResp.Items || [];
+
+      const targetUser = items.find((u: any) =>
+        (u.userId && String(u.userId).trim().toLowerCase() === cleanId) ||
+        (u.id && String(u.id).trim().toLowerCase() === cleanId) ||
+        (u.email && String(u.email).trim().toLowerCase() === cleanId) ||
+        (u.phone && String(u.phone).trim().toLowerCase() === cleanId)
       );
+
+      if (targetUser) {
+        if (targetUser.email) {
+          try {
+            await dynamoDocClient.send(
+              new DeleteCommand({
+                TableName: usersTableName,
+                Key: { email: targetUser.email }
+              })
+            );
+          } catch (e1) {}
+        }
+        if (targetUser.userId) {
+          try {
+            await dynamoDocClient.send(
+              new DeleteCommand({
+                TableName: usersTableName,
+                Key: { userId: targetUser.userId }
+              })
+            );
+          } catch (e2) {}
+        }
+        if (targetUser.id) {
+          try {
+            await dynamoDocClient.send(
+              new DeleteCommand({
+                TableName: usersTableName,
+                Key: { id: targetUser.id }
+              })
+            );
+          } catch (e3) {}
+        }
+      } else {
+        // Fallback delete attempts if direct key match exists
+        try {
+          await dynamoDocClient.send(new DeleteCommand({ TableName: usersTableName, Key: { email: id } }));
+        } catch (e1) {}
+        try {
+          await dynamoDocClient.send(new DeleteCommand({ TableName: usersTableName, Key: { userId: id } }));
+        } catch (e2) {}
+        try {
+          await dynamoDocClient.send(new DeleteCommand({ TableName: usersTableName, Key: { id } }));
+        } catch (e3) {}
+      }
     }
-    res.json({ success: true, message: 'Delivery partner removed.' });
+    return res.json({ success: true, message: 'Delivery partner removed.' });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: 'Failed to delete delivery partner.' });
+    console.error('Error deleting delivery partner:', error);
+    return res.status(500).json({ success: false, error: 'Failed to delete delivery partner.', details: error.message });
   }
 });
 

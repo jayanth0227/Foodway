@@ -68,7 +68,6 @@ class UnifiedRealtimeSocketService {
     const socketServerUrl = API_BASE_URL.replace(/\/api\/?$/, '');
 
     try {
-      console.log(`⚡ [Socket.IO Local Engine] Connecting to: ${socketServerUrl}`);
       this.ioSocket = io(socketServerUrl, {
         auth: { token },
         extraHeaders: token ? { Authorization: `Bearer ${token}` } : {},
@@ -78,7 +77,6 @@ class UnifiedRealtimeSocketService {
       });
 
       this.ioSocket.on('connect', () => {
-        console.log(`⚡ [Socket.IO Local Engine] Successfully Connected! Socket ID: ${this.ioSocket?.id}`);
         // Re-join rooms on Socket.IO
         this.joinedRooms.forEach(room => {
           if (room === 'admin') this.ioSocket?.emit('join_admin');
@@ -93,12 +91,8 @@ class UnifiedRealtimeSocketService {
       this.ioSocket.onAny((eventName: string, data: any) => {
         this.dispatchLocalEvent(eventName, data);
       });
-
-      this.ioSocket.on('disconnect', (reason) => {
-        console.warn(`🔌 [Socket.IO Disconnected] Reason: ${reason}`);
-      });
     } catch (err) {
-      console.warn('Socket.IO connection warning:', err);
+      // Ignore socket setup warnings
     }
 
     return this.ioSocket;
@@ -111,7 +105,7 @@ class UnifiedRealtimeSocketService {
         try {
           cb(data);
         } catch (e) {
-          console.warn(`Listener error for ${eventName}:`, e);
+          // Ignore listener execution errors silently
         }
       });
     }
@@ -140,13 +134,10 @@ class UnifiedRealtimeSocketService {
       ? `${baseWsUrl}${baseWsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}`
       : baseWsUrl;
 
-    console.log(`⚡ [Native WebSocket Engine] Connecting to: ${baseWsUrl} (Authenticated User: ${userId || 'Anonymous'})`);
-
     try {
       this.nativeWS = new WebSocket(fullWsUrl);
 
       this.nativeWS.onopen = () => {
-        console.log(`⚡ [Native WebSocket Engine] Successfully Connected to AWS API Gateway WebSocket!`);
         if (this.reconnectTimer) {
           clearInterval(this.reconnectTimer);
           this.reconnectTimer = null;
@@ -192,13 +183,12 @@ class UnifiedRealtimeSocketService {
       };
 
       this.nativeWS.onclose = (event) => {
-        console.warn(`🔌 [Native WebSocket Disconnected] Code: ${event.code}. Auto-reconnecting...`);
         this.stopHeartbeat();
         this.scheduleReconnect();
       };
 
       this.nativeWS.onerror = (error) => {
-        console.warn('⚠️ [Native WebSocket Error]:', error);
+        // Silently handle error & reconnect
       };
     } catch (e) {
       console.error('Failed to initialize Native WebSocket:', e);
@@ -211,7 +201,6 @@ class UnifiedRealtimeSocketService {
   private scheduleReconnect() {
     if (this.reconnectTimer) return;
     this.reconnectTimer = setInterval(() => {
-      console.log('🔄 [Native WebSocket] Attempting reconnect to AWS API Gateway...');
       this.connectNativeWS();
     }, 3000);
   }

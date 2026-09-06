@@ -156,7 +156,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Listen for Real-Time Menu Item Price & Details & Availability Updates from Vendors
       const unsubscribeMenu = socketService.onMenuUpdated((data: any) => {
-        console.log('⚡ [Live Socket Event: MENU_UPDATED] Received in CartContext:', data);
         const updatedItem = data?.item || data?.dish || data;
         if (!updatedItem && !data?.deletedId) return;
 
@@ -213,7 +212,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Listen for Real-Time Shop Open/Closed Status Updates
       const unsubscribeShopStatus = socketService.onShopStatusUpdated((data: any) => {
         if (!data) return;
-        console.log('⚡ [Live Socket Event: SHOP_STATUS_UPDATED] Received in CartContext:', data);
         const eventShopId = String(data.shopId || data.restaurantId || data.id || '').toLowerCase().replace(/[-_]/g, '');
         const isClosed = data.isOpen === false || data.isOpen === 'false' || data.status === 'closed' || data.status === 'inactive' || data.status === 'offline';
 

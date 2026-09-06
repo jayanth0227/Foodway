@@ -675,8 +675,6 @@ export const RestaurantDashboard: React.FC = () => {
 
     // Phase 1: Real-Time Order Creation Listener (0ms UI Update + Loud Buzz Alarm + Modal + Push Notif)
     const unsubscribeCreated = socketService.onOrderCreated((newOrder: any) => {
-      console.log('⚡ [Real-Time Socket Event: ORDER_CREATED] Received:', newOrder);
-
       const vendorIds = [
         restaurant?.id,
         restaurant?.shopId,

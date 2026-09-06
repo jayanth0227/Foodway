@@ -6,12 +6,10 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
     if (typeof window === "undefined") return null;
 
     if (!("Notification" in window)) {
-      console.warn("⚠️ Push Notifications API not supported in this browser.");
       return null;
     }
 
     if (!messaging) {
-      console.warn("⚠️ Firebase Messaging SDK not initialized.");
       return null;
     }
 
@@ -36,7 +34,7 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
           swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
           await navigator.serviceWorker.ready;
         } catch (swErr) {
-          console.warn("Service worker registration warning:", swErr);
+          // Ignore service worker registration warnings
         }
       }
 
@@ -45,12 +43,8 @@ export const requestNotificationPermission = async (): Promise<string | null> =>
         serviceWorkerRegistration: swRegistration,
       });
 
-      if (token) {
-        console.log("✅ FCM Push Notifications Enabled Token:", token);
-      }
       return token || null;
     } else {
-      console.warn("⚠️ Notification permission state:", permission);
       return null;
     }
   } catch (error) {

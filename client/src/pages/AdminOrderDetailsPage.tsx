@@ -61,7 +61,6 @@ export const AdminOrderDetailsPage: React.FC = () => {
           targetId.toLowerCase() === orderId.toLowerCase()
         )
       ) {
-        console.log('⚡ [Admin Order Details Realtime Update]:', updatedOrder);
         const newStatus = updatedOrder.status || updatedOrder.orderStatus;
         if (newStatus) {
           setOrder((prev: any) => (prev ? { ...prev, status: newStatus, orderStatus: newStatus, ...updatedOrder } : prev));

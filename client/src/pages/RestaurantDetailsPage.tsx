@@ -53,7 +53,6 @@ export const RestaurantDetailsPage: React.FC = () => {
       const handleStatusUpdate = () => fetchRestaurantDetails(id, false);
 
       const unsubscribeMenu = socketService.onMenuUpdated((data: any) => {
-        console.log('⚡ [Live Socket Event: MENU_UPDATED] Received in RestaurantDetailsPage:', data);
         const updatedItem = data?.item || data?.dish || data;
         if (!updatedItem) return;
 

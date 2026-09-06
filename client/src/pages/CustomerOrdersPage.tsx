@@ -63,7 +63,6 @@ export const CustomerOrdersPage: React.FC = () => {
       socketService.joinCustomer(custId);
 
       const handleOrderUpdate = (updatedOrder: any) => {
-        console.log('⚡ [Socket Event: ORDER/RIDER UPDATED]:', updatedOrder);
         const targetId = updatedOrder.orderId || updatedOrder.id;
         const parentId = updatedOrder.parentOrderId;
         const newStatus = updatedOrder.status || updatedOrder.orderStatus;

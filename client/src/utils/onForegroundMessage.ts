@@ -13,8 +13,6 @@ export const setupForegroundMessageListener = (onMessageReceived?: (payload: any
     }
 
     onMessage(messaging, (payload) => {
-      console.log("🔔 [Foreground FCM Message Received]:", payload);
-
       const title = payload.notification?.title || payload.data?.title || " Foodway Alert";
       const body = payload.notification?.body || payload.data?.body || "You have a new update.";
 

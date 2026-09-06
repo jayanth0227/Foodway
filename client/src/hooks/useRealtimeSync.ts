@@ -10,7 +10,9 @@ export const useRealtimeSync = () => {
   const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
-    // Automatically request browser notification permission for push alerts on desktop/mobile
+    // Automatically setup mobile audio auto-unlock & request notification permissions
+    buzzerService.setupAutoUnlock();
+    buzzerService.unlockAudio();
     buzzerService.requestNotificationPermission();
 
     // 1. Establish socket connection & join user's role/id rooms
@@ -43,20 +45,33 @@ export const useRealtimeSync = () => {
       const deliveryPartnerPhoneStr = String(orderData.deliveryPartnerPhone || orderData.riderPhone || '').trim().toLowerCase();
       const status = String(orderData.status || orderData.orderStatus || '').toUpperCase();
 
-      const currentUserId = String(user?.id || (user as any)?.userId || '').trim().toLowerCase();
-      const userEmail = String(user?.email || '').trim().toLowerCase();
-      const userName = String(user?.name || '').trim().toLowerCase();
-      const userPhone = String(user?.phone || (user as any)?.mobile || '').trim().toLowerCase();
-      const userRole = (user?.role || '').toUpperCase();
-      const userShopId = String(user?.shopId || (user as any)?.restaurantId || user?.id || '');
+      // Retrieve state user & fallback localStorage user for mobile sessions
+      let storedUser: any = null;
+      try {
+        const uStr = localStorage.getItem('foodway_user') || localStorage.getItem('user');
+        if (uStr) storedUser = JSON.parse(uStr);
+      } catch (e) { }
+
+      const currentUserId = String(user?.id || (user as any)?.userId || storedUser?.id || storedUser?.userId || localStorage.getItem('foodway_user_id') || '').trim().toLowerCase();
+      const userEmail = String(user?.email || storedUser?.email || localStorage.getItem('foodway_user_email') || '').trim().toLowerCase();
+      const userName = String(user?.name || storedUser?.name || '').trim().toLowerCase();
+      const userPhone = String(user?.phone || (user as any)?.mobile || storedUser?.phone || '').trim().toLowerCase();
+      const userRole = String(user?.role || storedUser?.role || localStorage.getItem('foodway_user_role') || '').toUpperCase();
+      const userShopId = String(user?.shopId || (user as any)?.restaurantId || user?.id || storedUser?.shopId || '');
 
       const isDeliveryRole =
         userRole === 'DELIVERY_PARTNER' ||
         userRole === 'DELIVERY' ||
         userRole === 'RIDER' ||
-        (currentUserId && currentUserId.startsWith('del-'));
+        (currentUserId && (currentUserId.startsWith('del-') || currentUserId.includes('del')));
 
-      console.log(`🔊 [Buzzer Evaluation] Event: ${eventName}, Order: #${orderId}, Status: ${status}, Role: ${userRole}`);
+      const hasRiderField = Boolean(orderDeliveryId || assignedRiderStr || deliveryPartnerEmailStr || deliveryPartnerPhoneStr);
+      const isAssignedToMe =
+        hasRiderField &&
+        ((currentUserId && (orderDeliveryId === currentUserId || currentUserId.includes(orderDeliveryId) || orderDeliveryId.includes(currentUserId))) ||
+          (userEmail && (orderDeliveryId === userEmail || deliveryPartnerEmailStr === userEmail)) ||
+          (userName && (assignedRiderStr === userName || assignedRiderStr.includes(userName) || userName.includes(assignedRiderStr))) ||
+          (userPhone && (deliveryPartnerPhoneStr === userPhone || deliveryPartnerPhoneStr.includes(userPhone))));
 
       // Rule 1: Customer places order -> Shop & Admin get 30s buzzer
       if (eventName === 'order_created') {
@@ -77,16 +92,8 @@ export const useRealtimeSync = () => {
 
       // Rule 2: Admin assigns delivery partner -> Delivery Partner gets 30s buzzer
       if (eventName === 'order_assigned' || (eventName === 'order_status_updated' && status === 'ASSIGNED')) {
-        if (isDeliveryRole) {
-          const hasRiderField = Boolean(orderDeliveryId || assignedRiderStr || deliveryPartnerEmailStr || deliveryPartnerPhoneStr);
-          const isAssignedToMe =
-            hasRiderField &&
-            ((currentUserId && (orderDeliveryId === currentUserId || currentUserId.includes(orderDeliveryId) || orderDeliveryId.includes(currentUserId))) ||
-            (userEmail && (orderDeliveryId === userEmail || deliveryPartnerEmailStr === userEmail)) ||
-            (userName && (assignedRiderStr === userName || assignedRiderStr.includes(userName) || userName.includes(assignedRiderStr))) ||
-            (userPhone && (deliveryPartnerPhoneStr === userPhone || deliveryPartnerPhoneStr.includes(userPhone))));
-
-          if (isAssignedToMe) {
+        if (isDeliveryRole || isAssignedToMe) {
+          if (isAssignedToMe || isDeliveryRole) {
             buzzerService.triggerBuzzer({
               title: '🛵 New Order Assigned to You!',
               message: `Order #${orderId} has been assigned to you by Admin!`,
@@ -101,16 +108,8 @@ export const useRealtimeSync = () => {
         eventName === 'order_ready_pickup' ||
         (eventName === 'order_status_updated' && (status === 'READY_FOR_PICKUP' || status === 'FOOD_READY' || status === 'READY'))
       ) {
-        if (isDeliveryRole) {
-          const hasRiderField = Boolean(orderDeliveryId || assignedRiderStr || deliveryPartnerEmailStr || deliveryPartnerPhoneStr);
-          const isTargetRider =
-            hasRiderField &&
-            ((currentUserId && (orderDeliveryId === currentUserId || currentUserId.includes(orderDeliveryId) || orderDeliveryId.includes(currentUserId))) ||
-            (userEmail && (orderDeliveryId === userEmail || deliveryPartnerEmailStr === userEmail)) ||
-            (userName && (assignedRiderStr === userName || assignedRiderStr.includes(userName) || userName.includes(assignedRiderStr))) ||
-            (userPhone && (deliveryPartnerPhoneStr === userPhone || deliveryPartnerPhoneStr.includes(userPhone))));
-
-          if (isTargetRider) {
+        if (isDeliveryRole || isAssignedToMe) {
+          if (isAssignedToMe || isDeliveryRole) {
             buzzerService.triggerBuzzer({
               title: '📦 Order Ready for Pickup!',
               message: `Shop updated order #${orderId} to Ready for Pickup! Please pick up the package.`,
@@ -142,7 +141,6 @@ export const useRealtimeSync = () => {
 
     // 2. Real-Time Event Handlers -> Invalidate TanStack Query Cache & Dispatch Local Events
     const handleShopChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Shop data updated:', data);
       shopService.getPublicRestaurants(true);
       queryClient.invalidateQueries({ queryKey: ['shops'] });
       queryClient.invalidateQueries({ queryKey: ['admin-shops'] });
@@ -150,7 +148,6 @@ export const useRealtimeSync = () => {
     };
 
     const handleMenuChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Menu/Items updated:', data);
       queryClient.invalidateQueries({ queryKey: ['menu'] });
       queryClient.invalidateQueries({ queryKey: ['dishes'] });
       queryClient.invalidateQueries({ queryKey: ['items'] });
@@ -159,7 +156,6 @@ export const useRealtimeSync = () => {
     };
 
     const handleOrderChange = (eventName: string, order?: any) => {
-      console.log(`⚡ [Real-time Sync] Order event [${eventName}] received:`, order);
       queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['customer-orders'] });
       queryClient.invalidateQueries({ queryKey: ['restaurant-orders'] });
@@ -172,45 +168,38 @@ export const useRealtimeSync = () => {
     };
 
     const handlePartnerChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Partner duty updated:', data);
       queryClient.invalidateQueries({ queryKey: ['delivery-partners'] });
       window.dispatchEvent(new CustomEvent('foodway_partner_updated', { detail: data }));
     };
 
     const handleLocationChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Delivery location updated:', data);
       queryClient.invalidateQueries({ queryKey: ['delivery-locations'] });
       window.dispatchEvent(new CustomEvent('foodway_location_updated', { detail: data }));
     };
 
     const handleCMSChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Homepage CMS updated:', data);
       queryClient.invalidateQueries({ queryKey: ['cms'] });
       queryClient.invalidateQueries({ queryKey: ['homepage'] });
       window.dispatchEvent(new CustomEvent('homepage_cms_updated', { detail: data }));
     };
 
     const handleCategoryChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Categories updated:', data);
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       window.dispatchEvent(new CustomEvent('foodway_category_updated', { detail: data }));
     };
 
     const handleDeliverySettingsChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Delivery settings updated:', data);
       queryClient.invalidateQueries({ queryKey: ['delivery-settings'] });
       window.dispatchEvent(new CustomEvent('foodway_delivery_settings_updated', { detail: data }));
     };
 
     const handleProfileChange = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Profile updated:', data);
       queryClient.invalidateQueries({ queryKey: ['user-profile'] });
       queryClient.invalidateQueries({ queryKey: ['user'] });
       window.dispatchEvent(new CustomEvent('foodway_profile_updated', { detail: data }));
     };
 
     const handleVendorItemsCancelled = (data?: any) => {
-      console.log('⚡ [Real-time Sync] Vendor items cancelled:', data);
       handleOrderChange('vendor_items_cancelled', data);
       window.dispatchEvent(new CustomEvent('vendor_items_cancelled', { detail: data }));
     };

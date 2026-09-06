@@ -189,7 +189,6 @@ export const CartPage: React.FC = () => {
     fetchDeliveryConfig();
 
     const unsubscribeDelivery = socketService.onDeliverySettingsUpdated((settings) => {
-      console.log('⚡ [Live Socket Event: DELIVERY_SETTINGS_UPDATED] Received in Cart:', settings);
       const rate = settings?.deliveryFeePerKm ?? settings?.settings?.deliveryFeePerKm;
       const base = settings?.baseDeliveryFee ?? settings?.settings?.baseDeliveryFee;
       if (typeof rate === 'number' && !isNaN(rate)) {
@@ -263,7 +262,6 @@ export const CartPage: React.FC = () => {
       const unsubscribeStatus = socketService.onShopStatusUpdated((data: any) => {
         if (!data) return;
         const eventResId = String(data.shopId || data.restaurantId || data.id || '').toLowerCase().replace(/[-_]/g, '');
-        console.log('⚡ [Live Socket Event: SHOP_STATUS_UPDATED] Received in Cart:', data);
 
         if (!targetResId || !eventResId || eventResId === targetResId || targetResId.includes(eventResId) || eventResId.includes(targetResId)) {
           const isClosed = data.isOpen === false || data.isOpen === 'false' || data.status === 'closed' || data.status === 'inactive' || data.status === 'offline';
@@ -277,14 +275,12 @@ export const CartPage: React.FC = () => {
       const unsubscribeShop = socketService.onShopUpdated((updatedShop: any) => {
         if (!updatedShop) return;
         const uId = String(updatedShop.id || updatedShop.shopId || updatedShop.restaurantId || '').toLowerCase().replace(/[-_]/g, '');
-        console.log('⚡ [Live Socket Event: SHOP_UPDATED] Received in Cart:', updatedShop);
 
         if (!targetResId || !uId || uId === targetResId || targetResId.includes(uId) || uId.includes(targetResId)) {
           const newLat = updatedShop.latitude ?? updatedShop.lat;
           const newLng = updatedShop.longitude ?? updatedShop.lng;
 
           if (newLat !== undefined && newLng !== undefined && !isNaN(Number(newLat)) && !isNaN(Number(newLng))) {
-            console.log(`📍 [Cart Live Location Sync] Store Coordinates Updated: Lat=${newLat}, Lng=${newLng}`);
             setStoreLat(Number(newLat));
             setStoreLng(Number(newLng));
           }
