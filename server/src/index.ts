@@ -221,30 +221,15 @@ async function getPlatformSettings(forceRefresh = false): Promise<typeof default
       saveSettingsToFile(_settingsCache);
       return _settingsCache;
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn('⚠️ [Settings Read] foodway-settings get error:', e?.message);
+  }
 
-  // 2. Try reading from usersTableName ('foodway-users') with userId PK schema
-  try {
-    const resUsers = await dynamoDocClient.send(new GetCommand({
-      TableName: usersTableName,
-      Key: { userId: 'platform_settings' }
-    }));
-    if (resUsers.Item && typeof resUsers.Item.deliveryFeePerKm === 'number') {
-      _settingsCache = {
-        deliveryFeePerKm: Number(resUsers.Item.deliveryFeePerKm),
-        baseDeliveryFee: Number(resUsers.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
-        freeDeliveryThreshold: Number(resUsers.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
-      };
-      saveSettingsToFile(_settingsCache);
-      return _settingsCache;
-    }
-  } catch (e) {}
-
-  // 3. Try reading from tableName ('mk-delivery-services')
+  // 2. Try reading from primary tableName ('mk-delivery-services') with email Partition Key
   try {
     const resTable = await dynamoDocClient.send(new GetCommand({
       TableName: tableName,
-      Key: { id: 'platform_settings' }
+      Key: { email: 'platform_settings@system' }
     }));
     if (resTable.Item && typeof resTable.Item.deliveryFeePerKm === 'number') {
       _settingsCache = {
@@ -255,7 +240,26 @@ async function getPlatformSettings(forceRefresh = false): Promise<typeof default
       saveSettingsToFile(_settingsCache);
       return _settingsCache;
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn('⚠️ [Settings Read] mk-delivery-services get error:', e?.message);
+  }
+
+  // 3. Try reading from usersTableName ('foodway-users') with email Partition Key
+  try {
+    const resUsers = await dynamoDocClient.send(new GetCommand({
+      TableName: usersTableName,
+      Key: { email: 'platform_settings@system' }
+    }));
+    if (resUsers.Item && typeof resUsers.Item.deliveryFeePerKm === 'number') {
+      _settingsCache = {
+        deliveryFeePerKm: Number(resUsers.Item.deliveryFeePerKm),
+        baseDeliveryFee: Number(resUsers.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
+        freeDeliveryThreshold: Number(resUsers.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
+      };
+      saveSettingsToFile(_settingsCache);
+      return _settingsCache;
+    }
+  } catch (e: any) {}
 
   // 4. Try reading from local disk file
   const fileSettings = readSettingsFromFile();
@@ -315,34 +319,55 @@ app.put('/api/admin/settings', async (req: Request, res: Response) => {
     saveSettingsToFile(settings);
 
     // 2. Persist to DynamoDB tables with matching PK schemas for each table
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: settingsTableName,
-        Item: { settingId: 'platform_settings', id: 'platform_settings', ...settings, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    const itemData = {
+      id: 'platform_settings',
+      settingId: 'platform_settings',
+      email: 'platform_settings@system',
+      ...settings,
+      updatedAt: new Date().toISOString()
+    };
 
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: usersTableName,
-        Item: { userId: 'platform_settings', id: 'platform_settings', settingId: 'platform_settings', ...settings, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    let savedToAnyTable = false;
 
+    // Try primary tableName ('mk-delivery-services')
     try {
       await dynamoDocClient.send(new PutCommand({
         TableName: tableName,
-        Item: { id: 'platform_settings', settingId: 'platform_settings', ...settings, updatedAt: new Date().toISOString() }
+        Item: itemData
       }));
-    } catch (e) {}
+      savedToAnyTable = true;
+    } catch (e: any) {
+      console.warn('⚠️ [Settings Put] mk-delivery-services failed:', e?.message);
+    }
+
+    // Try settingsTableName ('foodway-settings')
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: itemData
+      }));
+      savedToAnyTable = true;
+    } catch (e: any) {
+      console.warn('⚠️ [Settings Put] foodway-settings failed:', e?.message);
+    }
+
+    // Try usersTableName ('foodway-users')
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: itemData
+      }));
+      savedToAnyTable = true;
+    } catch (e: any) {}
 
     // 3. Broadcast real-time live update to all active customer sessions
     if (socketService) {
-      socketService.emitDeliverySettingsUpdated(settings);
+      socketService.emitDeliverySettingsUpdated(settings).catch(() => {});
     }
     res.json({
       success: true,
       message: 'Delivery fee settings updated and saved to DynamoDB successfully.',
+      persistedToDynamoDB: savedToAnyTable,
       settings
     });
   } catch (error: any) {
@@ -449,32 +474,15 @@ async function getHomepageCMS(forceRefresh = false): Promise<typeof defaultHomep
       saveCMSToFile(_cmsCache);
       return _cmsCache;
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn('⚠️ [CMS Read] foodway-settings get error:', e?.message);
+  }
 
-  // 2. Try reading from usersTableName ('foodway-users') with userId PK
-  try {
-    const resUsers = await dynamoDocClient.send(new GetCommand({
-      TableName: usersTableName,
-      Key: { userId: 'homepage_cms' }
-    }));
-    if (resUsers.Item && (resUsers.Item.heroStats || resUsers.Item.faqs || resUsers.Item.contactDetails)) {
-      _cmsCache = {
-        heroStats: { ...defaultHomepageCMS.heroStats, ...(resUsers.Item.heroStats || {}) },
-        flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(resUsers.Item.flavoursOfKonaseema || {}) },
-        whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(resUsers.Item.whyChooseUs || {}) },
-        faqs: Array.isArray(resUsers.Item.faqs) && resUsers.Item.faqs.length > 0 ? resUsers.Item.faqs : defaultHomepageCMS.faqs,
-        contactDetails: { ...defaultHomepageCMS.contactDetails, ...(resUsers.Item.contactDetails || {}) }
-      };
-      saveCMSToFile(_cmsCache);
-      return _cmsCache;
-    }
-  } catch (e) {}
-
-  // 3. Try reading from tableName ('mk-delivery-services')
+  // 2. Try reading from primary tableName ('mk-delivery-services') with email Partition Key
   try {
     const resTable = await dynamoDocClient.send(new GetCommand({
       TableName: tableName,
-      Key: { id: 'homepage_cms' }
+      Key: { email: 'homepage_cms@system' }
     }));
     if (resTable.Item && (resTable.Item.heroStats || resTable.Item.faqs || resTable.Item.contactDetails)) {
       _cmsCache = {
@@ -487,7 +495,28 @@ async function getHomepageCMS(forceRefresh = false): Promise<typeof defaultHomep
       saveCMSToFile(_cmsCache);
       return _cmsCache;
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn('⚠️ [CMS Read] mk-delivery-services get error:', e?.message);
+  }
+
+  // 3. Try reading from usersTableName ('foodway-users') with email Partition Key
+  try {
+    const resUsers = await dynamoDocClient.send(new GetCommand({
+      TableName: usersTableName,
+      Key: { email: 'homepage_cms@system' }
+    }));
+    if (resUsers.Item && (resUsers.Item.heroStats || resUsers.Item.faqs || resUsers.Item.contactDetails)) {
+      _cmsCache = {
+        heroStats: { ...defaultHomepageCMS.heroStats, ...(resUsers.Item.heroStats || {}) },
+        flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(resUsers.Item.flavoursOfKonaseema || {}) },
+        whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(resUsers.Item.whyChooseUs || {}) },
+        faqs: Array.isArray(resUsers.Item.faqs) && resUsers.Item.faqs.length > 0 ? resUsers.Item.faqs : defaultHomepageCMS.faqs,
+        contactDetails: { ...defaultHomepageCMS.contactDetails, ...(resUsers.Item.contactDetails || {}) }
+      };
+      saveCMSToFile(_cmsCache);
+      return _cmsCache;
+    }
+  } catch (e: any) {}
 
   // 4. Try reading from local file
   try {
@@ -531,32 +560,57 @@ app.put('/api/admin/cms/homepage', async (req: Request, res: Response) => {
     _cmsCache = updatedCMS;
     saveCMSToFile(updatedCMS);
 
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: settingsTableName,
-        Item: { settingId: 'homepage_cms', id: 'homepage_cms', ...updatedCMS, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    const itemData = {
+      id: 'homepage_cms',
+      settingId: 'homepage_cms',
+      email: 'homepage_cms@system',
+      ...updatedCMS,
+      updatedAt: new Date().toISOString()
+    };
 
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: usersTableName,
-        Item: { userId: 'homepage_cms', id: 'homepage_cms', settingId: 'homepage_cms', ...updatedCMS, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    let savedToAnyTable = false;
 
+    // Try primary tableName ('mk-delivery-services')
     try {
       await dynamoDocClient.send(new PutCommand({
         TableName: tableName,
-        Item: { id: 'homepage_cms', settingId: 'homepage_cms', ...updatedCMS, updatedAt: new Date().toISOString() }
+        Item: itemData
       }));
-    } catch (e) {}
+      savedToAnyTable = true;
+    } catch (e: any) {
+      console.warn('⚠️ [CMS Put] mk-delivery-services failed:', e?.message);
+    }
+
+    // Try settingsTableName ('foodway-settings')
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: itemData
+      }));
+      savedToAnyTable = true;
+    } catch (e: any) {
+      console.warn('⚠️ [CMS Put] foodway-settings failed:', e?.message);
+    }
+
+    // Try usersTableName ('foodway-users')
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: itemData
+      }));
+      savedToAnyTable = true;
+    } catch (e: any) {}
 
     if (socketService) {
       await socketService.emitCMSUpdated(updatedCMS);
     }
 
-    res.json({ success: true, message: 'Homepage CMS updated successfully', cms: updatedCMS });
+    res.json({
+      success: true,
+      message: 'Homepage CMS updated successfully',
+      persistedToDynamoDB: savedToAnyTable,
+      cms: updatedCMS
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to update CMS' });
   }
@@ -684,33 +738,37 @@ async function getHomepageCategories(forceRefresh = false): Promise<IHomepageCat
       saveHomepageCategoriesToFile(_categoriesCache!);
       return _categoriesCache!;
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn('⚠️ [Categories Read] foodway-settings get error:', e?.message);
+  }
 
-  // 2. Try reading from usersTableName
-  try {
-    const resUsers = await dynamoDocClient.send(new GetCommand({
-      TableName: usersTableName,
-      Key: { userId: 'homepage_categories' }
-    }));
-    if (resUsers.Item && Array.isArray(resUsers.Item.categories) && resUsers.Item.categories.length > 0) {
-      _categoriesCache = resUsers.Item.categories;
-      saveHomepageCategoriesToFile(_categoriesCache!);
-      return _categoriesCache!;
-    }
-  } catch (e) {}
-
-  // 3. Try reading from tableName
+  // 2. Try reading from primary tableName ('mk-delivery-services') with email Partition Key
   try {
     const resTable = await dynamoDocClient.send(new GetCommand({
       TableName: tableName,
-      Key: { id: 'homepage_categories' }
+      Key: { email: 'homepage_categories@system' }
     }));
     if (resTable.Item && Array.isArray(resTable.Item.categories) && resTable.Item.categories.length > 0) {
       _categoriesCache = resTable.Item.categories;
       saveHomepageCategoriesToFile(_categoriesCache!);
       return _categoriesCache!;
     }
-  } catch (e) {}
+  } catch (e: any) {
+    console.warn('⚠️ [Categories Read] mk-delivery-services get error:', e?.message);
+  }
+
+  // 3. Try reading from usersTableName with email Partition Key
+  try {
+    const resUsers = await dynamoDocClient.send(new GetCommand({
+      TableName: usersTableName,
+      Key: { email: 'homepage_categories@system' }
+    }));
+    if (resUsers.Item && Array.isArray(resUsers.Item.categories) && resUsers.Item.categories.length > 0) {
+      _categoriesCache = resUsers.Item.categories;
+      saveHomepageCategoriesToFile(_categoriesCache!);
+      return _categoriesCache!;
+    }
+  } catch (e: any) {}
 
   // 4. Try reading from local file
   try {
@@ -775,27 +833,41 @@ app.put('/api/admin/homepage-categories', async (req: Request, res: Response) =>
     _categoriesCache = cleanedCategories;
     saveHomepageCategoriesToFile(cleanedCategories);
 
-    // Persist to DynamoDB tables
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: settingsTableName,
-        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: cleanedCategories, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    const itemData = {
+      id: 'homepage_categories',
+      settingId: 'homepage_categories',
+      email: 'homepage_categories@system',
+      categories: cleanedCategories,
+      updatedAt: new Date().toISOString()
+    };
 
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: usersTableName,
-        Item: { userId: 'homepage_categories', id: 'homepage_categories', settingId: 'homepage_categories', categories: cleanedCategories, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
-
+    // Persist to primary tableName ('mk-delivery-services')
     try {
       await dynamoDocClient.send(new PutCommand({
         TableName: tableName,
-        Item: { id: 'homepage_categories', settingId: 'homepage_categories', categories: cleanedCategories, updatedAt: new Date().toISOString() }
+        Item: itemData
       }));
-    } catch (e) {}
+    } catch (e: any) {
+      console.warn('⚠️ [Categories Put] mk-delivery-services failed:', e?.message);
+    }
+
+    // Persist to settingsTableName ('foodway-settings')
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {
+      console.warn('⚠️ [Categories Put] foodway-settings failed:', e?.message);
+    }
+
+    // Persist to usersTableName
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {}
 
     try {
       if (categoriesTableName) {
@@ -872,26 +944,38 @@ app.post('/api/admin/homepage-categories', async (req: Request, res: Response) =
     _categoriesCache = updatedList;
     saveHomepageCategoriesToFile(updatedList);
 
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: settingsTableName,
-        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
-
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: usersTableName,
-        Item: { userId: 'homepage_categories', id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    const itemData = {
+      id: 'homepage_categories',
+      settingId: 'homepage_categories',
+      email: 'homepage_categories@system',
+      categories: updatedList,
+      updatedAt: new Date().toISOString()
+    };
 
     try {
       await dynamoDocClient.send(new PutCommand({
         TableName: tableName,
-        Item: { id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+        Item: itemData
       }));
-    } catch (e) {}
+    } catch (e: any) {
+      console.warn('⚠️ [Category Put] mk-delivery-services failed:', e?.message);
+    }
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {
+      console.warn('⚠️ [Category Put] foodway-settings failed:', e?.message);
+    }
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {}
 
     try {
       if (categoriesTableName) {
@@ -936,26 +1020,38 @@ app.delete('/api/admin/homepage-categories/:id', async (req: Request, res: Respo
     _categoriesCache = updatedList;
     saveHomepageCategoriesToFile(updatedList);
 
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: settingsTableName,
-        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
-
-    try {
-      await dynamoDocClient.send(new PutCommand({
-        TableName: usersTableName,
-        Item: { userId: 'homepage_categories', id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
-      }));
-    } catch (e) {}
+    const itemData = {
+      id: 'homepage_categories',
+      settingId: 'homepage_categories',
+      email: 'homepage_categories@system',
+      categories: updatedList,
+      updatedAt: new Date().toISOString()
+    };
 
     try {
       await dynamoDocClient.send(new PutCommand({
         TableName: tableName,
-        Item: { id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+        Item: itemData
       }));
-    } catch (e) {}
+    } catch (e: any) {
+      console.warn('⚠️ [Category Delete] mk-delivery-services failed:', e?.message);
+    }
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {
+      console.warn('⚠️ [Category Delete] foodway-settings failed:', e?.message);
+    }
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {}
 
     try {
       if (categoriesTableName) {
@@ -982,12 +1078,38 @@ app.post('/api/admin/homepage-categories/reset', async (req: Request, res: Respo
     _categoriesCache = [...defaultHomepageCategories];
     saveHomepageCategoriesToFile(_categoriesCache);
 
+    const itemData = {
+      id: 'homepage_categories',
+      settingId: 'homepage_categories',
+      email: 'homepage_categories@system',
+      categories: _categoriesCache,
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: tableName,
+        Item: itemData
+      }));
+    } catch (e: any) {
+      console.warn('⚠️ [Category Reset] mk-delivery-services failed:', e?.message);
+    }
+
     try {
       await dynamoDocClient.send(new PutCommand({
         TableName: settingsTableName,
-        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: _categoriesCache, updatedAt: new Date().toISOString() }
+        Item: itemData
       }));
-    } catch (e) {}
+    } catch (e: any) {
+      console.warn('⚠️ [Category Reset] foodway-settings failed:', e?.message);
+    }
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: itemData
+      }));
+    } catch (e: any) {}
 
     if (socketService) {
       await socketService.emitCategoryUpdated(_categoriesCache);
@@ -3952,17 +4074,27 @@ app.post('/api/admin/seed-shop-passwords', async (_req: Request, res: Response) 
 });
 
 // Centralized Production Error Handling Middleware
-// Masks internal stack traces and implementation details in production
+// Masks internal stack traces while guaranteeing CORS headers on all error responses
 app.use((err: any, req: Request, res: Response, _next: any) => {
   console.error('❌ Server Error:', err?.message || err);
 
-  const statusCode = err.status || err.statusCode || 500;
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, token, userid');
+
+  const statusCode = err.status || err.statusCode || (err.name === 'SyntaxError' ? 400 : 500);
   const isProd = process.env.NODE_ENV === 'production';
 
   res.status(statusCode).json({
     success: false,
-    error: isProd ? 'An internal server error occurred.' : (err?.message || 'Server error'),
-    code: err?.code || 'INTERNAL_SERVER_ERROR',
+    error: err?.message || 'Server error occurred',
+    code: err?.code || (statusCode === 400 ? 'BAD_REQUEST' : 'INTERNAL_SERVER_ERROR'),
     ...(isProd ? {} : { stack: err?.stack })
   });
 });

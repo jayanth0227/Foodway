@@ -10,14 +10,23 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 const s3Region = process.env.AWS_S3_REGION || 'ap-south-2';
 const dynamoRegion = process.env.AWS_DYNAMODB_REGION || 'ap-south-2';
 
-// Initialize S3 client using default AWS SDK credential provider chain (IAM execution role in Lambda)
+// Check for explicit AWS credentials in environment variables or .env
+const hasStaticKeys = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+const credentials = hasStaticKeys ? {
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+} : undefined;
+
+// Initialize S3 client (uses static keys if provided, else falls back to default SDK credential chain / IAM role)
 export const s3Client = new S3Client({
   region: s3Region,
+  ...(credentials ? { credentials } : {})
 });
 
-// Initialize DynamoDB client using default AWS SDK credential provider chain (IAM execution role in Lambda)
+// Initialize DynamoDB client (uses static keys if provided, else falls back to default SDK credential chain / IAM role)
 const dynamoClient = new DynamoDBClient({
   region: dynamoRegion,
+  ...(credentials ? { credentials } : {})
 });
 
 // Create DynamoDB Document Client helper
