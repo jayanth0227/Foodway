@@ -26,7 +26,7 @@ export const Footer: React.FC = () => {
           setContactInfo(prev => ({ ...prev, ...data.cms.contactDetails }));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleScrollToTop = () => {
@@ -36,10 +36,10 @@ export const Footer: React.FC = () => {
   return (
     <footer id="footer" className="bg-bg-cardSec border-t border-glass pt-10 pb-28 sm:pb-8 relative overflow-hidden transition-colors duration-400">
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
-        
+
         {/* Main Footer Layout Grid */}
         <div className="flex flex-col md:flex-row items-start justify-between gap-8 mb-8 pb-8 border-b border-glass">
-          
+
           {/* Brand Identity & Subheading */}
           <div className="space-y-3 max-w-md">
             <Link to="/" onClick={handleScrollToTop} className="inline-flex items-center space-x-3 group">

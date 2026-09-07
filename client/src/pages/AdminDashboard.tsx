@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  LogOut, 
-  Database, 
-  UploadCloud, 
-  Activity, 
-  RefreshCw, 
-  CheckCircle, 
+import {
+  LogOut,
+  Database,
+  UploadCloud,
+  Activity,
+  RefreshCw,
+  CheckCircle,
   AlertTriangle,
   PlusCircle,
   ArrowRight,
@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 import { useTheme } from '../context/ThemeContext';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import { getCurrentUser, clearSession } from '../utils/auth.utils';
@@ -125,7 +126,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       const url = new URL(window.location.href);
       url.searchParams.set('tab', tab);
       window.history.replaceState({}, '', url.toString());
-    } catch (e) {}
+    } catch (e) { }
   };
 
   useEffect(() => {
@@ -236,7 +237,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
   // Filter States
   const [resSearch, setResSearch] = useState('');
-  
+
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState('All');
   const [expandedAdminOrdersMap, setExpandedAdminOrdersMap] = useState<Record<string, boolean>>({});
@@ -246,45 +247,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   };
 
   const isTodayOrder = (o: any) => {
-    if (!o) return false;
+    if (!o) return true;
     const dateVal = o.createdAt || o.orderedAt || o.createdTime || o.date;
     if (!dateVal) return true;
     const d = new Date(dateVal);
     if (isNaN(d.getTime())) return true;
     const today = new Date();
-    return (
-      d.getDate() === today.getDate() &&
-      d.getMonth() === today.getMonth() &&
-      d.getFullYear() === today.getFullYear()
-    );
+    const diffMs = Math.abs(today.getTime() - d.getTime());
+    return diffMs <= 48 * 3600 * 1000;
   };
 
-  const getItemVariantLabel = (it: any): string | null => {
-    if (!it) return null;
+  const getItemVariantLabel = (it: any): string => {
+    if (!it) return '1 Pc';
     if (it.variantLabel && typeof it.variantLabel === 'string' && it.variantLabel.trim() !== '') {
       return it.variantLabel.trim();
     }
-    const v = it.selectedVariant || it.variant;
+    const v = it.selectedVariant || it.variant || (Array.isArray(it.variants) && it.variants.length > 0 ? it.variants[0] : null);
     if (v) {
       if (typeof v === 'string' && v.trim() !== '') return v.trim();
       if (typeof v === 'object') {
-        const name = v.name || v.label || v.variantName || v.portionName || v.title;
+        const label = v.label || v.name || v.variantName || v.portionName || v.title;
         const qty = v.quantity || v.qty || v.weight || v.packSize;
         const unit = v.unit || v.type || '';
         const qtyUnit = (qty || unit) ? `${qty || ''} ${unit}`.trim() : '';
 
-        if (name && qtyUnit && name !== qtyUnit) return `${name} (${qtyUnit})`;
-        if (name) return name;
+        if (label && qtyUnit && label.toLowerCase() !== qtyUnit.toLowerCase()) {
+          if (label.toLowerCase().includes(qtyUnit.toLowerCase())) return label;
+          return `${label} (${qtyUnit})`;
+        }
+        if (label) return label;
         if (qtyUnit) return qtyUnit;
       }
     }
     if (it.portion) return String(it.portion);
     if (it.portionSize) return String(it.portionSize);
-    if (it.unit && it.quantity && String(it.unit).trim() !== '') return `${it.quantity} ${it.unit}`;
-    if (it.unit && String(it.unit).trim() !== '') return String(it.unit);
-    if (it.size) return String(it.size);
+    if (it.packSize) return String(it.packSize);
     if (it.weight) return String(it.weight);
-    return null;
+    if (it.size) return String(it.size);
+
+    const qty = it.quantity || it.qty;
+    const unit = (it.unit || it.unitType || '').toString().trim();
+    if (qty && unit) return `${qty} ${unit}`;
+    if (unit) return `1 ${unit}`;
+
+    const itemName = String(it.name || it.itemName || it.foodName || it.title || '');
+    const itemDesc = String(it.description || '');
+    const qtyMatch = (itemName + ' ' + itemDesc).match(/\b(\d+\s*(?:pcs|pc|pieces|piece|gms|gm|g|kg|ml|l|litre|litres|plate|plates|items|pack|packs|box|boxes))\b/i);
+    if (qtyMatch && qtyMatch[1]) {
+      return qtyMatch[1].trim();
+    }
+
+    return '1 Pc';
   };
 
   const filteredOrders = orders.filter(o => {
@@ -299,27 +312,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     if (!matchesSearch) return false;
 
     const statusLower = (o.orderStatus || o.status || '').toString().toLowerCase();
-    const isToday = isTodayOrder(o);
+    const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
     if (orderStatusFilter === 'All') {
-      return isToday && (
-        statusLower === 'pending' ||
-        statusLower === 'accepted' ||
-        statusLower === 'preparing' ||
-        statusLower === 'ready' ||
-        statusLower === 'assigned' ||
-        statusLower === 'picked up' ||
-        statusLower === 'out_for_delivery' ||
-        statusLower === 'out for delivery'
-      );
+      return !isFinalized;
     }
 
     if (orderStatusFilter === 'Completed') {
-      return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+      return statusLower === 'completed' || statusLower === 'delivered';
     }
 
     if (orderStatusFilter === 'Rejected') {
-      return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+      return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
     }
 
     if (orderStatusFilter === 'Order History') {
@@ -332,25 +336,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const getTabOrderCount = (st: string) => {
     return orders.filter(o => {
       const statusLower = (o.orderStatus || o.status || '').toString().toLowerCase();
-      const isToday = isTodayOrder(o);
+      const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
       if (st === 'All') {
-        return isToday && (
-          statusLower === 'pending' ||
-          statusLower === 'accepted' ||
-          statusLower === 'preparing' ||
-          statusLower === 'ready' ||
-          statusLower === 'assigned' ||
-          statusLower === 'picked up' ||
-          statusLower === 'out_for_delivery' ||
-          statusLower === 'out for delivery'
-        );
+        return !isFinalized;
       }
       if (st === 'Completed') {
-        return isToday && (statusLower === 'completed' || statusLower === 'delivered');
+        return statusLower === 'completed' || statusLower === 'delivered';
       }
       if (st === 'Rejected') {
-        return isToday && (statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject');
+        return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
       }
       if (st === 'Order History') {
         return true;
@@ -486,11 +481,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const deleteDeliveryPartner = async (id: string) => {
     if (!window.confirm('Are you sure you want to remove this Delivery Partner from the database?')) return;
     try {
-      await axios.delete(`${API_BASE_URL}/admin/delivery-partners/${id}`);
-      showToast('success', 'Delivery Partner removed.');
+      setDbDeliveryPartners(prev => prev.filter(p => p.id !== id && p.userId !== id));
+      const res = await axios.delete(`${API_BASE_URL}/admin/delivery-partners/${encodeURIComponent(id)}`);
+      if (res.data.success) {
+        showToast('success', 'Delivery Partner removed.');
+      } else {
+        showToast('error', res.data.error || 'Failed to remove partner.');
+      }
       fetchDeliveryPartners();
-    } catch (err) {
-      console.error('Error deleting partner:', err);
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Error deleting delivery partner.');
+      fetchDeliveryPartners();
     }
   };
 
@@ -513,39 +514,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     localStorage.setItem('admin_activities', JSON.stringify(activities));
   }, [activities]);
 
-  // Helper: Play Synth Beep Alert for Admin Console
-  const playAdminOrderBeepSound = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        if (ctx.state === 'suspended') ctx.resume();
 
-        const playTone = (freq: number, start: number, dur: number) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-          gain.gain.setValueAtTime(0.45, ctx.currentTime + start);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(ctx.currentTime + start);
-          osc.stop(ctx.currentTime + start + dur);
-        };
-
-        // 3 crisp synth alert beeps (784Hz -> 1046Hz -> 1567Hz)
-        playTone(784, 0.0, 0.2);
-        playTone(1046.5, 0.22, 0.2);
-        playTone(1567.98, 0.44, 0.35);
-      }
-    } catch (e) {}
-
-    try {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-      audio.play().catch(() => {});
-    } catch (e) {}
-  };
 
   useEffect(() => {
     if (isLoading) return;
@@ -561,10 +530,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     // Join Admin Socket Room
     socketService.joinAdmin();
 
-    // Load original AWS & Admin API data
-    fetchAWSStatus();
-    fetchDBItems();
-    fetchHeroVideos();
+    // Load original AWS & Admin API data safely
     fetchAdminRestaurants();
     fetchAdminOrders();
     fetchDeliveryPartners();
@@ -594,43 +560,59 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
     const unsubscribeOrderCreated = socketService.onOrderCreated((newOrder: any) => {
       fetchAdminOrders();
-      playAdminOrderBeepSound();
     });
 
     const unsubscribeOrderAssigned = socketService.onOrderAssigned(() => {
       fetchAdminOrders();
-      playAdminOrderBeepSound();
     });
 
-    const unsubscribeStatus = socketService.onOrderStatusUpdated((updatedOrder: any) => {
+    const handleAdminOrderUpdate = (updatedOrder: any) => {
+      if (!updatedOrder) return;
       const targetId = updatedOrder.orderId || updatedOrder.id;
+      const parentId = updatedOrder.parentOrderId;
       const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
-      
-      setOrders(prev => prev.map(o => {
-        if (o.id === targetId || (o as any).orderId === targetId) {
-          return { ...o, orderStatus: nextStatus, status: nextStatus };
-        }
-        return o;
-      }));
-      playAdminOrderBeepSound();
-    });
 
-    const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
-      const targetId = updatedOrder.orderId || updatedOrder.id;
-      const nextStatus = updatedOrder.status || updatedOrder.orderStatus;
-      
-      setOrders(prev => prev.map(o => {
-        if (o.id === targetId || (o as any).orderId === targetId) {
-          return { ...o, orderStatus: nextStatus, status: nextStatus };
-        }
-        return o;
-      }));
-      playAdminOrderBeepSound();
-    });
+      if (nextStatus) {
+        setOrders(prev => prev.map(o => {
+          const oId = o.id || o.orderId;
+          const oParentId = o.parentOrderId;
+          const isMatch = (
+            oId === targetId ||
+            o.id === targetId ||
+            o.orderId === targetId ||
+            (parentId && (oId === parentId || oParentId === parentId)) ||
+            (targetId && oParentId === targetId)
+          );
+          if (isMatch) {
+            return {
+              ...o,
+              orderStatus: nextStatus,
+              status: nextStatus,
+              ...(updatedOrder.assignedRider ? { assignedRider: updatedOrder.assignedRider } : {}),
+              ...(updatedOrder.deliveryPartner ? { deliveryPartner: updatedOrder.deliveryPartner } : {})
+            };
+          }
+          return o;
+        }));
+      }
+
+      // Fetch fresh order details from backend to ensure sub-orders & item details remain synced
+      fetchAdminOrders();
+    };
+
+    const unsubscribeStatus = socketService.onOrderStatusUpdated(handleAdminOrderUpdate);
+    const unsubscribeRider = socketService.onRiderStatusUpdated(handleAdminOrderUpdate);
+    const unsubscribePickup = socketService.onOrderReadyForPickup(handleAdminOrderUpdate);
+
+    const handleWindowOrderUpdate = (e: any) => {
+      handleAdminOrderUpdate(e.detail);
+    };
+
+    window.addEventListener('foodway_order_updated', handleWindowOrderUpdate);
+    window.addEventListener('vendor_items_cancelled', handleWindowOrderUpdate);
 
     // Real-Time Delivery Partner Duty Status Listener (ON_DUTY vs OFF_DUTY / OFFLINE)
     const handleDutyUpdate = (data: any) => {
-      console.log('⚡ [Socket Event: PARTNER_DUTY_UPDATED]:', data);
       const targetDuty = data.dutyStatus || (data.isOnDuty ? 'ON_DUTY' : 'OFF_DUTY');
 
       setDbDeliveryPartners(prev => {
@@ -642,10 +624,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
           const pId = (p.id || p.userId || '').toLowerCase().trim();
           const dId = (data.userId || data.id || '').toLowerCase().trim();
 
-          const matches = (dEmail && pEmail === dEmail) || 
-                          (dId && (pId === dId || pId.includes(dId) || dId.includes(pId))) ||
-                          (dName && (pName === dName || pName.includes(dName))) ||
-                          (prev.length === 1);
+          const matches = (dEmail && pEmail === dEmail) ||
+            (dId && (pId === dId || pId.includes(dId) || dId.includes(pId))) ||
+            (dName && (pName === dName || pName.includes(dName))) ||
+            (prev.length === 1);
 
           if (matches) {
             return { ...p, dutyStatus: targetDuty };
@@ -665,11 +647,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       unsubscribeOrderAssigned();
       unsubscribeStatus();
       unsubscribeRider();
+      unsubscribePickup();
       unsubscribeDuty();
+      window.removeEventListener('foodway_order_updated', handleWindowOrderUpdate);
+      window.removeEventListener('vendor_items_cancelled', handleWindowOrderUpdate);
     };
-  }, []);
+  }, [isLoading, user, isAuthenticated]);
 
-  const fetchAdminRestaurants = async () => {
+  async function fetchAdminRestaurants() {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/restaurants`);
       if (response.data.success && Array.isArray(response.data.restaurants)) {
@@ -678,9 +663,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } catch (err) {
       console.error('Error fetching admin restaurants:', err);
     }
-  };
+  }
 
-  const fetchAdminOrders = async () => {
+  async function fetchAdminOrders() {
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/orders`);
       if (response.data.success && Array.isArray(response.data.orders)) {
@@ -689,10 +674,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } catch (err) {
       console.error('Error fetching admin orders:', err);
     }
-  };
+  }
 
   // Original AWS Functions (Unchanged APIs)
-  const fetchHeroVideos = async () => {
+  async function fetchHeroVideos() {
     setFetchingVideos(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/hero/videos`);
@@ -709,7 +694,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } finally {
       setFetchingVideos(false);
     }
-  };
+  }
 
   const handleSyncHeroVideos = async () => {
     setSyncingVideos(true);
@@ -734,16 +719,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     }
   };
 
-  const fetchAWSStatus = async () => {
+  async function fetchAWSStatus() {
     try {
       const response = await axios.get(`${API_BASE_URL}/aws/status`);
       setAwsStatus(response.data);
     } catch (error) {
       console.error('Error fetching AWS status:', error);
     }
-  };
+  }
 
-  const fetchDBItems = async () => {
+  async function fetchDBItems() {
     setDbLoading(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/db-items`);
@@ -753,7 +738,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     } finally {
       setDbLoading(false);
     }
-  };
+  }
 
   const handleSeedDatabase = async () => {
     setSeeding(true);
@@ -802,8 +787,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       } catch (error: any) {
         console.error('Error uploading file:', error);
         setUploadError(
-          error.response?.data?.details || 
-          error.response?.data?.error || 
+          error.response?.data?.details ||
+          error.response?.data?.error ||
           'Failed to upload file to S3. Verify bucket region and settings.'
         );
       } finally {
@@ -860,7 +845,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         console.warn('Error fetching vendor menu from API:', err);
         const savedMenu = localStorage.getItem(`foodway_menu_${resId}`) || localStorage.getItem('foodway_menu');
         if (savedMenu) {
-          try { setVendorMenuItems(JSON.parse(savedMenu)); } catch(e) { setVendorMenuItems([]); }
+          try { setVendorMenuItems(JSON.parse(savedMenu)); } catch (e) { setVendorMenuItems([]); }
         } else {
           setVendorMenuItems([]);
         }
@@ -1051,10 +1036,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     const targetRider = riderName || selectedRiders[orderId];
     if (!targetRider) return;
 
+    // Guard: Prevent assigning OFF DUTY delivery partners
+    const partnerObj = dbDeliveryPartners.find(p => (p.name || p.email) === targetRider || p.id === targetRider);
+    if (partnerObj && (partnerObj.dutyStatus === 'OFF_DUTY' || partnerObj.dutyStatus === 'OFFLINE' || partnerObj.isOnDuty === false)) {
+      showToast('error', `Cannot assign order: Delivery partner "${targetRider}" is currently OFF DUTY.`);
+      return;
+    }
+
     setOrders(prev => prev.map(o => {
       if (o.id === orderId || (o as any).orderId === orderId) {
-        return { 
-          ...o, 
+        return {
+          ...o,
           assignedRider: targetRider,
           assignmentTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
@@ -1063,11 +1055,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     }));
 
     try {
-      await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: targetRider });
-      showToast('success', `Assigned delivery partner "${targetRider}" to Order #${orderId}.`);
-      addActivity('order_assigned', `Order #${orderId} assigned to delivery partner "${targetRider}".`);
-    } catch (e) {
+      const res = await axios.put(`${API_BASE_URL}/admin/orders/${orderId}/assign-rider`, { assignedRider: targetRider });
+      if (res.data.success) {
+        showToast('success', `Assigned delivery partner "${targetRider}" to Order #${orderId}.`);
+        addActivity('order_assigned', `Order #${orderId} assigned to delivery partner "${targetRider}".`);
+      } else {
+        showToast('error', res.data.error || `Failed to assign partner "${targetRider}".`);
+        fetchAdminOrders();
+      }
+    } catch (e: any) {
       console.error('Error assigning rider to order:', e);
+      const errMsg = e.response?.data?.error || `Failed to assign delivery partner "${targetRider}".`;
+      showToast('error', errMsg);
+      fetchAdminOrders();
     }
   };
 
@@ -1096,12 +1096,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     setIsLogoutModalOpen(true);
   };
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
     setIsLogoutModalOpen(false);
-    clearSession();
-    localStorage.removeItem('adminAuth');
-    sessionStorage.removeItem('adminAuth');
-    logout();
+    await logout();
     navigate('/login', { replace: true });
   };
 
@@ -1117,8 +1114,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const filteredRestaurants = restaurants.filter(r => {
     if (!r || typeof r !== 'object') return false;
     const q = (resSearch || '').toLowerCase();
-    return (r?.name || '').toLowerCase().includes(q) || 
-           (r?.ownerName || '').toLowerCase().includes(q);
+    return (r?.name || '').toLowerCase().includes(q) ||
+      (r?.ownerName || '').toLowerCase().includes(q);
   });
 
   return (
@@ -1128,34 +1125,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       <div className="absolute bottom-[10%] right-[10%] w-[550px] h-[550px] rounded-full bg-accent/5 blur-[150px] pointer-events-none z-0" />
 
       {/* Hamburger header for mobile */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-bg-darkSec/80 border-b border-glass backdrop-blur-md flex items-center justify-between px-6 z-40">
-        <div className="flex items-center gap-3">
-          <img src="/logo.jpeg" alt="Logo" className="w-8 h-8 rounded-full object-cover border border-primary/40" />
-          <span className="font-display font-black text-sm tracking-widest text-primary">MK CONSOLE</span>
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200 dark:border-glass backdrop-blur-xl flex items-center justify-between px-4 z-40 shadow-md">
+        <div className="flex items-center gap-2.5">
+          <img src="/logo.jpeg" alt="Logo" className="w-8 h-8 rounded-xl object-cover border border-primary/40 shadow-2xs" />
+          <div>
+            <span className="text-[9px] font-black uppercase tracking-widest text-primary block">PLATFORM ADMIN</span>
+            <span className="font-display font-black text-xs tracking-tight text-slate-900 dark:text-text-primary block">MK CONSOLE</span>
+          </div>
         </div>
-        <button 
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="p-2 text-text-secondary hover:text-primary transition-colors border border-glass rounded-lg bg-glass-subtle"
-        >
-          <Menu size={18} />
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="p-2 text-text-secondary hover:text-primary transition-colors border border-slate-200 dark:border-glass rounded-xl bg-slate-100 dark:bg-glass cursor-pointer"
+            title="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            onClick={() => handleLogout()}
+            className="p-2 text-rose-500 hover:text-rose-600 transition-colors border border-rose-500/30 rounded-xl bg-rose-500/10 cursor-pointer"
+            title="Logout Admin Console"
+          >
+            <LogOut size={16} />
+          </button>
+        </div>
       </header>
 
-      {/* Mobile Backdrop Overlay for Drawer */}
-      {isSidebarOpen && (
-        <div 
-          onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-30 lg:hidden"
-        />
-      )}
+      {/* Admin Mobile Bottom Navigation Bar */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white backdrop-blur-2xl border-t border-slate-200 dark:border-glass px-2 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.15)] flex items-center justify-around">
+        {[
+          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+          { id: 'restaurants', label: 'Shops', icon: Store },
+          { id: 'orders', label: 'Orders', icon: ClipboardList },
+          { id: 'delivery', label: 'Delivery', icon: Bike },
+          { id: 'locations', label: 'Locations', icon: MapPin },
+          { id: 'settings', label: 'Settings', icon: Settings }
+        ].map(item => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all duration-200 cursor-pointer relative ${isActive
+                ? 'text-primary font-black scale-105'
+                : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label={item.label}
+            >
+              <Icon size={20} className={isActive ? 'text-primary stroke-[2.5]' : ''} />
+              <span className="text-[9.5px] font-extrabold mt-0.5 tracking-tight truncate max-w-[56px]">
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div
+                  layoutId="adminBottomTabUnderline"
+                  className="absolute -bottom-1 w-5 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(197,147,99,0.6)]"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
 
-      {/* Sidebar Navigation */}
-      <aside 
+      {/* Desktop Sidebar Navigation */}
+      <aside
         data-lenis-prevent
-        className={`
-          fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-40 transition-transform duration-300 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex flex-col justify-between shrink-0 shadow-2xl
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        `}
+        className="hidden lg:flex fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-40 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex-col justify-between shrink-0 shadow-2xl"
       >
         {/* Sidebar Header */}
         <div className="p-6 border-b border-glass flex items-center justify-between">
@@ -1168,7 +1206,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               </h2>
             </div>
           </div>
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(false)}
             className="lg:hidden text-text-muted hover:text-primary transition-colors p-1"
           >
@@ -1180,11 +1218,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
           <button
             onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'dashboard'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'dashboard'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <LayoutDashboard size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Dashboard</span>
@@ -1192,11 +1229,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('restaurants'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'restaurants'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'restaurants'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <Store size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Shops & Stores</span>
@@ -1204,11 +1240,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'orders'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'orders'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <ClipboardList size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Orders</span>
@@ -1216,11 +1251,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('delivery'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'delivery'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'delivery'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <Bike size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Delivery</span>
@@ -1228,11 +1262,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('locations'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'locations'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'locations'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <MapPin size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Delivery Locations</span>
@@ -1240,11 +1273,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('cms'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'cms'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'cms'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <Layers size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Website CMS</span>
@@ -1252,11 +1284,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('invitations'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'invitations'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'invitations'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <Mail size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Invitations Requests</span>
@@ -1264,11 +1295,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
           <button
             onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
-              activeTab === 'settings'
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'settings'
                 ? 'bg-primary text-bg-dark shadow-luxury font-black'
                 : 'text-text-secondary hover:bg-glass hover:text-primary'
-            }`}
+              }`}
           >
             <Settings size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Settings</span>
@@ -1307,9 +1337,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       </aside>
 
       {/* Main Content Area */}
-      <main 
+      <main
         data-lenis-prevent
-        className="flex-grow min-w-0 min-h-screen lg:h-screen pt-20 lg:pt-10 px-4 md:px-8 pb-28 lg:pb-10 z-10 relative lg:overflow-y-auto max-w-7xl mx-auto w-full"
+        className="flex-grow min-w-0 min-h-screen lg:h-screen pt-24 lg:pt-10 px-4 md:px-8 pb-32 lg:pb-10 z-10 relative lg:overflow-y-auto max-w-7xl mx-auto w-full"
       >
         <ErrorBoundary>
           {/* ==================================================== */}
@@ -1328,7 +1358,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
               {/* Analytics Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                
+
                 {/* Card 1: Total Restaurants */}
                 <div className="glass-panel border border-glass rounded-xl p-5 flex flex-col justify-between h-[125px] hover:border-primary/40 hover:shadow-lg transition-all duration-300 relative group overflow-hidden">
                   <div className="flex justify-between items-start">
@@ -1416,7 +1446,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
               {/* Bottom Section Layout */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                
+
                 {/* Latest Orders Panel (2/3 width) */}
                 <div className="xl:col-span-2 space-y-4">
                   <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
@@ -1425,7 +1455,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                         <ClipboardList className="text-primary" size={18} />
                         <h2 className="text-base font-bold font-display">Latest Active Orders</h2>
                       </div>
-                      <button 
+                      <button
                         onClick={() => setActiveTab('orders')}
                         className="text-[10px] font-bold uppercase tracking-wider text-primary hover:text-primary-dark transition-colors flex items-center gap-1.5"
                       >
@@ -1471,12 +1501,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                                   )}
                                 </td>
                                 <td className="py-3.5 pr-2">
-                                  <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border tracking-wider ${
-                                    order.orderStatus === 'delivered' ? 'bg-success/15 border-success/30 text-success' :
-                                    order.orderStatus === 'cancelled' ? 'bg-error/15 border-error/30 text-error' :
-                                    order.orderStatus === 'pending' ? 'bg-warning/15 border-warning/30 text-warning' :
-                                    'bg-primary/10 border-primary/20 text-primary'
-                                  }`}>
+                                  <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase border tracking-wider ${order.orderStatus === 'delivered' ? 'bg-success/15 border-success/30 text-success' :
+                                      order.orderStatus === 'cancelled' ? 'bg-error/15 border-error/30 text-error' :
+                                        order.orderStatus === 'pending' ? 'bg-warning/15 border-warning/30 text-warning' :
+                                          'bg-primary/10 border-primary/20 text-primary'
+                                    }`}>
                                     {order.orderStatus}
                                   </span>
                                 </td>
@@ -1534,1863 +1563,1846 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
             </div>
           )}
 
-        {/* ==================================================== */}
-        {/* RESTAURANTS TAB */}
-        {/* ==================================================== */}
-        {activeTab === 'restaurants' && (
-          selectedResProfile ? (
-            <div className="space-y-8 animate-fadeIn">
-              {/* Back navigation header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <button
-                  onClick={() => setSelectedResProfile(null)}
-                  className="self-start flex items-center gap-2 px-4 py-2.5 rounded-lg border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all"
-                >
-                  <ArrowLeft size={14} />
-                  <span>Back to Establishments</span>
-                </button>
-                <div className="flex gap-2">
+          {/* ==================================================== */}
+          {/* RESTAURANTS TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'restaurants' && (
+            selectedResProfile ? (
+              <div className="space-y-8 animate-fadeIn">
+                {/* Back navigation header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <button
-                    onClick={() => { setResForm(selectedResProfile); setEditingRes(selectedResProfile); setIsResFormOpen(true); }}
-                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all"
+                    onClick={() => setSelectedResProfile(null)}
+                    className="self-start flex items-center gap-2 px-4 py-2.5 rounded-lg border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all"
                   >
-                    <Edit2 size={14} />
-                    <span>Edit Profile</span>
+                    <ArrowLeft size={14} />
+                    <span>Back to Establishments</span>
                   </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setResForm(selectedResProfile); setEditingRes(selectedResProfile); setIsResFormOpen(true); }}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all"
+                    >
+                      <Edit2 size={14} />
+                      <span>Edit Profile</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* Profile cover banner */}
-              <div className="glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury relative">
-                <div className="h-44 md:h-56 w-full relative overflow-hidden bg-bg-darkSec/35">
-                  {/* Blurry cover background */}
-                  <img 
-                    src={selectedResProfile.image} 
-                    alt={selectedResProfile.name} 
-                    className="absolute inset-0 w-full h-full object-cover filter blur-md opacity-30 scale-105"
-                  />
-                  {/* Clean center graphic */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-bg-dark to-transparent opacity-80" />
-                </div>
-                
-                <div className="px-6 pb-6 pt-0 flex flex-col sm:flex-row gap-5 items-start sm:items-end -mt-12 md:-mt-16 relative z-10">
-                  <img
-                    src={selectedResProfile.image}
-                    alt={selectedResProfile.name}
-                    className="w-24 h-24 md:w-32 md:h-32 rounded-2xl object-cover border-4 border-glass shadow-luxury bg-bg-dark shrink-0"
-                  />
-                  <div className="min-w-0 flex-grow pb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-2xl md:text-3xl font-black font-display text-text-primary tracking-tight">{selectedResProfile.name}</h2>
+                {/* Profile cover banner */}
+                <div className="glass-panel border border-glass rounded-2xl overflow-hidden shadow-luxury relative">
+                  <div className="h-44 md:h-56 w-full relative overflow-hidden bg-bg-darkSec/35">
+                    {/* Blurry cover background */}
+                    <img
+                      src={selectedResProfile.image}
+                      alt={selectedResProfile.name}
+                      className="absolute inset-0 w-full h-full object-cover filter blur-md opacity-30 scale-105"
+                    />
+                    {/* Clean center graphic */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-bg-dark to-transparent opacity-80" />
+                  </div>
+
+                  <div className="px-6 pb-6 pt-0 flex flex-col sm:flex-row gap-5 items-start sm:items-end -mt-12 md:-mt-16 relative z-10">
+                    <img
+                      src={selectedResProfile.image}
+                      alt={selectedResProfile.name}
+                      className="w-24 h-24 md:w-32 md:h-32 rounded-2xl object-cover border-4 border-glass shadow-luxury bg-bg-dark shrink-0"
+                    />
+                    <div className="min-w-0 flex-grow pb-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-2xl md:text-3xl font-black font-display text-text-primary tracking-tight">{selectedResProfile.name}</h2>
+                      </div>
+                      <p className="text-[10px] text-text-muted mt-1.5 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={11} className="text-primary" />
+                          {selectedResProfile.address}
+                        </span>
+                      </p>
                     </div>
-                    <p className="text-[10px] text-text-muted mt-1.5 font-semibold flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin size={11} className="text-primary" />
-                        {selectedResProfile.address}
+                    <div className="pb-2">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase border tracking-wider ${selectedResProfile.status === 'active' ? 'bg-success/15 border-success/30 text-success' : 'bg-error/15 border-error/30 text-error'
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${selectedResProfile.status === 'active' ? 'bg-success animate-pulse' : 'bg-error'}`} />
+                        {selectedResProfile.status}
                       </span>
-                    </p>
-                  </div>
-                  <div className="pb-2">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase border tracking-wider ${
-                      selectedResProfile.status === 'active' ? 'bg-success/15 border-success/30 text-success' : 'bg-error/15 border-error/30 text-error'
-                    }`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${selectedResProfile.status === 'active' ? 'bg-success animate-pulse' : 'bg-error'}`} />
-                      {selectedResProfile.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile statistics cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-primary/20 transition-all duration-300 shadow-sm">
-                  <div className="p-3 rounded-lg bg-primary/10 text-primary">
-                    <ClipboardList size={18} />
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Total Orders</span>
-                    <h4 className="text-xl font-black text-text-primary mt-0.5">
-                      {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).length}
-                    </h4>
-                  </div>
-                </div>
-
-                <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-success/20 transition-all duration-300 shadow-sm">
-                  <div className="p-3 rounded-lg bg-success/10 text-success font-black flex items-center justify-center w-11 h-11 text-base">
-                    $
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Total Revenue</span>
-                    <h4 className="text-xl font-black text-success mt-0.5 font-display">
-                      ${orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).reduce((acc, o) => acc + (o.total || 0), 0).toFixed(2)}
-                    </h4>
-                  </div>
-                </div>
-
-                <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-warning/20 transition-all duration-300 shadow-sm">
-                  <div className="p-3 rounded-lg bg-warning/10 text-warning">
-                    <Clock size={18} />
-                  </div>
-                  <div>
-                    <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Active / Pending</span>
-                    <h4 className="text-xl font-black text-warning mt-0.5">
-                      {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase() && (o.orderStatus === 'pending' || o.orderStatus === 'accepted' || o.orderStatus === 'preparing' || o.orderStatus === 'ready')).length}
-                    </h4>
-                  </div>
-                </div>
-              </div>
-
-              {/* Two Column details layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                {/* Left Side: Owner & Address info (1/3) */}
-                <div className="space-y-6">
-                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-5">
-                    <h3 className="text-sm font-bold font-display text-text-primary border-b border-glass pb-3">Establishment Information</h3>
-                    
-                    <div className="space-y-4 text-xs font-semibold text-text-secondary">
-                      <div className="space-y-1">
-                        <span className="text-[9px] text-text-muted uppercase tracking-wider block">Manager/Owner:</span>
-                        <p className="text-text-primary font-bold text-sm">{selectedResProfile.ownerName}</p>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] text-text-muted uppercase tracking-wider block">Contact Information:</span>
-                        <div className="flex items-center gap-2 text-text-muted">
-                          <Mail size={13} className="text-primary" />
-                          <span className="text-[11px] truncate">{selectedResProfile.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-text-muted mt-1">
-                          <Bike size={13} className="text-primary" />
-                          <span className="text-[11px]">{selectedResProfile.phone}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <span className="text-[9px] text-text-muted uppercase tracking-wider block">Gourmet Address:</span>
-                        <p className="text-text-secondary leading-relaxed font-medium">{selectedResProfile.address}</p>
-                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Side: Dishes list & Recent Orders (2/3) */}
-                <div className="lg:col-span-2 space-y-6">
-                  
-                  {/* Gourmet Menu Selections with Dynamic Vendor Category Filter (Requirements 3, 4, 5, 6) */}
-                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-glass pb-3">
-                      <h3 className="text-sm font-bold font-display text-text-primary">Gourmet Menu Selections</h3>
-                      
-                      {/* Dynamic Category Dropdown (Requirements 3 & 5) */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-muted">Select Category:</span>
-                        <select
-                          value={selectedVendorCategory}
-                          onChange={(e) => setSelectedVendorCategory(e.target.value)}
-                          className="py-1.5 px-3 text-xs font-bold rounded-lg bg-bg-dark border border-glass text-text-secondary outline-none focus:border-primary/40 cursor-pointer"
-                        >
-                          {['All', ...Array.from(new Set(vendorMenuItems.map(item => item.category || 'General').filter(Boolean)))].map((cat: any) => (
-                            <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
-                          ))}
-                        </select>
+                {/* Profile statistics cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-primary/20 transition-all duration-300 shadow-sm">
+                    <div className="p-3 rounded-lg bg-primary/10 text-primary">
+                      <ClipboardList size={18} />
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Total Orders</span>
+                      <h4 className="text-xl font-black text-text-primary mt-0.5">
+                        {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).length}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-success/20 transition-all duration-300 shadow-sm">
+                    <div className="p-3 rounded-lg bg-success/10 text-success font-black flex items-center justify-center w-11 h-11 text-base">
+                      $
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Total Revenue</span>
+                      <h4 className="text-xl font-black text-success mt-0.5 font-display">
+                        ${orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).reduce((acc, o) => acc + (o.total || 0), 0).toFixed(2)}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-warning/20 transition-all duration-300 shadow-sm">
+                    <div className="p-3 rounded-lg bg-warning/10 text-warning">
+                      <Clock size={18} />
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Active / Pending</span>
+                      <h4 className="text-xl font-black text-warning mt-0.5">
+                        {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase() && (o.orderStatus === 'pending' || o.orderStatus === 'accepted' || o.orderStatus === 'preparing' || o.orderStatus === 'ready')).length}
+                      </h4>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Two Column details layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                  {/* Left Side: Owner & Address info (1/3) */}
+                  <div className="space-y-6">
+                    <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-5">
+                      <h3 className="text-sm font-bold font-display text-text-primary border-b border-glass pb-3">Establishment Information</h3>
+
+                      <div className="space-y-4 text-xs font-semibold text-text-secondary">
+                        <div className="space-y-1">
+                          <span className="text-[9px] text-text-muted uppercase tracking-wider block">Manager/Owner:</span>
+                          <p className="text-text-primary font-bold text-sm">{selectedResProfile.ownerName}</p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <span className="text-[9px] text-text-muted uppercase tracking-wider block">Contact Information:</span>
+                          <div className="flex items-center gap-2 text-text-muted">
+                            <Mail size={13} className="text-primary" />
+                            <span className="text-[11px] truncate">{selectedResProfile.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-text-muted mt-1">
+                            <Bike size={13} className="text-primary" />
+                            <span className="text-[11px]">{selectedResProfile.phone}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <span className="text-[9px] text-text-muted uppercase tracking-wider block">Gourmet Address:</span>
+                          <p className="text-text-secondary leading-relaxed font-medium">{selectedResProfile.address}</p>
+                        </div>
                       </div>
                     </div>
-                    
-                    {isVendorMenuLoading ? (
-                      <div className="py-8 text-center text-xs font-bold text-text-muted">Fetching real vendor menu...</div>
-                    ) : vendorMenuItems.length === 0 ? (
-                      <div className="py-8 text-center text-xs font-bold text-text-muted italic border border-dashed border-glass rounded-lg">
-                        No vendor menu products found for this establishment.
+                  </div>
+
+                  {/* Right Side: Dishes list & Recent Orders (2/3) */}
+                  <div className="lg:col-span-2 space-y-6">
+
+                    {/* Gourmet Menu Selections with Dynamic Vendor Category Filter (Requirements 3, 4, 5, 6) */}
+                    <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-glass pb-3">
+                        <h3 className="text-sm font-bold font-display text-text-primary">Gourmet Menu Selections</h3>
+
+                        {/* Dynamic Category Dropdown (Requirements 3 & 5) */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-text-muted">Select Category:</span>
+                          <select
+                            value={selectedVendorCategory}
+                            onChange={(e) => setSelectedVendorCategory(e.target.value)}
+                            className="py-1.5 px-3 text-xs font-bold rounded-lg bg-bg-dark border border-glass text-text-secondary outline-none focus:border-primary/40 cursor-pointer"
+                          >
+                            {['All', ...Array.from(new Set(vendorMenuItems.map(item => item.category || 'General').filter(Boolean)))].map((cat: any) => (
+                              <option key={cat} value={cat}>{cat === 'All' ? 'All Categories' : cat}</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {vendorMenuItems
-                          .filter(dish => selectedVendorCategory === 'All' || (dish.category || '').toLowerCase() === selectedVendorCategory.toLowerCase())
-                          .map(dish => (
-                            <div key={dish.id} className="flex gap-4 p-3.5 rounded-xl border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
-                              <img
-                                src={dish.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400&q=80'}
-                                alt={dish.name}
-                                className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
-                              />
-                              <div className="min-w-0 flex-grow flex flex-col justify-between">
-                                <div>
-                                  <div className="flex justify-between items-start gap-1">
-                                    <h4 className="text-xs font-bold text-text-primary truncate">{dish.name}</h4>
-                                    {/* Availability Badge (Requirement 6) */}
-                                    <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${
-                                      dish.isAvailable !== false && dish.status !== 'disabled' 
-                                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                                        : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                                    }`}>
-                                      {dish.isAvailable !== false && dish.status !== 'disabled' ? 'Available' : 'Out of Stock'}
-                                    </span>
+
+                      {isVendorMenuLoading ? (
+                        <div className="py-8 text-center text-xs font-bold text-text-muted">Fetching real vendor menu...</div>
+                      ) : vendorMenuItems.length === 0 ? (
+                        <div className="py-8 text-center text-xs font-bold text-text-muted italic border border-dashed border-glass rounded-lg">
+                          No vendor menu products found for this establishment.
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {vendorMenuItems
+                            .filter(dish => selectedVendorCategory === 'All' || (dish.category || '').toLowerCase() === selectedVendorCategory.toLowerCase())
+                            .map(dish => (
+                              <div key={dish.id} className="flex gap-4 p-3.5 rounded-xl border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
+                                <ItemImageOrIcon
+                                  image={dish.image}
+                                  name={dish.name}
+                                  category={dish.category}
+                                  isVeg={dish.isVeg}
+                                  className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
+                                  containerClassName="w-16 h-16 rounded-lg border border-glass shrink-0 shadow-sm"
+                                  iconSize={20}
+                                  showCategoryLabel={false}
+                                />
+                                <div className="min-w-0 flex-grow flex flex-col justify-between">
+                                  <div>
+                                    <div className="flex justify-between items-start gap-1">
+                                      <h4 className="text-xs font-bold text-text-primary truncate">{dish.name}</h4>
+                                      {/* Availability Badge (Requirement 6) */}
+                                      <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${dish.isAvailable !== false && dish.status !== 'disabled'
+                                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                        }`}>
+                                        {dish.isAvailable !== false && dish.status !== 'disabled' ? 'Available' : 'Out of Stock'}
+                                      </span>
+                                    </div>
+                                    <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
+                                      {dish.description || 'Vendor Menu Product'}
+                                    </p>
+
+                                    {/* Variant expand button if item has variants */}
+                                    {dish.variants && dish.variants.length > 0 && (
+                                      <div className="mt-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleAdminExpandVariants(dish.id)}
+                                          className="w-full flex items-center justify-between px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-bold transition-all cursor-pointer"
+                                        >
+                                          <span>{dish.variants.length} Variants Available</span>
+                                          <span>{expandedAdminItemIds[dish.id] ? '▲' : '▼'}</span>
+                                        </button>
+
+                                        {expandedAdminItemIds[dish.id] && (
+                                          <div className="mt-1.5 p-2 rounded-lg bg-bg-dark/90 border border-glass space-y-1">
+                                            {dish.variants.map((v: any, vIdx: number) => (
+                                              <div key={v.id || vIdx} className="flex items-center justify-between text-[10px] text-text-secondary border-b border-glass/30 last:border-0 py-0.5">
+                                                <span>{v.label || `${v.quantity} ${v.unit}`}</span>
+                                                <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
-                                  <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
-                                    {dish.description || 'Vendor Menu Product'}
-                                  </p>
-                                  
-                                  {/* Variant expand button if item has variants */}
-                                  {dish.variants && dish.variants.length > 0 && (
-                                    <div className="mt-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleAdminExpandVariants(dish.id)}
-                                        className="w-full flex items-center justify-between px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-bold transition-all cursor-pointer"
-                                      >
-                                        <span>{dish.variants.length} Variants Available</span>
-                                        <span>{expandedAdminItemIds[dish.id] ? '▲' : '▼'}</span>
-                                      </button>
 
-                                      {expandedAdminItemIds[dish.id] && (
-                                        <div className="mt-1.5 p-2 rounded-lg bg-bg-dark/90 border border-glass space-y-1">
-                                          {dish.variants.map((v: any, vIdx: number) => (
-                                            <div key={v.id || vIdx} className="flex items-center justify-between text-[10px] text-text-secondary border-b border-glass/30 last:border-0 py-0.5">
-                                              <span>{v.label || `${v.quantity} ${v.unit}`}</span>
-                                              <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
-                                            </div>
-                                          ))}
-                                        </div>
+                                  <div className="flex justify-between items-center mt-2.5">
+                                    {/* Price in ₹ (Requirement 6) */}
+                                    <span className="text-xs font-black font-display text-primary">
+                                      ₹{(dish.price || 0).toFixed(2)}
+                                    </span>
+
+                                    <div className="flex items-center gap-1.5">
+                                      {/* Category Name (Requirement 6) */}
+                                      <span className="text-[8px] font-bold text-text-muted uppercase bg-glass px-1.5 py-0.5 rounded border border-glass">
+                                        {dish.category || 'General'}
+                                      </span>
+
+                                      {/* Veg / Non-Veg badge (Requirement 6) */}
+                                      {(dish.isVeg !== undefined || dish.type) && (
+                                        <span className={`text-[8px] font-extrabold uppercase px-1 py-0.5 rounded border ${dish.isVeg || dish.type === 'veg' ? 'bg-success/10 border-success/20 text-success' : 'bg-error/10 border-error/20 text-error'
+                                          }`}>
+                                          {dish.isVeg || dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
+                                        </span>
                                       )}
                                     </div>
-                                  )}
-                                </div>
-
-                                <div className="flex justify-between items-center mt-2.5">
-                                  {/* Price in ₹ (Requirement 6) */}
-                                  <span className="text-xs font-black font-display text-primary">
-                                    ₹{(dish.price || 0).toFixed(2)}
-                                  </span>
-
-                                  <div className="flex items-center gap-1.5">
-                                    {/* Category Name (Requirement 6) */}
-                                    <span className="text-[8px] font-bold text-text-muted uppercase bg-glass px-1.5 py-0.5 rounded border border-glass">
-                                      {dish.category || 'General'}
-                                    </span>
-
-                                    {/* Veg / Non-Veg badge (Requirement 6) */}
-                                    {(dish.isVeg !== undefined || dish.type) && (
-                                      <span className={`text-[8px] font-extrabold uppercase px-1 py-0.5 rounded border ${
-                                        dish.isVeg || dish.type === 'veg' ? 'bg-success/10 border-success/20 text-success' : 'bg-error/10 border-error/20 text-error'
-                                      }`}>
-                                        {dish.isVeg || dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Recent orders */}
-                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-4">
-                    <h3 className="text-sm font-bold font-display text-text-primary border-b border-glass pb-3">Recent Orders Log</h3>
-                    
-                    {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).length === 0 ? (
-                      <p className="text-[10px] text-text-muted italic py-4 text-center">No orders logged from this establishment yet.</p>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="border-b border-glass text-text-muted font-bold tracking-wider uppercase text-[9px]">
-                              <th className="pb-2">Order ID</th>
-                              <th className="pb-2">Customer</th>
-                              <th className="pb-2">Rider</th>
-                              <th className="pb-2">Status</th>
-                              <th className="pb-2 text-right">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="font-semibold text-text-secondary">
-                            {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).slice(0, 4).map(o => (
-                              <tr key={o.id} className="border-b border-glass/30 last:border-b-0">
-                                <td className="py-2.5 font-mono text-primary text-[10px]">{o.id}</td>
-                                <td className="py-2.5 text-[11px]">{o.customer?.name || 'Guest'}</td>
-                                <td className="py-2.5 text-[10px] text-text-muted">{o.assignedRider || 'Unassigned'}</td>
-                                <td className="py-2.5">
-                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase border tracking-wider ${
-                                    o.orderStatus === 'delivered' ? 'bg-success/15 border-success/30 text-success' :
-                                    o.orderStatus === 'cancelled' ? 'bg-error/15 border-error/30 text-error' :
-                                    o.orderStatus === 'pending' ? 'bg-warning/15 border-warning/30 text-warning' :
-                                    'bg-primary/10 border-primary/20 text-primary'
-                                  }`}>
-                                    {o.orderStatus}
-                                  </span>
-                                </td>
-                                <td className="py-2.5 text-right font-black font-display text-primary text-[11px]">${(o.total || 0).toFixed(2)}</td>
-                              </tr>
                             ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
+                        </div>
+                      )}
+                    </div>
 
+                    {/* Recent orders */}
+                    <div className="glass-panel border border-glass rounded-xl p-6 shadow-sm space-y-4">
+                      <h3 className="text-sm font-bold font-display text-text-primary border-b border-glass pb-3">Recent Orders Log</h3>
+
+                      {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).length === 0 ? (
+                        <p className="text-[10px] text-text-muted italic py-4 text-center">No orders logged from this establishment yet.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="border-b border-glass text-text-muted font-bold tracking-wider uppercase text-[9px]">
+                                <th className="pb-2">Order ID</th>
+                                <th className="pb-2">Customer</th>
+                                <th className="pb-2">Rider</th>
+                                <th className="pb-2">Status</th>
+                                <th className="pb-2 text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody className="font-semibold text-text-secondary">
+                              {orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).slice(0, 4).map(o => (
+                                <tr key={o.id} className="border-b border-glass/30 last:border-b-0">
+                                  <td className="py-2.5 font-mono text-primary text-[10px]">{o.id}</td>
+                                  <td className="py-2.5 text-[11px]">{o.customer?.name || 'Guest'}</td>
+                                  <td className="py-2.5 text-[10px] text-text-muted">{o.assignedRider || 'Unassigned'}</td>
+                                  <td className="py-2.5">
+                                    <span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase border tracking-wider ${o.orderStatus === 'delivered' ? 'bg-success/15 border-success/30 text-success' :
+                                        o.orderStatus === 'cancelled' ? 'bg-error/15 border-error/30 text-error' :
+                                          o.orderStatus === 'pending' ? 'bg-warning/15 border-warning/30 text-warning' :
+                                            'bg-primary/10 border-primary/20 text-primary'
+                                      }`}>
+                                      {o.orderStatus}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 text-right font-black font-display text-primary text-[11px]">${(o.total || 0).toFixed(2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : isResFormOpen ? (
-            <div className="space-y-8 animate-fadeIn w-full">
-              {/* Single Full-Width Glass Panel combining header, back button, and form */}
-              <div className="glass-panel border border-glass rounded-2xl p-6 md:p-10 shadow-luxury w-full">
-                {/* Header section with title on left and Back button on right */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6 mb-8">
-                  <div>
-                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Shop Onboarding</span>
-                    <h2 className="text-2xl md:text-3xl font-black font-display text-primary tracking-tight">
-                      {editingRes ? 'Edit Shop / Store Profile' : 'Add New Merchant Shop / Store'}
-                    </h2>
-                    <p className="text-xs text-text-muted mt-1">Provide the required shop credentials and store details below.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { setIsResFormOpen(false); setEditingRes(null); clearResForm(); }}
-                    className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all duration-300"
-                  >
-                    <ArrowLeft size={14} />
-                    <span>Back to Shops & Stores</span>
-                  </button>
-                </div>
-
-                {resFormError && (
-                  <div className="p-4 rounded-xl bg-error/10 border border-error/20 text-error text-xs font-semibold mb-6 flex gap-2.5 items-center">
-                    <AlertTriangle size={16} className="shrink-0" />
-                    <span>{resFormError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={saveRestaurant} className="space-y-6 text-xs font-semibold text-text-secondary w-full">
-                  {/* Auto-Generated Unique Shop ID Banner */}
-                  <div className="p-4 rounded-xl bg-glass-subtle/50 border border-glass flex items-center justify-between gap-4">
+            ) : isResFormOpen ? (
+              <div className="space-y-8 animate-fadeIn w-full">
+                {/* Single Full-Width Glass Panel combining header, back button, and form */}
+                <div className="glass-panel border border-glass rounded-2xl p-6 md:p-10 shadow-luxury w-full">
+                  {/* Header section with title on left and Back button on right */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-glass pb-6 mb-8">
                     <div>
-                      <span className="text-[9px] font-extrabold uppercase tracking-widest text-text-muted block">Shop ID (Auto-Generated)</span>
-                      <span className="text-sm font-mono font-black text-primary tracking-wider mt-0.5 block">
-                        {editingRes ? editingRes.id : generateUniqueResId(restaurants)}
+                      <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Shop Onboarding</span>
+                      <h2 className="text-2xl md:text-3xl font-black font-display text-primary tracking-tight">
+                        {editingRes ? 'Edit Shop / Store Profile' : 'Add New Merchant Shop / Store'}
+                      </h2>
+                      <p className="text-xs text-text-muted mt-1">Provide the required shop credentials and store details below.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setIsResFormOpen(false); setEditingRes(null); clearResForm(); }}
+                      className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl border border-glass bg-glass hover:bg-glass-subtle hover:text-primary font-bold text-xs uppercase tracking-wider transition-all duration-300"
+                    >
+                      <ArrowLeft size={14} />
+                      <span>Back to Shops & Stores</span>
+                    </button>
+                  </div>
+
+                  {resFormError && (
+                    <div className="p-4 rounded-xl bg-error/10 border border-error/20 text-error text-xs font-semibold mb-6 flex gap-2.5 items-center">
+                      <AlertTriangle size={16} className="shrink-0" />
+                      <span>{resFormError}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={saveRestaurant} className="space-y-6 text-xs font-semibold text-text-secondary w-full">
+                    {/* Auto-Generated Unique Shop ID Banner */}
+                    <div className="p-4 rounded-xl bg-glass-subtle/50 border border-glass flex items-center justify-between gap-4">
+                      <div>
+                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-text-muted block">Shop ID (Auto-Generated)</span>
+                        <span className="text-sm font-mono font-black text-primary tracking-wider mt-0.5 block">
+                          {editingRes ? editingRes.id : generateUniqueResId(restaurants)}
+                        </span>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase bg-primary/10 border border-primary/20 text-primary">
+                        {editingRes ? 'Existing Record' : 'System Assigned'}
                       </span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase bg-primary/10 border border-primary/20 text-primary">
-                      {editingRes ? 'Existing Record' : 'System Assigned'}
-                    </span>
-                  </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Shop / Store Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={resForm.name}
-                        onChange={(e) => setResForm({ ...resForm, name: e.target.value })}
-                        placeholder="e.g. Vijaya Durga Sweets & Bakery"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Owner Full Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={resForm.ownerName}
-                        onChange={(e) => setResForm({ ...resForm, ownerName: e.target.value })}
-                        placeholder="e.g. Jean-Luc"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Email Address *</label>
-                      <input
-                        type="email"
-                        required
-                        value={resForm.email}
-                        onChange={(e) => setResForm({ ...resForm, email: e.target.value })}
-                        placeholder="e.g. contact@fork.com"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Phone Number *</label>
-                      <input
-                        type="text"
-                        required
-                        value={resForm.phone}
-                        onChange={(e) => setResForm({ ...resForm, phone: e.target.value })}
-                        placeholder="e.g. +1 555-0100"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {!editingRes ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Access Password *</label>
-                        <div className="relative">
-                          <input
-                            type={showResPassword ? 'text' : 'password'}
-                            required
-                            value={resForm.password}
-                            onChange={(e) => setResForm({ ...resForm, password: e.target.value })}
-                            placeholder="••••••••"
-                            className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 pr-10 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowResPassword(!showResPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors cursor-pointer"
-                          >
-                            {showResPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-
-                    <div className={!editingRes ? '' : 'md:col-span-2'}>
-                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Physical Address *</label>
-                      <input
-                        type="text"
-                        required
-                        value={resForm.address}
-                        onChange={(e) => setResForm({ ...resForm, address: e.target.value })}
-                        placeholder="e.g. 45 Rue de l'Étoile, Paris"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Establishment Cover Image with S3 upload */}
-                  <div className="space-y-3">
-                    <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Establishment Cover Image (S3 Upload / URL)</label>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                      <div className="md:col-span-2 space-y-3">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl border border-glass bg-glass-subtle hover:bg-glass hover:text-primary transition-all text-xs font-bold shrink-0">
-                            <UploadCloud size={16} />
-                            <span>{isResImageUploading ? 'Uploading to S3...' : 'Upload Image File'}</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={handleRestaurantImageFileChange}
-                              disabled={isResImageUploading}
-                            />
-                          </label>
-                          {resImageUploadSuccess && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase text-success bg-success/10 border border-success/20 px-2.5 py-1 rounded-md">
-                              <CheckCircle size={12} />
-                              Stored in S3
-                            </span>
-                          )}
-                        </div>
-
+                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Shop / Store Name *</label>
                         <input
                           type="text"
-                          value={resForm.image}
-                          onChange={(e) => setResForm({ ...resForm, image: e.target.value })}
-                          placeholder="Or paste S3 / Web image URL (https://...)"
+                          required
+                          value={resForm.name}
+                          onChange={(e) => setResForm({ ...resForm, name: e.target.value })}
+                          placeholder="e.g. Vijaya Durga Sweets & Bakery"
                           className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
                         />
                       </div>
 
-                      {/* Image Preview Card */}
-                      <div className="flex items-center gap-3 p-3 rounded-xl border border-glass/60 bg-bg-dark/40">
-                        {resForm.image ? (
-                          <img
-                            src={resForm.image}
-                            alt="Preview"
-                            className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
-                          />
-                        ) : (
-                          <div className="w-16 h-16 rounded-lg border border-dashed border-glass flex items-center justify-center text-text-muted text-[10px] shrink-0">
-                            No Image
+                      <div>
+                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Owner Full Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={resForm.ownerName}
+                          onChange={(e) => setResForm({ ...resForm, ownerName: e.target.value })}
+                          placeholder="e.g. Jean-Luc"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Email Address *</label>
+                        <input
+                          type="email"
+                          required
+                          value={resForm.email}
+                          onChange={(e) => setResForm({ ...resForm, email: e.target.value })}
+                          placeholder="e.g. contact@fork.com"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Phone Number *</label>
+                        <input
+                          type="text"
+                          required
+                          value={resForm.phone}
+                          onChange={(e) => setResForm({ ...resForm, phone: e.target.value })}
+                          placeholder="e.g. +1 555-0100"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {!editingRes ? (
+                        <div>
+                          <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Access Password *</label>
+                          <div className="relative">
+                            <input
+                              type={showResPassword ? 'text' : 'password'}
+                              required
+                              value={resForm.password}
+                              onChange={(e) => setResForm({ ...resForm, password: e.target.value })}
+                              placeholder="••••••••"
+                              className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 pr-10 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowResPassword(!showResPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors cursor-pointer"
+                            >
+                              {showResPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
                           </div>
-                        )}
-                        <div className="min-w-0 flex-grow">
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-text-muted block">Image Preview</span>
-                          <span className="text-[10px] text-text-secondary truncate block font-mono mt-0.5" title={resForm.image}>
-                            {resForm.image ? (resForm.image.startsWith('data:') ? 'Local Image File' : resForm.image) : 'Default fallback image will be used.'}
-                          </span>
+                        </div>
+                      ) : null}
+
+                      <div className={!editingRes ? '' : 'md:col-span-2'}>
+                        <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2">Physical Address *</label>
+                        <input
+                          type="text"
+                          required
+                          value={resForm.address}
+                          onChange={(e) => setResForm({ ...resForm, address: e.target.value })}
+                          placeholder="e.g. 45 Rue de l'Étoile, Paris"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Establishment Cover Image with S3 upload */}
+                    <div className="space-y-3">
+                      <label className="block text-[10px] font-bold text-text-muted uppercase tracking-widest">Establishment Cover Image (S3 Upload / URL)</label>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                        <div className="md:col-span-2 space-y-3">
+                          <div className="flex flex-wrap items-center gap-3">
+                            <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl border border-glass bg-glass-subtle hover:bg-glass hover:text-primary transition-all text-xs font-bold shrink-0">
+                              <UploadCloud size={16} />
+                              <span>{isResImageUploading ? 'Uploading to S3...' : 'Upload Image File'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleRestaurantImageFileChange}
+                                disabled={isResImageUploading}
+                              />
+                            </label>
+                            {resImageUploadSuccess && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase text-success bg-success/10 border border-success/20 px-2.5 py-1 rounded-md">
+                                <CheckCircle size={12} />
+                                Stored in S3
+                              </span>
+                            )}
+                          </div>
+
+                          <input
+                            type="text"
+                            value={resForm.image}
+                            onChange={(e) => setResForm({ ...resForm, image: e.target.value })}
+                            placeholder="Or paste S3 / Web image URL (https://...)"
+                            className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-4 py-3 rounded-xl outline-none transition-all placeholder-text-muted/40 font-medium text-sm"
+                          />
+                        </div>
+
+                        {/* Image Preview Card */}
+                        <div className="flex items-center gap-3 p-3 rounded-xl border border-glass/60 bg-bg-dark/40">
+                          {resForm.image ? (
+                            <img
+                              src={resForm.image}
+                              alt="Preview"
+                              className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg border border-dashed border-glass flex items-center justify-center text-text-muted text-[10px] shrink-0">
+                              No Image
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-grow">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-text-muted block">Image Preview</span>
+                            <span className="text-[10px] text-text-secondary truncate block font-mono mt-0.5" title={resForm.image}>
+                              {resForm.image ? (resForm.image.startsWith('data:') ? 'Local Image File' : resForm.image) : 'Default fallback image will be used.'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="pt-6 border-t border-glass flex flex-col sm:flex-row gap-4 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => { setIsResFormOpen(false); setEditingRes(null); clearResForm(); }}
-                      className="px-6 py-3 rounded-xl border border-glass bg-glass-subtle hover:bg-glass text-xs font-bold transition-all uppercase tracking-wider text-text-secondary order-2 sm:order-1"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-8 py-3 bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest rounded-xl hover:shadow-lg transition-all order-1 sm:order-2"
-                    >
-                      Save Details
-                    </button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-8 animate-fadeIn">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Merchant Partners & Stores</span>
-                  <h1 className="text-3xl font-black font-display text-primary tracking-tight">Manage Merchant Shops & Stores</h1>
+                    <div className="pt-6 border-t border-glass flex flex-col sm:flex-row gap-4 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => { setIsResFormOpen(false); setEditingRes(null); clearResForm(); }}
+                        className="px-6 py-3 rounded-xl border border-glass bg-glass-subtle hover:bg-glass text-xs font-bold transition-all uppercase tracking-wider text-text-secondary order-2 sm:order-1"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-8 py-3 bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest rounded-xl hover:shadow-lg transition-all order-1 sm:order-2"
+                      >
+                        Save Details
+                      </button>
+                    </div>
+                  </form>
                 </div>
-                <button
-                  onClick={() => { clearResForm(); setEditingRes(null); setIsResFormOpen(true); }}
-                  className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  <PlusCircle size={16} />
-                  <span>Add Shop / Store</span>
-                </button>
               </div>
-
-              {/* Filter Controls Bar */}
-              <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
-                <div className="relative w-full sm:w-72 md:w-96 shrink-0">
-                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                  <input
-                    type="text"
-                    placeholder="Search shops, stores, or owner..."
-                    value={resSearch}
-                    onChange={(e) => setResSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none transition-all focus:ring-1 focus:ring-primary/20"
-                  />
-                </div>
-
-                {/* View Mode Toggle Controls */}
-                <div className="flex items-center gap-1.5 bg-glass-subtle border border-glass p-1 rounded-lg shrink-0 self-end sm:self-auto">
+            ) : (
+              <div className="space-y-8 animate-fadeIn">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Merchant Partners & Stores</span>
+                    <h1 className="text-3xl font-black font-display text-primary tracking-tight">Manage Merchant Shops & Stores</h1>
+                  </div>
                   <button
-                    onClick={() => setResViewMode('grid')}
-                    className={`p-1.5 rounded-md transition-all ${resViewMode === 'grid' ? 'bg-primary text-black' : 'text-text-muted hover:text-text-primary'}`}
-                    title="Grid View"
+                    onClick={() => { clearResForm(); setEditingRes(null); setIsResFormOpen(true); }}
+                    className="self-start sm:self-auto flex items-center gap-2 px-5 py-3 rounded-xl bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
                   >
-                    <LayoutGrid size={14} />
-                  </button>
-                  <button
-                    onClick={() => setResViewMode('table')}
-                    className={`p-1.5 rounded-md transition-all ${resViewMode === 'table' ? 'bg-primary text-black' : 'text-text-muted hover:text-text-primary'}`}
-                    title="Table View"
-                  >
-                    <List size={14} />
+                    <PlusCircle size={16} />
+                    <span>Add Shop / Store</span>
                   </button>
                 </div>
-              </div>
 
-              {/* Restaurants Display */}
-              {filteredRestaurants.length === 0 ? (
-                <div className="py-16 px-4 border border-dashed border-glass rounded-xl text-center flex flex-col items-center justify-center">
-                  <Store size={36} className="text-text-muted mb-3" />
-                  <h3 className="text-sm font-bold text-text-primary">No Establishments Found</h3>
-                  <p className="text-xs text-text-muted mt-1 max-w-sm">No partner restaurants match your current search queries or filters.</p>
+                {/* Filter Controls Bar */}
+                <div className="glass-panel border border-glass rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-md">
+                  <div className="relative w-full sm:w-72 md:w-96 shrink-0">
+                    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                    <input
+                      type="text"
+                      placeholder="Search shops, stores, or owner..."
+                      value={resSearch}
+                      onChange={(e) => setResSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 text-xs font-semibold rounded-lg bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none transition-all focus:ring-1 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  {/* View Mode Toggle Controls */}
+                  <div className="flex items-center gap-1.5 bg-glass-subtle border border-glass p-1 rounded-lg shrink-0 self-end sm:self-auto">
+                    <button
+                      onClick={() => setResViewMode('grid')}
+                      className={`p-1.5 rounded-md transition-all ${resViewMode === 'grid' ? 'bg-primary text-black' : 'text-text-muted hover:text-text-primary'}`}
+                      title="Grid View"
+                    >
+                      <LayoutGrid size={14} />
+                    </button>
+                    <button
+                      onClick={() => setResViewMode('table')}
+                      className={`p-1.5 rounded-md transition-all ${resViewMode === 'table' ? 'bg-primary text-black' : 'text-text-muted hover:text-text-primary'}`}
+                      title="Table View"
+                    >
+                      <List size={14} />
+                    </button>
+                  </div>
                 </div>
-              ) : resViewMode === 'table' ? (
-                <div className="glass-panel border border-glass rounded-xl overflow-hidden shadow-luxury">
-                  {/* Desktop View Table */}
-                  <div className="hidden lg:block overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-glass text-text-muted font-bold tracking-wider uppercase text-[10px] bg-bg-darkSec/30">
-                          <th className="p-4 font-semibold">Image</th>
-                          <th className="p-4 font-semibold">Restaurant Name</th>
-                          <th className="p-4 font-semibold">Owner Info</th>
-                          <th className="p-4 font-semibold">Address</th>
-                          <th className="p-4 font-semibold text-center">Status</th>
-                          <th className="p-4 font-semibold text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-glass font-medium">
-                        {filteredRestaurants.map((res) => (
-                          <tr key={res.id} className="hover:bg-glass-subtle transition-colors">
-                            <td className="p-4 shrink-0 cursor-pointer" onClick={() => setSelectedResProfile(res)}>
-                              <img
-                                src={res.image}
-                                alt={res.name}
-                                className="w-14 h-14 rounded-lg object-cover border border-glass shadow-sm"
-                              />
-                            </td>
-                            <td className="p-4">
-                              <h4 className="text-sm font-bold text-text-primary leading-tight hover:text-primary transition-colors cursor-pointer" onClick={() => setSelectedResProfile(res)}>{res.name}</h4>
-                            </td>
-                            <td className="p-4">
-                              <p className="text-text-primary text-[12px] font-bold">{res.ownerName}</p>
-                              <span className="text-[10px] text-text-muted leading-relaxed block">{res.phone}</span>
-                              <span className="text-[10px] text-text-muted truncate block max-w-[150px]">{res.email}</span>
-                            </td>
-                            <td className="p-4 text-text-secondary text-[11px] max-w-[180px] leading-relaxed truncate" title={res.address}>
-                              {res.address}
-                            </td>
-                            <td className="p-4">
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => toggleRestaurantStatus(res.id)}
-                                  className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${
-                                    (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-success' : 'bg-rose-600/80 border border-rose-500/40'
-                                  }`}
-                                >
-                                  <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                                    (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'translate-x-3.5' : 'translate-x-0'
-                                  }`} />
-                                </button>
-                                <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
-                                  (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'text-success' : 'text-rose-400'
-                                }`}>
-                                  {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'active' : 'closed'}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="p-4 text-right">
-                              <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => setSelectedResProfile(res)}
-                                  className="p-2 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-muted"
-                                  title="View Restaurant Profile"
-                                >
-                                  <ArrowRight size={12} />
-                                </button>
-                                <button
-                                  onClick={() => { setResForm(res); setEditingRes(res); setIsResFormOpen(true); }}
-                                  className="p-2 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-muted"
-                                  title="Edit Restaurant"
-                                >
-                                  <Edit2 size={12} />
-                                </button>
-                                <button
-                                  onClick={() => deleteRestaurant(res.id)}
-                                  className="p-2 rounded bg-glass border border-glass hover:border-error/40 hover:text-error transition-all text-text-muted"
-                                  title="Delete Restaurant"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </td>
+
+                {/* Restaurants Display */}
+                {filteredRestaurants.length === 0 ? (
+                  <div className="py-16 px-4 border border-dashed border-glass rounded-xl text-center flex flex-col items-center justify-center">
+                    <Store size={36} className="text-text-muted mb-3" />
+                    <h3 className="text-sm font-bold text-text-primary">No Establishments Found</h3>
+                    <p className="text-xs text-text-muted mt-1 max-w-sm">No partner restaurants match your current search queries or filters.</p>
+                  </div>
+                ) : resViewMode === 'table' ? (
+                  <div className="glass-panel border border-glass rounded-xl overflow-hidden shadow-luxury">
+                    {/* Desktop View Table */}
+                    <div className="hidden lg:block overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-glass text-text-muted font-bold tracking-wider uppercase text-[10px] bg-bg-darkSec/30">
+                            <th className="p-4 font-semibold">Image</th>
+                            <th className="p-4 font-semibold">Restaurant Name</th>
+                            <th className="p-4 font-semibold">Owner Info</th>
+                            <th className="p-4 font-semibold">Address</th>
+                            <th className="p-4 font-semibold text-center">Status</th>
+                            <th className="p-4 font-semibold text-right">Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-glass font-medium">
+                          {filteredRestaurants.map((res) => (
+                            <tr key={res.id} className="hover:bg-glass-subtle transition-colors">
+                              <td className="p-4 shrink-0 cursor-pointer" onClick={() => setSelectedResProfile(res)}>
+                                <img
+                                  src={res.image}
+                                  alt={res.name}
+                                  className="w-14 h-14 rounded-lg object-cover border border-glass shadow-sm"
+                                />
+                              </td>
+                              <td className="p-4">
+                                <h4 className="text-sm font-bold text-text-primary leading-tight hover:text-primary transition-colors cursor-pointer" onClick={() => setSelectedResProfile(res)}>{res.name}</h4>
+                              </td>
+                              <td className="p-4">
+                                <p className="text-text-primary text-[12px] font-bold">{res.ownerName}</p>
+                                <span className="text-[10px] text-text-muted leading-relaxed block">{res.phone}</span>
+                                <span className="text-[10px] text-text-muted truncate block max-w-[150px]">{res.email}</span>
+                              </td>
+                              <td className="p-4 text-text-secondary text-[11px] max-w-[180px] leading-relaxed truncate" title={res.address}>
+                                {res.address}
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => toggleRestaurantStatus(res.id)}
+                                    className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-success' : 'bg-rose-600/80 border border-rose-500/40'
+                                      }`}
+                                  >
+                                    <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'translate-x-3.5' : 'translate-x-0'
+                                      }`} />
+                                  </button>
+                                  <span className={`text-[10px] font-extrabold uppercase tracking-wider ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'text-success' : 'text-rose-400'
+                                    }`}>
+                                    {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'active' : 'closed'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="p-4 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => setSelectedResProfile(res)}
+                                    className="p-2 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-muted"
+                                    title="View Restaurant Profile"
+                                  >
+                                    <ArrowRight size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => { setResForm(res); setEditingRes(res); setIsResFormOpen(true); }}
+                                    className="p-2 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-muted"
+                                    title="Edit Restaurant"
+                                  >
+                                    <Edit2 size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteRestaurant(res.id)}
+                                    className="p-2 rounded bg-glass border border-glass hover:border-error/40 hover:text-error transition-all text-text-muted"
+                                    title="Delete Restaurant"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
-                  {/* Mobile View Card List */}
-                  <div className="grid grid-cols-1 gap-4 lg:hidden p-4 bg-bg-darkSec/20">
+                    {/* Mobile View Card List */}
+                    <div className="grid grid-cols-1 gap-4 lg:hidden p-4 bg-bg-darkSec/20">
+                      {filteredRestaurants.map((res) => (
+                        <div key={res.id} className="p-4 rounded-xl border border-glass bg-glass-subtle flex flex-col gap-4 relative hover:border-primary/20 transition-all">
+                          <div className="flex gap-4 items-start">
+                            <img
+                              src={res.image}
+                              alt={res.name}
+                              className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm cursor-pointer"
+                              onClick={() => setSelectedResProfile(res)}
+                            />
+                            <div className="min-w-0 flex-grow flex-1">
+                              <h4 className="text-sm font-bold text-text-primary leading-tight truncate cursor-pointer hover:text-primary transition-colors" onClick={() => setSelectedResProfile(res)}>{res.name}</h4>
+                            </div>
+                          </div>
+
+                          <div className="pt-3 border-t border-glass/40 grid grid-cols-2 gap-2 text-[10px]">
+                            <div>
+                              <span className="text-text-muted font-semibold uppercase tracking-wider block">Owner:</span>
+                              <span className="text-text-secondary font-bold">{res.ownerName}</span>
+                            </div>
+                            <div>
+                              <span className="text-text-muted font-semibold uppercase tracking-wider block">Phone:</span>
+                              <span className="text-text-secondary font-bold">{res.phone}</span>
+                            </div>
+                          </div>
+
+                          <div className="text-[10px] border-t border-glass/40 pt-3">
+                            <span className="text-text-muted font-semibold uppercase tracking-wider block">Address:</span>
+                            <span className="text-text-secondary font-medium leading-relaxed block">{res.address}</span>
+                          </div>
+
+                          <div className="pt-3 border-t border-glass/40 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleRestaurantStatus(res.id)}
+                                className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-success' : 'bg-rose-600/80 border border-rose-500/40'
+                                  }`}
+                              >
+                                <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'translate-x-3.5' : 'translate-x-0'
+                                  }`} />
+                              </button>
+                              <span className={`text-[10px] font-extrabold uppercase tracking-wider ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'text-success' : 'text-rose-400'
+                                }`}>
+                                {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'active' : 'closed'}
+                              </span>
+                            </div>
+
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setSelectedResProfile(res)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-secondary"
+                              >
+                                <ArrowRight size={10} />
+                                <span>View</span>
+                              </button>
+                              <button
+                                onClick={() => { setResForm(res); setEditingRes(res); setIsResFormOpen(true); }}
+                                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-secondary"
+                              >
+                                <Edit2 size={10} />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => deleteRestaurant(res.id)}
+                                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded bg-glass border border-glass hover:border-error/40 hover:text-error transition-all text-text-secondary"
+                              >
+                                <Trash2 size={10} />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
                     {filteredRestaurants.map((res) => (
-                      <div key={res.id} className="p-4 rounded-xl border border-glass bg-glass-subtle flex flex-col gap-4 relative hover:border-primary/20 transition-all">
-                        <div className="flex gap-4 items-start">
+                      <div key={res.id} className="glass-panel border border-glass bg-bg-darkSec/10 rounded-xl overflow-hidden shadow-luxury flex flex-col justify-between group hover:border-primary/40 transition-all duration-300">
+                        <div className="relative h-32 overflow-hidden bg-bg-darkSec/20 cursor-pointer" onClick={() => setSelectedResProfile(res)}>
                           <img
                             src={res.image}
                             alt={res.name}
-                            className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm cursor-pointer"
-                            onClick={() => setSelectedResProfile(res)}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
-                          <div className="min-w-0 flex-grow flex-1">
-                            <h4 className="text-sm font-bold text-text-primary leading-tight truncate cursor-pointer hover:text-primary transition-colors" onClick={() => setSelectedResProfile(res)}>{res.name}</h4>
-                          </div>
-                        </div>
-
-                        <div className="pt-3 border-t border-glass/40 grid grid-cols-2 gap-2 text-[10px]">
-                          <div>
-                            <span className="text-text-muted font-semibold uppercase tracking-wider block">Owner:</span>
-                            <span className="text-text-secondary font-bold">{res.ownerName}</span>
-                          </div>
-                          <div>
-                            <span className="text-text-muted font-semibold uppercase tracking-wider block">Phone:</span>
-                            <span className="text-text-secondary font-bold">{res.phone}</span>
-                          </div>
-                        </div>
-
-                        <div className="text-[10px] border-t border-glass/40 pt-3">
-                          <span className="text-text-muted font-semibold uppercase tracking-wider block">Address:</span>
-                          <span className="text-text-secondary font-medium leading-relaxed block">{res.address}</span>
-                        </div>
-
-                        <div className="pt-3 border-t border-glass/40 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => toggleRestaurantStatus(res.id)}
-                              className={`w-8 h-4.5 rounded-full p-0.5 transition-colors duration-300 flex items-center ${
-                                (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-success' : 'bg-rose-600/80 border border-rose-500/40'
-                              }`}
-                            >
-                              <div className={`w-3.5 h-3.5 rounded-full bg-white transition-transform duration-300 shadow-sm ${
-                                (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'translate-x-3.5' : 'translate-x-0'
-                              }`} />
-                            </button>
-                            <span className={`text-[10px] font-extrabold uppercase tracking-wider ${
-                              (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'text-success' : 'text-rose-400'
-                            }`}>
-                              {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'active' : 'closed'}
+                          <div className="absolute top-3 right-3">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border tracking-wider backdrop-blur-md shadow-md ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false
+                                ? 'bg-emerald-500/90 border-emerald-400/40 text-white'
+                                : 'bg-rose-600/90 border-rose-500/40 text-white'
+                              }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-white animate-pulse' : 'bg-white/60'
+                                }`} />
+                              {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'ACTIVE' : 'CLOSED'}
                             </span>
                           </div>
+                        </div>
 
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setSelectedResProfile(res)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-secondary"
-                            >
-                              <ArrowRight size={10} />
-                              <span>View</span>
-                            </button>
+                        <div className="p-4 flex-grow space-y-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-text-primary leading-tight hover:text-primary transition-colors cursor-pointer truncate" title={res.name} onClick={() => setSelectedResProfile(res)}>
+                              {res.name}
+                            </h4>
+                          </div>
+
+                          <div className="pt-2.5 border-t border-glass/40 space-y-1.5 text-[10px] font-semibold text-text-secondary">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <UserCheck size={11} className="text-primary/70 shrink-0" />
+                              <span className="truncate">{res.ownerName}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 truncate">
+                              <MapPin size={11} className="text-primary/70 shrink-0" />
+                              <span className="truncate" title={res.address}>{res.address}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="px-4 pb-4 pt-2.5 border-t border-glass/30 bg-bg-darkSec/10 flex items-center justify-between">
+                          <button
+                            onClick={() => setSelectedResProfile(res)}
+                            className="px-2.5 py-1.5 rounded-lg bg-glass border border-glass hover:border-primary/40 hover:bg-glass-subtle transition-all text-[9px] font-extrabold uppercase tracking-wider text-text-secondary hover:text-primary flex items-center gap-1"
+                          >
+                            <span>View Profile</span>
+                            <ArrowRight size={10} />
+                          </button>
+
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => { setResForm(res); setEditingRes(res); setIsResFormOpen(true); }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-secondary"
+                              className="p-1.5 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-muted"
+                              title="Edit Restaurant"
                             >
-                              <Edit2 size={10} />
-                              <span>Edit</span>
+                              <Edit2 size={11} />
                             </button>
                             <button
                               onClick={() => deleteRestaurant(res.id)}
-                              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded bg-glass border border-glass hover:border-error/40 hover:text-error transition-all text-text-secondary"
+                              className="p-1.5 rounded bg-glass border border-glass hover:border-error/40 hover:text-error transition-all text-text-muted"
+                              title="Delete Restaurant"
                             >
-                              <Trash2 size={10} />
-                              <span>Delete</span>
+                              <Trash2 size={11} />
                             </button>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
+                )}
+              </div>
+            )
+          )}
+
+          {/* ==================================================== */}
+          {/* ORDERS TAB (Matching Vendor Dashboard Layout) */}
+          {/* ==================================================== */}
+          {activeTab === 'orders' && (
+            <div className="space-y-6 animate-fadeIn w-full">
+              <div className="border-b border-glass pb-6">
+                <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Logistics Management</span>
+                <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Active Customer Orders</h1>
+                <p className="text-xs text-text-muted mt-1">Track customer orders across all stores, filter by status, and assign delivery partners.</p>
+              </div>
+
+              {/* Filter Controls & 4 Simplified Tabs */}
+              <div className="glass-panel border border-glass rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center justify-between shadow-md">
+                <div className="relative w-full sm:w-80">
+                  <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    type="text"
+                    placeholder="Search Order ID, Customer, or Store..."
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 text-[15px] sm:text-xs font-semibold rounded-xl bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none"
+                  />
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-5">
-                  {filteredRestaurants.map((res) => (
-                    <div key={res.id} className="glass-panel border border-glass bg-bg-darkSec/10 rounded-xl overflow-hidden shadow-luxury flex flex-col justify-between group hover:border-primary/40 transition-all duration-300">
-                      <div className="relative h-32 overflow-hidden bg-bg-darkSec/20 cursor-pointer" onClick={() => setSelectedResProfile(res)}>
-                        <img 
-                          src={res.image} 
-                          alt={res.name} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        />
-                        <div className="absolute top-3 right-3">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase border tracking-wider backdrop-blur-md shadow-md ${
-                            (res.status === 'active' || res.status === 'open') && res.isOpen !== false
-                              ? 'bg-emerald-500/90 border-emerald-400/40 text-white'
-                              : 'bg-rose-600/90 border-rose-500/40 text-white'
+
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1.5 sm:pb-0 scrollbar-none">
+                  {['All', 'Completed', 'Rejected', 'Order History'].map(st => {
+                    const count = getTabOrderCount(st);
+                    const isActive = orderStatusFilter === st;
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setOrderStatusFilter(st)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${isActive
+                          ? 'bg-primary text-black font-black shadow-sm'
+                          : 'bg-glass text-text-secondary hover:text-primary border border-glass/60'
+                          }`}
+                      >
+                        <span>{st}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-black/20 text-black' : 'bg-primary/20 text-primary'
                           }`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              (res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'bg-white animate-pulse' : 'bg-white/60'
-                            }`} />
-                            {(res.status === 'active' || res.status === 'open') && res.isOpen !== false ? 'ACTIVE' : 'CLOSED'}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="p-4 flex-grow space-y-3">
-                        <div>
-                          <h4 className="text-sm font-bold text-text-primary leading-tight hover:text-primary transition-colors cursor-pointer truncate" title={res.name} onClick={() => setSelectedResProfile(res)}>
-                            {res.name}
-                          </h4>
-                        </div>
-
-                        <div className="pt-2.5 border-t border-glass/40 space-y-1.5 text-[10px] font-semibold text-text-secondary">
-                          <div className="flex items-center gap-1.5 truncate">
-                            <UserCheck size={11} className="text-primary/70 shrink-0" />
-                            <span className="truncate">{res.ownerName}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5 truncate">
-                            <MapPin size={11} className="text-primary/70 shrink-0" />
-                            <span className="truncate" title={res.address}>{res.address}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="px-4 pb-4 pt-2.5 border-t border-glass/30 bg-bg-darkSec/10 flex items-center justify-between">
-                        <button
-                          onClick={() => setSelectedResProfile(res)}
-                          className="px-2.5 py-1.5 rounded-lg bg-glass border border-glass hover:border-primary/40 hover:bg-glass-subtle transition-all text-[9px] font-extrabold uppercase tracking-wider text-text-secondary hover:text-primary flex items-center gap-1"
-                        >
-                          <span>View Profile</span>
-                          <ArrowRight size={10} />
-                        </button>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => { setResForm(res); setEditingRes(res); setIsResFormOpen(true); }}
-                            className="p-1.5 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all text-text-muted"
-                            title="Edit Restaurant"
-                          >
-                            <Edit2 size={11} />
-                          </button>
-                          <button
-                            onClick={() => deleteRestaurant(res.id)}
-                            className="p-1.5 rounded bg-glass border border-glass hover:border-error/40 hover:text-error transition-all text-text-muted"
-                            title="Delete Restaurant"
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
-            </div>
-          )
-        )}
-
-        {/* ==================================================== */}
-        {/* ORDERS TAB (Matching Vendor Dashboard Layout) */}
-        {/* ==================================================== */}
-        {activeTab === 'orders' && (
-          <div className="space-y-6 animate-fadeIn w-full">
-            <div className="border-b border-glass pb-6">
-              <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Logistics Management</span>
-              <h1 className="text-2xl sm:text-3xl font-black font-display text-primary tracking-tight">Active Customer Orders</h1>
-              <p className="text-xs text-text-muted mt-1">Track customer orders across all stores, filter by status, and assign delivery partners.</p>
-            </div>
-
-            {/* Filter Controls & 4 Simplified Tabs */}
-            <div className="glass-panel border border-glass rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row gap-3.5 sm:gap-4 items-center justify-between shadow-md">
-              <div className="relative w-full sm:w-80">
-                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  type="text"
-                  placeholder="Search Order ID, Customer, or Store..."
-                  value={orderSearch}
-                  onChange={(e) => setOrderSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 text-[15px] sm:text-xs font-semibold rounded-xl bg-bg-dark border border-glass focus:border-primary/40 text-text-primary placeholder-text-muted/60 outline-none"
-                />
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1.5 sm:pb-0 scrollbar-none">
-                {['All', 'Completed', 'Rejected', 'Order History'].map(st => {
-                  const count = getTabOrderCount(st);
-                  const isActive = orderStatusFilter === st;
-                  return (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setOrderStatusFilter(st)}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${isActive
-                        ? 'bg-primary text-black font-black shadow-sm'
-                        : 'bg-glass text-text-secondary hover:text-primary border border-glass/60'
-                        }`}
-                    >
-                      <span>{st}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-black/20 text-black' : 'bg-primary/20 text-primary'
-                        }`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ORDERS ACCORDION CARDS LIST */}
-            {filteredOrders.length === 0 ? (
-              <div className="text-center py-16 glass-panel border border-glass rounded-2xl p-8 max-w-md mx-auto space-y-3">
-                <ClipboardList size={40} className="mx-auto text-text-muted opacity-50" />
-                <h3 className="font-bold text-base text-text-primary font-display">No Orders Found</h3>
-                <p className="text-xs text-text-muted">
-                  No customer orders match your filter configuration.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4 w-full">
-                {filteredOrders.map(o => {
-                  const orderId = o.id || o.orderId;
-                  const status = (o.orderStatus || o.status || 'Pending').toString();
-                  const statusLower = status.toLowerCase();
-
-                  const isExpanded = !!expandedAdminOrdersMap[orderId];
-
-                  let itemsList: any[] = [];
-                  if (Array.isArray(o.items)) {
-                    itemsList = o.items;
-                  } else if (typeof o.items === 'string' && o.items.trim().startsWith('[')) {
-                    try {
-                      itemsList = JSON.parse(o.items);
-                    } catch (e) {}
-                  }
-
-                  const totalItemsQty = itemsList.length > 0
-                    ? itemsList.reduce((acc: number, it: any) => acc + Number(it.quantity || it.qty || 1), 0)
-                    : 1;
-
-                  const customerName = o.customer?.name || o.customerName || 'Valued Customer';
-                  const customerPhone = o.customer?.phone || o.customerPhone || '';
-                  const customerAddress = o.customer?.address || o.customerAddress || 'No address specified';
-                  const restaurantName = o.restaurant || o.restaurantName || 'Partner Store';
-                  const totalAmt = Number(o.total || o.totalAmount || 0);
-
-                  return (
-                    <motion.div
-                      key={orderId}
-                      layout
-                      className="glass-panel border border-glass rounded-2xl overflow-hidden shadow-md hover:border-primary/30 transition-all text-left"
-                    >
-                      {/* CARD HEADER ROW */}
-                      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bg-darkSec/20">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => toggleAdminOrderExpand(orderId)}
-                            className="p-1.5 rounded-xl bg-glass border border-glass text-text-secondary hover:text-primary transition-all cursor-pointer shrink-0"
-                            title="Toggle order item details"
-                          >
-                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                          </button>
-
-                          <div className="min-w-0 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="font-mono font-black text-sm text-primary tracking-tight">
-                                #{orderId}
-                              </span>
-
-                              <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${
-                                statusLower === 'completed' || statusLower === 'delivered'
-                                  ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
-                                  : statusLower === 'rejected' || statusLower === 'cancelled'
-                                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
-                                  : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
-                              }`}>
-                                {status}
-                              </span>
-
-                              <span className="text-[11px] text-text-muted font-mono flex items-center gap-1">
-                                <Clock size={11} />
-                                <span>
-                                  {o.createdAt || o.createdTime ? new Date(o.createdAt || o.createdTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
-                                </span>
-                              </span>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary font-semibold">
-                              <span className="flex items-center gap-1 text-text-primary font-bold">
-                                <User size={13} className="text-primary" />
-                                <span>{customerName}</span>
-                              </span>
-
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-primary font-extrabold text-[11px]">
-                                <Store size={12} />
-                                <span>{restaurantName}</span>
-                              </span>
-
-                              <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 text-[11px] font-mono">
-                                🛒 {totalItemsQty} item{totalItemsQty !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* RIGHT HEADER ACTIONS: TOTAL AMOUNT, RIDER SELECTOR & TOGGLE */}
-                        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 border-glass/40 pt-3 sm:pt-0">
-                          <div className="text-left sm:text-right shrink-0">
-                            <span className="text-[10px] uppercase font-bold text-text-muted block tracking-wider">Total Order</span>
-                            <span className="text-base sm:text-lg font-black text-primary font-display">
-                              ₹{totalAmt.toFixed(2)}
-                            </span>
-                          </div>
-
-                          {/* Rider Assignment Selector */}
-                          <div className="flex items-center gap-1.5 bg-bg-dark border border-glass px-2.5 py-1.5 rounded-xl shadow-xs">
-                            <Bike size={14} className="text-primary shrink-0" />
-                            <select
-                              value={o.assignedRider || 'Unassigned'}
-                              onChange={(e) => handleAssignRider(orderId, e.target.value)}
-                              className="bg-transparent text-xs font-extrabold text-text-primary outline-none cursor-pointer"
-                            >
-                              <option value="Unassigned">Assign Delivery Rider...</option>
-                              {allDeliveryRiders.map((r) => (
-                                <option key={r} value={r}>{r}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => toggleAdminOrderExpand(orderId)}
-                            className="px-3 py-1.5 rounded-xl bg-glass border border-glass/80 hover:border-primary/40 text-text-primary hover:text-primary text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
-                          >
-                            <span>{isExpanded ? 'Hide Details' : 'View Items'}</span>
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* EXPANDABLE ACCORDION BODY */}
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="border-t border-glass p-4 sm:p-5 space-y-4 bg-bg-darkSec/10"
-                          >
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Customer & Address Details */}
-                              <div className="space-y-2 bg-glass/40 border border-glass p-3.5 rounded-xl text-left">
-                                <span className="text-[10px] font-black uppercase text-primary tracking-widest block">
-                                  Customer & Delivery Details
-                                </span>
-                                <div className="space-y-1 text-xs text-text-secondary font-semibold">
-                                  <p className="font-bold text-text-primary flex items-center gap-1.5">
-                                    <User size={13} className="text-primary shrink-0" />
-                                    <span>{customerName}</span>
-                                  </p>
-                                  {customerPhone && (
-                                    <a
-                                      href={`tel:${customerPhone}`}
-                                      className="text-xs text-primary font-extrabold hover:underline flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20 w-fit"
-                                    >
-                                      <Phone size={12} />
-                                      <span>{customerPhone}</span>
-                                    </a>
-                                  )}
-                                  <p className="text-xs font-semibold text-text-secondary flex items-start gap-1.5 leading-relaxed pt-1">
-                                    <MapPin size={14} className="text-primary shrink-0 mt-0.5" />
-                                    <span>{customerAddress}</span>
-                                  </p>
-                                </div>
-                              </div>
-
-                              {/* Order & Payment Summary */}
-                              <div className="space-y-2 bg-glass/40 border border-glass p-3.5 rounded-xl text-left flex flex-col justify-between">
-                                <div>
-                                  <span className="text-[10px] font-black uppercase text-primary tracking-widest block mb-1">
-                                    Order Summary & Payment Status
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-text-muted text-xs font-bold">Payment Status:</span>
-                                    <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase border ${
-                                      o.paymentStatus === 'paid' || o.paymentStatus === 'SUCCESS'
-                                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                                        : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
-                                    }`}>
-                                      {o.paymentStatus || 'Pending'}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="pt-2 border-t border-glass flex items-center justify-between">
-                                  <span className="text-xs font-extrabold text-text-secondary">Grand Total Amount</span>
-                                  <span className="text-lg font-black text-primary font-display">₹{totalAmt.toFixed(2)}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Detailed Itemized Food Breakdown */}
-                            <div className="space-y-3 pt-2">
-                              <span className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-2">
-                                <Utensils size={15} className="text-primary" />
-                                <span>Itemized Food Breakdown ({itemsList.length} unique items)</span>
-                              </span>
-
-                              <div className="space-y-2.5">
-                                {itemsList.length > 0 ? (
-                                  itemsList.map((it: any, idx: number) => {
-                                    const foodName = it.foodName || it.name || it.dishName || 'Food Item';
-                                    const qty = it.quantity || it.qty || 1;
-                                    const price = it.price ? Number(it.price) : undefined;
-                                    const variantLabel = getItemVariantLabel(it);
-                                    const img = it.image || it.dishImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200';
-
-                                    return (
-                                      <div
-                                        key={idx}
-                                        className="p-3 rounded-xl bg-glass/60 border border-glass flex items-center justify-between gap-3 text-left"
-                                      >
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                                          <img
-                                            src={img}
-                                            alt={foodName}
-                                            className="rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
-                                            style={{ width: '48px', height: '48px', minWidth: '48px', minHeight: '48px' }}
-                                          />
-                                          <div className="min-w-0 space-y-1 flex-1">
-                                            <h4 className="text-xs sm:text-sm font-black text-text-primary truncate">
-                                              {foodName}
-                                            </h4>
-                                            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                                              <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 font-black text-[11px] font-mono">
-                                                QTY: {qty}
-                                              </span>
-                                              {variantLabel ? (
-                                                <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-black text-[11px] font-mono flex items-center gap-1">
-                                                  <Package size={11} className="shrink-0" />
-                                                  <span>{variantLabel}</span>
-                                                </span>
-                                              ) : (
-                                                <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 font-bold text-[10px] font-mono">
-                                                  Standard Portion
-                                                </span>
-                                              )}
-                                              {price !== undefined && (
-                                                <span className="text-text-muted font-bold text-[11px]">
-                                                  • ₹{Number.isInteger(price) ? price : price.toFixed(2)} each
-                                                </span>
-                                              )}
-                                            </div>
-                                          </div>
-                                        </div>
-
-                                        {price !== undefined && (
-                                          <div className="text-right shrink-0">
-                                            <span className="text-xs sm:text-sm font-black text-primary font-display block">
-                                              ₹{(price * qty).toFixed(2)}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })
-                                ) : (
-                                  <div className="p-3 rounded-xl bg-bg-dark/40 border border-glass text-xs text-text-muted italic">
-                                    Item details stored in order record database.
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ==================================================== */}
-        {/* DELIVERY ASSIGNMENTS TAB */}
-        {/* ==================================================== */}
-        {activeTab === 'delivery' && (
-          <div className="space-y-8 animate-fadeIn">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-glass pb-4">
-              <div>
-                <span className="text-[#B87C44] dark:text-[#D9A36C] font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
-                <h1 className="text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight">Delivery Fleet & Live Assignments</h1>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => navigate('/admin/delivery-partners/new')}
-                className="px-5 py-3 rounded-2xl bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer shrink-0"
-              >
-                <Bike size={16} />
-                <span>+ Create Delivery Partner</span>
-              </button>
-            </div>
-
-            {/* Registered Delivery Partners stored in DB */}
-            <div className="p-5 sm:p-6 rounded-3xl bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass space-y-4 shadow-xl">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-                    <UserCheck size={18} className="text-[#B87C44] dark:text-[#D9A36C]" />
-                    <span>Registered Delivery Partners (Stored in Database)</span>
-                  </h3>
-                  <p className="text-xs text-slate-600 dark:text-text-muted mt-0.5 font-medium">
-                    Delivery partners can log in at the central <code className="text-[#B87C44] dark:text-[#D9A36C] font-mono font-bold">/login</code> page using their credentials.
+              {/* ORDERS ACCORDION CARDS LIST */}
+              {filteredOrders.length === 0 ? (
+                <div className="text-center py-16 glass-panel border border-glass rounded-2xl p-8 max-w-md mx-auto space-y-3">
+                  <ClipboardList size={40} className="mx-auto text-text-muted opacity-50" />
+                  <h3 className="font-bold text-base text-text-primary font-display">No Orders Found</h3>
+                  <p className="text-xs text-text-muted">
+                    No customer orders match your filter configuration.
                   </p>
                 </div>
-                <span className="self-start sm:self-auto px-3.5 py-1 rounded-full text-xs font-black uppercase bg-[#B87C44]/15 border border-[#B87C44]/30 text-[#B87C44] dark:text-[#D9A36C] shrink-0">
-                  {dbDeliveryPartners.length} Partners Registered
-                </span>
-              </div>
-
-              {dbDeliveryPartners.length === 0 ? (
-                <div className="p-8 text-center rounded-2xl border border-dashed border-slate-300 dark:border-glass text-slate-600 dark:text-text-muted text-xs font-semibold bg-slate-50/50 dark:bg-bg-dark/40 flex flex-col items-center gap-3">
-                  <p>No custom delivery partners created yet. Click "+ Create Delivery Partner" to add a new delivery partner.</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/admin/delivery-partners/new')}
-                    className="px-4 py-2 rounded-xl bg-primary text-black font-extrabold text-xs flex items-center gap-1.5 shadow-sm hover:brightness-105 cursor-pointer"
-                  >
-                    <Bike size={14} />
-                    <span>+ Create Delivery Partner</span>
-                  </button>
-                </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
-                  {dbDeliveryPartners.map((partner) => {
-                    const partnerName = (partner.name || '').toLowerCase();
-                    const partnerEmail = (partner.email || '').toLowerCase();
-                    const partnerId = (partner.id || partner.userId || '').toLowerCase();
+                <div className="space-y-4 w-full">
+                  {filteredOrders.map(o => {
+                    const orderId = o.id || o.orderId;
+                    const status = (o.orderStatus || o.status || 'Pending').toString();
+                    const statusLower = status.toLowerCase();
 
-                    // Find if rider currently has an active order in transit
-                    const activeTransitOrder = orders.find((o) => {
-                      const assigned = (o.assignedRider || '').toLowerCase();
-                      const st = (o.orderStatus || o.status || '').toLowerCase();
-                      const isAssignedToRider = assigned && (assigned === partnerName || assigned.includes(partnerName) || partnerName.includes(assigned) || assigned === partnerEmail || assigned === partnerId);
-                      const isActiveState = ['assigned', 'out for delivery', 'in transit', 'picked up', 'ready'].includes(st);
-                      return isAssignedToRider && isActiveState;
-                    });
+                    const isExpanded = !!expandedAdminOrdersMap[orderId];
 
-                    const isOffline = partner.dutyStatus === 'OFF_DUTY';
-                    const isBusyOnRide = !isOffline && Boolean(activeTransitOrder);
+                    let itemsList: any[] = [];
+                    if (Array.isArray(o.items)) {
+                      itemsList = o.items;
+                    } else if (typeof o.items === 'string' && o.items.trim().startsWith('[')) {
+                      try {
+                        itemsList = JSON.parse(o.items);
+                      } catch (e) { }
+                    }
+
+                    const totalItemsQty = itemsList.length > 0
+                      ? itemsList.reduce((acc: number, it: any) => acc + Number(it.quantity || it.qty || 1), 0)
+                      : 1;
+
+                    const customerName = o.customer?.name || o.customerName || 'Valued Customer';
+                    const customerPhone = o.customer?.phone || o.customerPhone || '';
+                    const customerAddress = o.customer?.address || o.customerAddress || 'No address specified';
+                    const restaurantName = o.restaurant || o.restaurantName || 'Partner Store';
+                    const totalAmt = Number(o.total || o.totalAmount || 0);
 
                     return (
-                      <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-slate-50 dark:bg-bg-dark/80 border border-slate-200 dark:border-glass/60 flex flex-col justify-between gap-3 relative hover:border-amber-500/40 dark:hover:border-primary/40 transition-all shadow-sm">
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="space-y-0.5 min-w-0 flex-grow">
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-extrabold text-slate-900 dark:text-white text-sm truncate">{partner.name}</span>
-                              
-                              {/* 3-State Status Pill: OFF DUTY vs BUSY ON RIDE vs ONLINE */}
-                              {isOffline ? (
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 shrink-0 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                  <span>OFFLINE</span>
+                      <motion.div
+                        key={orderId}
+                        layout
+                        className="glass-panel border border-glass rounded-2xl overflow-hidden shadow-md hover:border-primary/30 transition-all text-left"
+                      >
+                        {/* CARD HEADER ROW */}
+                        <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-bg-darkSec/20">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleAdminOrderExpand(orderId)}
+                              className="p-1.5 rounded-xl bg-glass border border-glass text-text-secondary hover:text-primary transition-all cursor-pointer shrink-0"
+                              title="Toggle order item details"
+                            >
+                              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </button>
+
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono font-black text-sm text-primary tracking-tight">
+                                  #{orderId}
                                 </span>
-                              ) : isBusyOnRide ? (
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-blue-500/15 border border-blue-500/40 text-blue-700 dark:text-sky-400 shrink-0 flex items-center gap-1 animate-pulse">
-                                  <Bike size={10} className="text-blue-500 dark:text-sky-400" />
-                                  <span>BUSY • ON RIDE</span>
+
+                                <span className={`px-2.5 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-wider border ${statusLower === 'completed' || statusLower === 'delivered'
+                                    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                                    : statusLower === 'rejected' || statusLower === 'cancelled'
+                                      ? 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                                      : 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                                  }`}>
+                                  {status}
                                 </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 shrink-0 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                  <span>ONLINE • AVAILABLE</span>
+
+                                <span className="text-[11px] text-text-muted font-mono flex items-center gap-1">
+                                  <Clock size={11} />
+                                  <span>
+                                    {o.createdAt || o.createdTime ? new Date(o.createdAt || o.createdTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
+                                  </span>
                                 </span>
-                              )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary font-semibold">
+                                <span className="flex items-center gap-1 text-text-primary font-bold">
+                                  <User size={13} className="text-primary" />
+                                  <span>{customerName}</span>
+                                </span>
+
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-primary font-extrabold text-[11px]">
+                                  <Store size={12} />
+                                  <span>{restaurantName}</span>
+                                </span>
+
+                                <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 text-[11px] font-mono">
+                                  🛒 {totalItemsQty} item{totalItemsQty !== 1 ? 's' : ''}
+                                </span>
+                              </div>
                             </div>
-                            <p className="text-xs text-slate-600 dark:text-text-muted truncate" title={partner.email}>{partner.email}</p>
-                            <p className="text-[11px] text-slate-500 dark:text-text-muted font-mono">{partner.phone || 'No phone'}</p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => deleteDeliveryPartner(partner.id || partner.userId)}
-                            className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
-                            title="Remove Partner"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+
+                          {/* RIGHT HEADER ACTIONS: TOTAL AMOUNT, RIDER SELECTOR & TOGGLE */}
+                          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 border-glass/40 pt-3 sm:pt-0">
+                            <div className="text-left sm:text-right shrink-0">
+                              <span className="text-[10px] uppercase font-bold text-text-muted block tracking-wider">Total Order</span>
+                              <span className="text-base sm:text-lg font-black text-primary font-display">
+                                ₹{totalAmt.toFixed(2)}
+                              </span>
+                            </div>
+
+                            {/* Rider Assignment Selector */}
+                            <div className="flex items-center gap-1.5 bg-bg-dark border border-glass px-2.5 py-1.5 rounded-xl shadow-xs">
+                              <Bike size={14} className="text-primary shrink-0" />
+                              <select
+                                value={o.assignedRider || 'Unassigned'}
+                                onChange={(e) => handleAssignRider(orderId, e.target.value)}
+                                className="bg-transparent text-xs font-extrabold text-text-primary outline-none cursor-pointer"
+                              >
+                                <option value="Unassigned">Assign Delivery Rider...</option>
+                                {allDeliveryRiders.map((r) => (
+                                  <option key={r} value={r}>{r}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleAdminOrderExpand(orderId)}
+                              className="px-3 py-1.5 rounded-xl bg-glass border border-glass/80 hover:border-primary/40 text-text-primary hover:text-primary text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                            >
+                              <span>{isExpanded ? 'Hide Details' : 'View Items'}</span>
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Active order chip if on ride */}
-                        {activeTransitOrder && !isOffline && (
-                          <div className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-between text-[10px]">
-                            <span className="text-slate-600 dark:text-text-muted font-semibold">Carrying Order:</span>
-                            <span className="font-mono font-bold text-blue-600 dark:text-sky-400">#{activeTransitOrder.id || activeTransitOrder.orderId}</span>
-                          </div>
-                        )}
+                        {/* EXPANDABLE ACCORDION BODY */}
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="border-t border-glass p-4 sm:p-5 space-y-4 bg-bg-darkSec/10"
+                            >
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Customer & Address Details */}
+                                <div className="space-y-2 bg-glass/40 border border-glass p-3.5 rounded-xl text-left">
+                                  <span className="text-[10px] font-black uppercase text-primary tracking-widest block">
+                                    Customer & Delivery Details
+                                  </span>
+                                  <div className="space-y-1 text-xs text-text-secondary font-semibold">
+                                    <p className="font-bold text-text-primary flex items-center gap-1.5">
+                                      <User size={13} className="text-primary shrink-0" />
+                                      <span>{customerName}</span>
+                                    </p>
+                                    {customerPhone && (
+                                      <a
+                                        href={`tel:${customerPhone}`}
+                                        className="text-xs text-primary font-extrabold hover:underline flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-lg border border-primary/20 w-fit"
+                                      >
+                                        <Phone size={12} />
+                                        <span>{customerPhone}</span>
+                                      </a>
+                                    )}
+                                    <p className="text-xs font-semibold text-text-secondary flex items-start gap-1.5 leading-relaxed pt-1">
+                                      <MapPin size={14} className="text-primary shrink-0 mt-0.5" />
+                                      <span>{customerAddress}</span>
+                                    </p>
+                                  </div>
+                                </div>
 
-                        <div className="pt-2 border-t border-slate-200 dark:border-glass/30 flex items-center justify-between text-[10px] text-slate-600 dark:text-text-muted font-medium">
-                          <span className="flex items-center gap-1 font-bold text-slate-700 dark:text-text-secondary truncate">
-                            <Bike size={12} className="text-amber-600 dark:text-primary shrink-0" />
-                            <span>{partner.vehicleType || 'Bike'} {partner.vehicleNumber ? `• ${partner.vehicleNumber}` : ''}</span>
-                          </span>
-                          <span className="font-mono text-amber-700 dark:text-primary font-bold shrink-0">
-                            ID: {partner.userId}
-                          </span>
-                        </div>
-                      </div>
+                                {/* Order & Payment Summary */}
+                                <div className="space-y-2 bg-glass/40 border border-glass p-3.5 rounded-xl text-left flex flex-col justify-between">
+                                  <div>
+                                    <span className="text-[10px] font-black uppercase text-primary tracking-widest block mb-1">
+                                      Order Summary & Payment Status
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-text-muted text-xs font-bold">Payment Status:</span>
+                                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase border ${o.paymentStatus === 'paid' || o.paymentStatus === 'SUCCESS'
+                                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                                          : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                                        }`}>
+                                        {o.paymentStatus || 'Pending'}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-2 border-t border-glass flex items-center justify-between">
+                                    <span className="text-xs font-extrabold text-text-secondary">Grand Total Amount</span>
+                                    <span className="text-lg font-black text-primary font-display">₹{totalAmt.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Detailed Itemized Food Breakdown */}
+                              <div className="space-y-3 pt-2">
+                                <span className="text-xs font-black uppercase tracking-wider text-text-primary flex items-center gap-2">
+                                  <Utensils size={15} className="text-primary" />
+                                  <span>Itemized Food Breakdown ({itemsList.length} unique items)</span>
+                                </span>
+
+                                <div className="space-y-2.5">
+                                  {itemsList.length > 0 ? (
+                                    itemsList.map((it: any, idx: number) => {
+                                      const foodName = it.foodName || it.name || it.dishName || 'Food Item';
+                                      const qty = it.quantity || it.qty || 1;
+                                      const price = it.price ? Number(it.price) : undefined;
+                                      const variantLabel = getItemVariantLabel(it);
+                                      const img = it.image || it.dishImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=200';
+
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="p-3 rounded-xl bg-glass/60 border border-glass flex items-center justify-between gap-3 text-left"
+                                        >
+                                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <img
+                                              src={img}
+                                              alt={foodName}
+                                              className="rounded-xl object-cover border border-glass shrink-0 bg-bg-dark shadow-xs"
+                                              style={{ width: '48px', height: '48px', minWidth: '48px', minHeight: '48px' }}
+                                            />
+                                            <div className="min-w-0 space-y-1 flex-1">
+                                              <h4 className="text-xs sm:text-sm font-black text-text-primary truncate">
+                                                {foodName}
+                                              </h4>
+                                              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 font-black text-[11px] font-mono">
+                                                  QTY: {qty}
+                                                </span>
+                                                <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-black text-[11px] font-mono flex items-center gap-1">
+                                                  <Package size={11} className="shrink-0" />
+                                                  <span>{variantLabel || 'Standard Portion'}</span>
+                                                </span>
+                                                {price !== undefined && (
+                                                  <span className="text-text-muted font-bold text-[11px]">
+                                                    • ₹{Number.isInteger(price) ? price : price.toFixed(2)} each
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {price !== undefined && (
+                                            <div className="text-right shrink-0">
+                                              <span className="text-xs sm:text-sm font-black text-primary font-display block">
+                                                ₹{(price * qty).toFixed(2)}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <div className="p-3 rounded-xl bg-bg-dark/40 border border-glass text-xs text-text-muted italic">
+                                      Item details stored in order record database.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
                     );
                   })}
                 </div>
               )}
             </div>
+          )}
 
-            {/* Column Board Grid Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-              
-              {/* Column 1: Waiting for Rider */}
-              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Waiting for Rider</h2>
-                  </div>
-                  <span className="text-[11px] font-black bg-amber-500/15 text-amber-700 dark:text-warning px-2.5 py-0.5 rounded-full border border-amber-500/30">
-                    {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
-                  </span>
+          {/* ==================================================== */}
+          {/* DELIVERY ASSIGNMENTS TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'delivery' && (
+            <div className="space-y-8 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-glass pb-4">
+                <div>
+                  <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1 block">Courier Operations</span>
+                  <h1 className="text-3xl font-black font-display text-text-primary tracking-tight">Delivery Fleet & Live Assignments</h1>
                 </div>
 
-                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
-                  {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
-                      No orders waiting for riders.
-                    </div>
-                  ) : (
-                    orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-amber-500/40 dark:hover:border-primary/40 transition-all">
-                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-amber-600 dark:text-warning">{order.orderStatus || order.status}</span>
-                        </div>
-                        <div className="space-y-1.5 text-[10px] leading-relaxed">
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                        </div>
-                        <div className="pt-2.5 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
-                          <select
-                            value={selectedRiders[order.id] || ''}
-                            onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-darkSec border border-slate-300 dark:border-glass rounded-lg text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
-                          >
-                            <option value="">Select Rider...</option>
-                            {allDeliveryRiders.map(r => (
-                              <option key={r} value={r}>{r}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleAssignRider(order.id)}
-                            disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded-lg bg-amber-500 dark:bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
-                          >
-                            Assign
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/delivery-partners/new')}
+                  className="px-5 py-3 rounded-2xl bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black font-black text-xs uppercase tracking-wider shadow-lg hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer shrink-0"
+                >
+                  <Bike size={16} />
+                  <span>+ Create Delivery Partner</span>
+                </button>
               </div>
 
-              {/* Column 2: Assigned Orders */}
-              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Assigned Orders</h2>
-                  </div>
-                  <span className="text-[11px] font-black bg-blue-500/15 text-blue-700 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/30">
-                    {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
-                  </span>
-                </div>
-
-                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-blue-500/30">
-                  {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
-                      No active courier transits.
-                    </div>
-                  ) : (
-                    orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-blue-500/40 dark:hover:border-primary/40 transition-all">
-                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-blue-600 dark:text-primary">{order.orderStatus || order.status}</span>
-                        </div>
-                        <div className="space-y-1.5 text-[10px] leading-relaxed">
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-amber-700 dark:text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-slate-700 dark:text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
-                        </div>
-                        <div className="pt-2.5 border-t border-slate-100 dark:border-glass/30 flex gap-2 items-center">
-                          <select
-                            value={selectedRiders[order.id] || ''}
-                            onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
-                            className="flex-1 py-1.5 px-2 bg-slate-50 dark:bg-bg-darkSec border border-slate-300 dark:border-glass rounded-lg text-[10px] font-bold text-slate-800 dark:text-text-secondary outline-none focus:border-amber-500 dark:focus:border-primary/40"
-                          >
-                            <option value="">Reassign Rider...</option>
-                            {allDeliveryRiders.filter(r => r !== order.assignedRider).map(r => (
-                              <option key={r} value={r}>{r}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleAssignRider(order.id)}
-                            disabled={!selectedRiders[order.id]}
-                            className="py-1.5 px-3 rounded-lg bg-slate-100 dark:bg-glass border border-slate-300 dark:border-glass hover:border-amber-500 dark:hover:border-primary/40 text-slate-700 dark:text-text-secondary hover:text-amber-700 dark:hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
-                          >
-                            Reassign
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Column 3: Delivered Orders */}
-              <div className="space-y-4 bg-white/60 dark:bg-bg-darkSec/40 p-4 rounded-2xl border border-slate-200 dark:border-glass shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-glass pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800 dark:text-text-secondary">Delivered Orders</h2>
-                  </div>
-                  <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
-                  </span>
-                </div>
-
-                <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-emerald-500/30">
-                  {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
-                    <div className="py-12 text-center text-slate-500 dark:text-text-muted text-xs font-semibold border border-dashed border-slate-300 dark:border-glass rounded-xl bg-slate-50 dark:bg-glass-subtle/10">
-                      No orders successfully delivered yet.
-                    </div>
-                  ) : (
-                    orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
-                      <div key={order.id} className="bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass rounded-xl p-4 space-y-3 shadow-sm hover:border-emerald-500/40 transition-all opacity-90 hover:opacity-100">
-                        <div className="flex justify-between items-center text-[10px] border-b border-slate-100 dark:border-glass/30 pb-2">
-                          <span className="font-mono font-bold text-amber-600 dark:text-primary">{order.id}</span>
-                          <span className="uppercase font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
-                        </div>
-                        <div className="space-y-1.5 text-[10px] leading-relaxed">
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.restaurant}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-slate-800 dark:text-text-primary">{order.customer?.name || 'Guest'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-slate-600 dark:text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
-                          <p><span className="text-slate-500 dark:text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* ==================================================== */}
-        {/* DELIVERY LOCATIONS TAB */}
-        {/* ==================================================== */}
-        {activeTab === 'locations' && (
-          <AdminDeliveryLocations />
-        )}
-
-        {/* ==================================================== */}
-        {/* WEBSITE CMS TAB */}
-        {/* ==================================================== */}
-        {activeTab === 'cms' && (
-          <AdminCMSManager />
-        )}
-
-        {/* ==================================================== */}
-        {/* INVITATIONS REQUESTS TAB */}
-        {/* ==================================================== */}
-        {activeTab === 'invitations' && (
-          <AdminInvitationsManager />
-        )}
-
-        {/* ==================================================== */}
-        {/* SETTINGS TAB */}
-        {/* ==================================================== */}
-        {activeTab === 'settings' && (
-
-          <div className="space-y-8">
-            <div>
-              <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Console Options</span>
-              <h1 className="text-3xl font-black font-display text-primary tracking-tight">Admin System Settings</h1>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-              
-              {/* Profile & Password Config (Left Column) */}
-              <div className="space-y-6">
-                {/* Profile Card */}
-                <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
-                  <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
-                    <User className="text-primary" size={18} />
-                    <h2 className="text-base font-bold font-display">Administrator Profile</h2>
-                  </div>
-                  <div className="space-y-3.5 text-xs font-semibold text-text-secondary">
-                    <div className="flex justify-between py-2 border-b border-glass/20">
-                      <span className="text-text-muted">Account Authority:</span>
-                      <span className="text-primary uppercase tracking-wider">Super Administrator</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-glass/20">
-                      <span className="text-text-muted">Registered Email:</span>
-                      <span className="text-text-primary">{adminEmail}</span>
-                    </div>
-                    <div className="flex justify-between py-2 border-b border-glass/20">
-                      <span className="text-text-muted">System Level:</span>
-                      <span className="text-text-primary">Production Live</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Delivery Charge per Kilometer Settings Card */}
-                <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
-                  <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
-                    <Bike className="text-primary" size={18} />
-                    <div>
-                      <h2 className="text-base font-bold font-display">Delivery Fee Configuration (per KM)</h2>
-                      <p className="text-[10px] text-text-muted">Set distance-based pricing applied dynamically in customer cart.</p>
-                    </div>
-                  </div>
-
-                  {deliverySettingsStatus && (
-                    <div className={`p-3 rounded-xl text-[10px] font-bold mb-4 flex gap-2 ${
-                      deliverySettingsStatus.type === 'success' ? 'bg-success/10 border border-success/20 text-success' : 'bg-error/10 border border-error/20 text-error'
-                    }`}>
-                      {deliverySettingsStatus.type === 'success' ? <CheckCircle size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
-                      <span>{deliverySettingsStatus.message}</span>
-                    </div>
-                  )}
-
-                  <form onSubmit={handleSaveDeliverySettings} className="space-y-4 text-xs font-semibold text-text-secondary">
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
-                        Delivery Charge per Kilometer (₹ / km) *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-primary text-sm">₹</span>
-                        <input
-                          type="number"
-                          required
-                          min="0"
-                          step="1"
-                          value={deliveryFeePerKm}
-                          onChange={(e) => setDeliveryFeePerKm(Number(e.target.value))}
-                          placeholder="e.g. 15"
-                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-8 pr-4 py-2.5 rounded-xl outline-none font-bold text-sm"
-                        />
-                      </div>
-                      <p className="text-[10px] text-text-muted mt-1">Example: ₹15 per km calculated dynamically from Store GPS to Delivery Address GPS.</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
-                        Minimum Base Delivery Fee (₹) *
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-primary text-sm">₹</span>
-                        <input
-                          type="number"
-                          required
-                          min="0"
-                          step="1"
-                          value={baseDeliveryFee}
-                          onChange={(e) => setBaseDeliveryFee(Number(e.target.value))}
-                          placeholder="e.g. 25"
-                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-8 pr-4 py-2.5 rounded-xl outline-none font-bold text-sm"
-                        />
-                      </div>
-                      <p className="text-[10px] text-text-muted mt-1">Minimum delivery fee applied when distance is under base radius.</p>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isSavingDeliverySettings}
-                      className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-300 shadow-md cursor-pointer disabled:opacity-50"
-                    >
-                      {isSavingDeliverySettings ? 'Saving Settings...' : 'Save Delivery Rate Settings'}
-                    </button>
-                  </form>
-                </div>
-
-                {/* Theme Configuration */}
-                <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
-                  <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
-                    {theme === 'light' ? <Sun className="text-primary" size={18} /> : <Moon className="text-primary" size={18} />}
-                    <h2 className="text-base font-bold font-display">Interface Theme Settings</h2>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-bold text-text-primary">Toggle Dashboard Style</p>
-                      <p className="text-[10px] text-text-muted mt-1 font-medium">Switch dynamically between elegant Light Mode and Dark Mode.</p>
-                    </div>
-                    <button
-                      onClick={toggleTheme}
-                      className="p-2.5 rounded-xl border border-glass bg-glass-subtle hover:bg-glass hover:text-primary transition-all duration-300 shadow-sm text-text-secondary"
-                      aria-label="Toggle Theme"
-                    >
-                      {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Password Config (Right Column) */}
-              <div className="space-y-6">
-                <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
-                  <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
-                    <Key className="text-primary" size={18} />
-                    <h2 className="text-base font-bold font-display">Change Admin Password</h2>
-                  </div>
-
-                  {passwordStatus && (
-                    <div className={`p-3.5 rounded-xl text-[10px] font-bold mb-4 flex gap-2 ${
-                      passwordStatus.type === 'success' ? 'bg-success/10 border border-success/20 text-success' : 'bg-error/10 border border-error/20 text-error'
-                    }`}>
-                      {passwordStatus.type === 'success' ? <CheckCircle size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
-                      <span>{passwordStatus.message}</span>
-                    </div>
-                  )}
-
-                  <form onSubmit={handlePasswordChange} className="space-y-4 text-xs font-semibold text-text-secondary">
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Current Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={oldPassword}
-                        onChange={(e) => setOldPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-text-muted/45 font-medium"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">New Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-text-muted/45 font-medium"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Confirm New Password</label>
-                      <input
-                        type="password"
-                        required
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-text-muted/45 font-medium"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="w-full py-3 bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest rounded-xl hover:shadow-lg transition-all pt-2.5"
-                    >
-                      Update Password
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Developer Accordion Section (Original S3 & DynamoDB features preserved) */}
-            <div className="glass-panel border border-glass rounded-xl overflow-hidden shadow-luxury">
-              <button
-                onClick={() => setDevToolsOpen(!devToolsOpen)}
-                className="w-full flex items-center justify-between p-6 bg-bg-darkSec/30 text-left outline-none transition-colors hover:bg-bg-darkSec/50"
-              >
-                <div className="flex items-center gap-3">
-                  <Layers className="text-primary animate-pulse" size={18} />
+              {/* Registered Delivery Partners stored in DB */}
+              <div className="glass-panel border border-glass p-5 sm:p-6 rounded-3xl space-y-4 shadow-luxury">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-base font-bold font-display text-text-primary">Developer System Tools</h2>
-                    <p className="text-[10px] text-text-muted mt-0.5 font-medium">Manage AWS cloud infrastructure endpoints (DynamoDB seeder, S3 uploads, Video sync).</p>
+                    <h3 className="text-base font-black text-text-primary flex items-center gap-2">
+                      <UserCheck size={18} className="text-primary" />
+                      <span>Registered Delivery Partners (Stored in Database)</span>
+                    </h3>
+                    <p className="text-xs text-text-muted mt-0.5 font-medium">
+                      Delivery partners can log in at the central <code className="text-primary font-mono font-bold">/login</code> page using their credentials.
+                    </p>
+                  </div>
+                  <span className="self-start sm:self-auto px-3.5 py-1 rounded-full text-xs font-black uppercase bg-primary/15 border border-primary/30 text-primary shrink-0">
+                    {dbDeliveryPartners.length} Partners Registered
+                  </span>
+                </div>
+
+                {dbDeliveryPartners.length === 0 ? (
+                  <div className="p-8 text-center rounded-2xl border border-dashed border-glass text-text-muted text-xs font-semibold bg-bg-darkSec/40 flex flex-col items-center gap-3">
+                    <p>No custom delivery partners created yet. Click "+ Create Delivery Partner" to add a new delivery partner.</p>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/admin/delivery-partners/new')}
+                      className="px-4 py-2 rounded-xl bg-primary text-black font-extrabold text-xs flex items-center gap-1.5 shadow-sm hover:brightness-105 cursor-pointer"
+                    >
+                      <Bike size={14} />
+                      <span>+ Create Delivery Partner</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-primary/30">
+                    {dbDeliveryPartners.map((partner) => {
+                      const partnerName = (partner.name || '').toLowerCase();
+                      const partnerEmail = (partner.email || '').toLowerCase();
+                      const partnerId = (partner.id || partner.userId || '').toLowerCase();
+
+                      // Find if rider currently has an active order in transit
+                      const activeTransitOrder = orders.find((o) => {
+                        const assigned = (o.assignedRider || '').toLowerCase();
+                        const st = (o.orderStatus || o.status || '').toLowerCase();
+                        const isAssignedToRider = assigned && (assigned === partnerName || assigned.includes(partnerName) || partnerName.includes(assigned) || assigned === partnerEmail || assigned === partnerId);
+                        const isActiveState = ['assigned', 'out for delivery', 'in transit', 'picked up', 'ready'].includes(st);
+                        return isAssignedToRider && isActiveState;
+                      });
+
+                      const isOffline = partner.dutyStatus === 'OFF_DUTY';
+                      const isBusyOnRide = !isOffline && Boolean(activeTransitOrder);
+
+                      return (
+                        <div key={partner.id || partner.userId} className="p-4 rounded-2xl bg-bg-cardSec/90 border border-glass flex flex-col justify-between gap-3 relative hover:border-primary/50 transition-all shadow-md">
+                          <div className="flex justify-between items-start gap-2">
+                            <div className="space-y-0.5 min-w-0 flex-grow">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-extrabold text-text-primary text-sm truncate">{partner.name}</span>
+
+                                {/* 3-State Status Pill: OFF DUTY vs BUSY ON RIDE vs ONLINE */}
+                                {isOffline ? (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 shrink-0 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                    <span>OFFLINE</span>
+                                  </span>
+                                ) : isBusyOnRide ? (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-blue-500/15 border border-blue-500/40 text-blue-600 dark:text-sky-400 shrink-0 flex items-center gap-1 animate-pulse">
+                                    <Bike size={10} className="text-blue-500 dark:text-sky-400" />
+                                    <span>BUSY • ON RIDE</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[8px] font-black uppercase bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 shrink-0 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span>ONLINE • AVAILABLE</span>
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-text-secondary truncate" title={partner.email}>{partner.email}</p>
+                              <p className="text-[11px] text-text-muted font-mono">{partner.phone || 'No phone'}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteDeliveryPartner(partner.id || partner.userId)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
+                              title="Remove Partner"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+
+                          {/* Active order chip if on ride */}
+                          {activeTransitOrder && !isOffline && (
+                            <div className="px-2.5 py-1 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-between text-[10px]">
+                              <span className="text-text-muted font-semibold">Carrying Order:</span>
+                              <span className="font-mono font-bold text-blue-600 dark:text-sky-400">#{activeTransitOrder.id || activeTransitOrder.orderId}</span>
+                            </div>
+                          )}
+
+                          <div className="pt-2 border-t border-glass/30 flex items-center justify-between text-[10px] text-text-muted font-medium">
+                            <span className="flex items-center gap-1 font-bold text-text-secondary truncate">
+                              <Bike size={12} className="text-primary shrink-0" />
+                              <span>{partner.vehicleType || 'Bike'} {partner.vehicleNumber ? `• ${partner.vehicleNumber}` : ''}</span>
+                            </span>
+                            <span className="font-mono text-primary font-bold shrink-0">
+                              ID: {partner.userId}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Column Board Grid Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+                {/* Column 1: Waiting for Rider */}
+                <div className="space-y-4 glass-panel border border-glass p-4 rounded-2xl shadow-luxury">
+                  <div className="flex items-center justify-between border-b border-glass pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" />
+                      <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-text-primary">Waiting for Rider</h2>
+                    </div>
+                    <span className="text-[11px] font-black bg-amber-500/15 text-amber-600 dark:text-warning px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                      {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-amber-500/30">
+                    {orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
+                      <div className="py-12 text-center text-text-muted text-xs font-semibold border border-dashed border-glass rounded-xl bg-bg-darkSec/30">
+                        No orders waiting for riders.
+                      </div>
+                    ) : (
+                      orders.filter(o => !o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
+                        <div key={order.id} className="bg-bg-cardSec/90 border border-glass rounded-xl p-4 space-y-3 shadow-md hover:border-primary/40 transition-all">
+                          <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
+                            <span className="font-mono font-bold text-primary">#{order.id}</span>
+                            <span className="uppercase font-extrabold text-amber-600 dark:text-warning">{order.orderStatus || order.status}</span>
+                          </div>
+                          <div className="space-y-1.5 text-[10px] leading-relaxed">
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                          </div>
+                          <div className="pt-2.5 border-t border-glass/30 flex gap-2 items-center">
+                            <select
+                              value={selectedRiders[order.id] || ''}
+                              onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
+                              className="flex-1 py-1.5 px-2 bg-bg-dark border border-glass rounded-lg text-[10px] font-bold text-text-primary outline-none focus:border-primary/40"
+                            >
+                              <option value="">Select Rider...</option>
+                              {allDeliveryRiders.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => handleAssignRider(order.id)}
+                              disabled={!selectedRiders[order.id]}
+                              className="py-1.5 px-3 rounded-lg bg-primary text-black font-extrabold text-[10px] uppercase tracking-wider shadow-sm hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
+                            >
+                              Assign
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
-                <ChevronRight size={18} className={`text-text-muted transition-transform duration-300 ${devToolsOpen ? 'rotate-90' : ''}`} />
-              </button>
 
-              <AnimatePresence>
-                {devToolsOpen && (
-                  <motion.div
-                    initial={{ height: 0 }}
-                    animate={{ height: 'auto' }}
-                    exit={{ height: 0 }}
-                    className="overflow-hidden border-t border-glass bg-bg-dark/10"
-                  >
-                    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
-                      
-                      {/* AWS DynamoDB Manager */}
-                      <div className="glass-panel border border-glass rounded-xl p-5 shadow-sm space-y-4">
-                        <div className="flex items-center justify-between border-b border-glass pb-3">
-                          <div className="flex items-center gap-2">
-                            <Database className="text-primary" size={16} />
-                            <h3 className="text-sm font-bold font-display">DynamoDB Setup</h3>
-                          </div>
-                          <button
-                            onClick={fetchDBItems}
-                            disabled={dbLoading}
-                            className="p-1.5 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all disabled:opacity-50"
-                          >
-                            <RefreshCw size={12} className={dbLoading ? 'animate-spin' : ''} />
-                          </button>
-                        </div>
+                {/* Column 2: Assigned Orders */}
+                <div className="space-y-4 glass-panel border border-glass p-4 rounded-2xl shadow-luxury">
+                  <div className="flex items-center justify-between border-b border-glass pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-text-primary">Assigned Orders</h2>
+                    </div>
+                    <span className="text-[11px] font-black bg-blue-500/15 text-blue-600 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                      {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
+                    </span>
+                  </div>
 
-                        {dbLoading && dbItems.length === 0 ? (
-                          <div className="py-8 flex flex-col items-center justify-center text-text-muted space-y-2 text-[10px]">
-                            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            <span>Scanning DynamoDB...</span>
+                  <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-blue-500/30">
+                    {orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
+                      <div className="py-12 text-center text-text-muted text-xs font-semibold border border-dashed border-glass rounded-xl bg-bg-darkSec/30">
+                        No active courier transits.
+                      </div>
+                    ) : (
+                      orders.filter(o => o.assignedRider && !['delivered', 'completed', 'cancelled'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
+                        <div key={order.id} className="bg-bg-cardSec/90 border border-glass rounded-xl p-4 space-y-3 shadow-md hover:border-blue-500/40 dark:hover:border-primary/40 transition-all">
+                          <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
+                            <span className="font-mono font-bold text-primary">#{order.id}</span>
+                            <span className="uppercase font-extrabold text-blue-600 dark:text-primary">{order.orderStatus || order.status}</span>
                           </div>
-                        ) : dbItems.length === 0 ? (
-                          <div className="py-6 text-center space-y-3">
-                            <p className="text-[10px] text-text-muted leading-relaxed">
-                              Table `mk-delivery-services` (Region: {awsStatus?.regions?.dynamoRegion || 'eu-north-1'}) was found but is empty.
-                            </p>
-                            <button
-                              onClick={handleSeedDatabase}
-                              disabled={seeding}
-                              className="w-full flex items-center justify-center gap-2 py-2 rounded bg-primary hover:bg-primary-dark text-bg-dark font-extrabold text-[10px] uppercase tracking-wider hover:shadow-lg disabled:opacity-75 transition-all"
+                          <div className="space-y-1.5 text-[10px] leading-relaxed">
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Assigned Rider:</span> <span className="text-primary font-bold inline-flex items-center gap-1"><Bike size={11} /> {order.assignedRider}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Assignment Time:</span> <span className="text-text-secondary font-bold">{order.assignmentTime || 'N/A'}</span></p>
+                          </div>
+                          <div className="pt-2.5 border-t border-glass/30 flex gap-2 items-center">
+                            <select
+                              value={selectedRiders[order.id] || ''}
+                              onChange={(e) => setSelectedRiders({ ...selectedRiders, [order.id]: e.target.value })}
+                              className="flex-1 py-1.5 px-2 bg-bg-dark border border-glass rounded-lg text-[10px] font-bold text-text-primary outline-none focus:border-primary/40"
                             >
-                              {seeding ? (
-                                <div className="w-3.5 h-3.5 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <>
-                                  <PlusCircle size={13} />
-                                  <span>Seed Dishes</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-[10px] font-bold text-text-muted py-1 border-b border-glass/25">
-                              <span>Dish Name</span>
-                              <span>Category</span>
-                              <span>Price</span>
-                            </div>
-                            <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-0.5">
-                              {dbItems.map(item => (
-                                <div key={item.id} className="flex justify-between items-center text-[10px] py-1">
-                                  <span className="font-semibold text-text-secondary truncate max-w-[100px]">{item.name}</span>
-                                  <span className="text-text-muted capitalize text-[9px]">{item.category}</span>
-                                  <span className="font-black text-primary">${item.price}</span>
-                                </div>
+                              <option value="">Reassign Rider...</option>
+                              {allDeliveryRiders.filter(r => r !== order.assignedRider).map(r => (
+                                <option key={r} value={r}>{r}</option>
                               ))}
-                            </div>
+                            </select>
+                            <button
+                              onClick={() => handleAssignRider(order.id)}
+                              disabled={!selectedRiders[order.id]}
+                              className="py-1.5 px-3 rounded-lg bg-glass border border-glass hover:border-primary/40 text-text-primary hover:text-primary font-extrabold text-[10px] uppercase tracking-wider shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all shrink-0 cursor-pointer"
+                            >
+                              Reassign
+                            </button>
                           </div>
-                        )}
-                      </div>
-
-                      {/* S3 Media center */}
-                      <div className="glass-panel border border-glass rounded-xl p-5 shadow-sm space-y-4">
-                        <div className="flex items-center gap-2 border-b border-glass pb-3">
-                          <UploadCloud className="text-primary" size={16} />
-                          <h3 className="text-sm font-bold font-display">S3 Cloud Upload</h3>
                         </div>
+                      ))
+                    )}
+                  </div>
+                </div>
 
-                        <div
-                          onClick={() => fileInputRef.current?.click()}
-                          className="border border-dashed border-glass hover:border-primary/40 rounded-lg p-4 text-center cursor-pointer bg-glass-subtle/50 hover:bg-glass-subtle transition-all duration-300 flex flex-col items-center justify-center min-h-[90px]"
-                        >
+                {/* Column 3: Delivered Orders */}
+                <div className="space-y-4 glass-panel border border-glass p-4 rounded-2xl shadow-luxury">
+                  <div className="flex items-center justify-between border-b border-glass pb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                      <h2 className="text-xs sm:text-sm font-black uppercase tracking-wider text-text-primary">Delivered Orders</h2>
+                    </div>
+                    <span className="text-[11px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                      {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3.5 max-h-[520px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-emerald-500/30">
+                    {orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).length === 0 ? (
+                      <div className="py-12 text-center text-text-muted text-xs font-semibold border border-dashed border-glass rounded-xl bg-bg-darkSec/30">
+                        No orders successfully delivered yet.
+                      </div>
+                    ) : (
+                      orders.filter(o => ['delivered', 'completed'].includes((o.orderStatus || o.status || '').toLowerCase())).map((order) => (
+                        <div key={order.id} className="bg-bg-cardSec/90 border border-glass rounded-xl p-4 space-y-3 shadow-md hover:border-emerald-500/40 transition-all opacity-95 hover:opacity-100">
+                          <div className="flex justify-between items-center text-[10px] border-b border-glass/30 pb-2">
+                            <span className="font-mono font-bold text-primary">#{order.id}</span>
+                            <span className="uppercase font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle size={10} /> Completed</span>
+                          </div>
+                          <div className="space-y-1.5 text-[10px] leading-relaxed">
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Establishment:</span> <span className="font-bold text-text-primary">{order.restaurant}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Customer:</span> <span className="font-bold text-text-primary">{order.customer?.name || 'Guest'}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivery Address:</span> <span className="text-text-secondary block font-medium mt-0.5">{order.customer?.address || 'N/A'}</span></p>
+                            <p><span className="text-text-muted uppercase tracking-wider font-semibold">Delivered By:</span> <span className="text-emerald-600 dark:text-emerald-400 font-bold inline-flex items-center gap-1"><UserCheck size={11} /> {order.assignedRider || 'N/A'}</span></p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================== */}
+          {/* DELIVERY LOCATIONS TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'locations' && (
+            <AdminDeliveryLocations />
+          )}
+
+          {/* ==================================================== */}
+          {/* WEBSITE CMS TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'cms' && (
+            <AdminCMSManager />
+          )}
+
+          {/* ==================================================== */}
+          {/* INVITATIONS REQUESTS TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'invitations' && (
+            <AdminInvitationsManager />
+          )}
+
+          {/* ==================================================== */}
+          {/* SETTINGS TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'settings' && (
+
+            <div className="space-y-8">
+              <div>
+                <span className="text-primary font-bold text-xs uppercase tracking-widest mb-1.5 block">Console Options</span>
+                <h1 className="text-3xl font-black font-display text-primary tracking-tight">Admin System Settings</h1>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+
+                {/* Profile & Password Config (Left Column) */}
+                <div className="space-y-6">
+                  {/* Profile Card */}
+                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
+                    <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
+                      <User className="text-primary" size={18} />
+                      <h2 className="text-base font-bold font-display">Administrator Profile</h2>
+                    </div>
+                    <div className="space-y-3.5 text-xs font-semibold text-text-secondary">
+                      <div className="flex justify-between py-2 border-b border-glass/20">
+                        <span className="text-text-muted">Account Authority:</span>
+                        <span className="text-primary uppercase tracking-wider">Super Administrator</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-glass/20">
+                        <span className="text-text-muted">Registered Email:</span>
+                        <span className="text-text-primary">{adminEmail}</span>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-glass/20">
+                        <span className="text-text-muted">System Level:</span>
+                        <span className="text-text-primary">Production Live</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Delivery Charge per Kilometer Settings Card */}
+                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
+                    <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
+                      <Bike className="text-primary" size={18} />
+                      <div>
+                        <h2 className="text-base font-bold font-display">Delivery Fee Configuration (per KM)</h2>
+                        <p className="text-[10px] text-text-muted">Set distance-based pricing applied dynamically in customer cart.</p>
+                      </div>
+                    </div>
+
+                    {deliverySettingsStatus && (
+                      <div className={`p-3 rounded-xl text-[10px] font-bold mb-4 flex gap-2 ${deliverySettingsStatus.type === 'success' ? 'bg-success/10 border border-success/20 text-success' : 'bg-error/10 border border-error/20 text-error'
+                        }`}>
+                        {deliverySettingsStatus.type === 'success' ? <CheckCircle size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+                        <span>{deliverySettingsStatus.message}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSaveDeliverySettings} className="space-y-4 text-xs font-semibold text-text-secondary">
+                      <div>
+                        <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+                          Delivery Charge per Kilometer (₹ / km) *
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-primary text-sm">₹</span>
                           <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={handleFileChange}
-                            accept="image/*,application/pdf"
-                            className="hidden"
+                            type="number"
+                            required
+                            min="0"
+                            step="1"
+                            value={deliveryFeePerKm}
+                            onChange={(e) => setDeliveryFeePerKm(Number(e.target.value))}
+                            placeholder="e.g. 15"
+                            className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-8 pr-4 py-2.5 rounded-xl outline-none font-bold text-sm"
                           />
-                          <UploadCloud size={20} className="text-text-muted mb-1.5" />
-                          {selectedFile ? (
-                            <span className="text-[10px] font-bold text-text-primary truncate max-w-[180px]">
-                              {selectedFile.name}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-text-muted font-bold">Choose local files</span>
-                          )}
                         </div>
-
-                        {selectedFile && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleUploadToS3}
-                              disabled={uploading}
-                              className="flex-1 py-1.5 bg-primary hover:bg-primary-dark text-bg-dark font-extrabold text-[10px] uppercase tracking-wider rounded hover:shadow-lg disabled:opacity-75 transition-all flex items-center justify-center gap-1.5"
-                            >
-                              {uploading ? (
-                                <div className="w-3 h-3 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <>
-                                  <span>Upload</span>
-                                  <ArrowRight size={11} />
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => setSelectedFile(null)}
-                              disabled={uploading}
-                              className="px-2 py-1.5 rounded border border-glass bg-glass text-[10px] font-extrabold uppercase tracking-wider text-text-secondary hover:bg-glass-subtle transition-all"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        )}
-
-                        {uploadError && (
-                          <div className="p-2.5 rounded bg-error/10 border border-error/20 text-error text-[9px] font-semibold flex gap-1.5 leading-relaxed">
-                            <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                            <span>{uploadError}</span>
-                          </div>
-                        )}
-
-                        {uploadedUrl && (
-                          <div className="space-y-1.5 pt-2 border-t border-glass/35">
-                            <div className="flex items-center gap-1 text-success font-bold text-[9px] uppercase tracking-wider">
-                              <CheckCircle size={11} />
-                              <span>Stored Successfully</span>
-                            </div>
-                            <input
-                              type="text"
-                              readOnly
-                              value={uploadedUrl}
-                              onClick={(e) => (e.target as HTMLInputElement).select()}
-                              className="w-full px-2 py-1.5 rounded border border-glass bg-bg-dark text-[9px] font-mono outline-none cursor-pointer"
-                            />
-                          </div>
-                        )}
+                        <p className="text-[10px] text-text-muted mt-1">Example: ₹15 per km calculated dynamically from Store GPS to Delivery Address GPS.</p>
                       </div>
 
-                      {/* Hero videos manager */}
-                      <div className="glass-panel border border-glass rounded-xl p-5 shadow-sm space-y-4">
-                        <div className="flex items-center gap-2 border-b border-glass pb-3">
-                          <Video className="text-primary" size={16} />
-                          <h3 className="text-sm font-bold font-display">Hero Video Sync</h3>
+                      <div>
+                        <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">
+                          Minimum Base Delivery Fee (₹) *
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-primary text-sm">₹</span>
+                          <input
+                            type="number"
+                            required
+                            min="0"
+                            step="1"
+                            value={baseDeliveryFee}
+                            onChange={(e) => setBaseDeliveryFee(Number(e.target.value))}
+                            placeholder="e.g. 25"
+                            className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary pl-8 pr-4 py-2.5 rounded-xl outline-none font-bold text-sm"
+                          />
+                        </div>
+                        <p className="text-[10px] text-text-muted mt-1">Minimum delivery fee applied when distance is under base radius.</p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSavingDeliverySettings}
+                        className="w-full py-3 rounded-xl bg-primary hover:bg-primary-dark text-black font-extrabold text-xs uppercase tracking-wider transition-all duration-300 shadow-md cursor-pointer disabled:opacity-50"
+                      >
+                        {isSavingDeliverySettings ? 'Saving Settings...' : 'Save Delivery Rate Settings'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Theme Configuration */}
+                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
+                    <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
+                      {theme === 'light' ? <Sun className="text-primary" size={18} /> : <Moon className="text-primary" size={18} />}
+                      <h2 className="text-base font-bold font-display">Interface Theme Settings</h2>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-text-primary">Toggle Dashboard Style</p>
+                        <p className="text-[10px] text-text-muted mt-1 font-medium">Switch dynamically between elegant Light Mode and Dark Mode.</p>
+                      </div>
+                      <button
+                        onClick={toggleTheme}
+                        className="p-2.5 rounded-xl border border-glass bg-glass-subtle hover:bg-glass hover:text-primary transition-all duration-300 shadow-sm text-text-secondary"
+                        aria-label="Toggle Theme"
+                      >
+                        {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Password Config (Right Column) */}
+                <div className="space-y-6">
+                  <div className="glass-panel border border-glass rounded-xl p-6 shadow-luxury">
+                    <div className="flex items-center gap-3 border-b border-glass pb-4 mb-5">
+                      <Key className="text-primary" size={18} />
+                      <h2 className="text-base font-bold font-display">Change Admin Password</h2>
+                    </div>
+
+                    {passwordStatus && (
+                      <div className={`p-3.5 rounded-xl text-[10px] font-bold mb-4 flex gap-2 ${passwordStatus.type === 'success' ? 'bg-success/10 border border-success/20 text-success' : 'bg-error/10 border border-error/20 text-error'
+                        }`}>
+                        {passwordStatus.type === 'success' ? <CheckCircle size={14} className="shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="shrink-0 mt-0.5" />}
+                        <span>{passwordStatus.message}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handlePasswordChange} className="space-y-4 text-xs font-semibold text-text-secondary">
+                      <div>
+                        <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Current Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={oldPassword}
+                          onChange={(e) => setOldPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-text-muted/45 font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">New Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-text-muted/45 font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] font-bold text-text-muted uppercase tracking-widest mb-1.5">Confirm New Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-bg-dark/70 border border-glass focus:border-primary/50 text-text-primary px-3.5 py-2.5 rounded-xl outline-none transition-all placeholder-text-muted/45 font-medium"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full py-3 bg-primary hover:bg-primary-dark text-bg-dark font-black text-xs uppercase tracking-widest rounded-xl hover:shadow-lg transition-all pt-2.5"
+                      >
+                        Update Password
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Developer Accordion Section (Original S3 & DynamoDB features preserved) */}
+              <div className="glass-panel border border-glass rounded-xl overflow-hidden shadow-luxury">
+                <button
+                  onClick={() => setDevToolsOpen(!devToolsOpen)}
+                  className="w-full flex items-center justify-between p-6 bg-bg-darkSec/30 text-left outline-none transition-colors hover:bg-bg-darkSec/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Layers className="text-primary animate-pulse" size={18} />
+                    <div>
+                      <h2 className="text-base font-bold font-display text-text-primary">Developer System Tools</h2>
+                      <p className="text-[10px] text-text-muted mt-0.5 font-medium">Manage AWS cloud infrastructure endpoints (DynamoDB seeder, S3 uploads, Video sync).</p>
+                    </div>
+                  </div>
+                  <ChevronRight size={18} className={`text-text-muted transition-transform duration-300 ${devToolsOpen ? 'rotate-90' : ''}`} />
+                </button>
+
+                <AnimatePresence>
+                  {devToolsOpen && (
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: 'auto' }}
+                      exit={{ height: 0 }}
+                      className="overflow-hidden border-t border-glass bg-bg-dark/10"
+                    >
+                      <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                        {/* AWS DynamoDB Manager */}
+                        <div className="glass-panel border border-glass rounded-xl p-5 shadow-sm space-y-4">
+                          <div className="flex items-center justify-between border-b border-glass pb-3">
+                            <div className="flex items-center gap-2">
+                              <Database className="text-primary" size={16} />
+                              <h3 className="text-sm font-bold font-display">DynamoDB Setup</h3>
+                            </div>
+                            <button
+                              onClick={fetchDBItems}
+                              disabled={dbLoading}
+                              className="p-1.5 rounded bg-glass border border-glass hover:border-primary/40 hover:text-primary transition-all disabled:opacity-50"
+                            >
+                              <RefreshCw size={12} className={dbLoading ? 'animate-spin' : ''} />
+                            </button>
+                          </div>
+
+                          {dbLoading && dbItems.length === 0 ? (
+                            <div className="py-8 flex flex-col items-center justify-center text-text-muted space-y-2 text-[10px]">
+                              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              <span>Scanning DynamoDB...</span>
+                            </div>
+                          ) : dbItems.length === 0 ? (
+                            <div className="py-6 text-center space-y-3">
+                              <p className="text-[10px] text-text-muted leading-relaxed">
+                                Table `mk-delivery-services` (Region: {awsStatus?.regions?.dynamoRegion || 'eu-north-1'}) was found but is empty.
+                              </p>
+                              <button
+                                onClick={handleSeedDatabase}
+                                disabled={seeding}
+                                className="w-full flex items-center justify-center gap-2 py-2 rounded bg-primary hover:bg-primary-dark text-bg-dark font-extrabold text-[10px] uppercase tracking-wider hover:shadow-lg disabled:opacity-75 transition-all"
+                              >
+                                {seeding ? (
+                                  <div className="w-3.5 h-3.5 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <>
+                                    <PlusCircle size={13} />
+                                    <span>Seed Dishes</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-[10px] font-bold text-text-muted py-1 border-b border-glass/25">
+                                <span>Dish Name</span>
+                                <span>Category</span>
+                                <span>Price</span>
+                              </div>
+                              <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-0.5">
+                                {dbItems.map(item => (
+                                  <div key={item.id} className="flex justify-between items-center text-[10px] py-1">
+                                    <span className="font-semibold text-text-secondary truncate max-w-[100px]">{item.name}</span>
+                                    <span className="text-text-muted capitalize text-[9px]">{item.category}</span>
+                                    <span className="font-black text-primary">${item.price}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        <p className="text-[10px] text-text-muted leading-relaxed">
-                          Synchronize client landing page background video assets to S3 and DynamoDB.
-                        </p>
+                        {/* S3 Media center */}
+                        <div className="glass-panel border border-glass rounded-xl p-5 shadow-sm space-y-4">
+                          <div className="flex items-center gap-2 border-b border-glass pb-3">
+                            <UploadCloud className="text-primary" size={16} />
+                            <h3 className="text-sm font-bold font-display">S3 Cloud Upload</h3>
+                          </div>
 
-                        <button
-                          onClick={handleSyncHeroVideos}
-                          disabled={syncingVideos}
-                          className="w-full py-2 bg-primary hover:bg-primary-dark text-bg-dark font-extrabold text-[10px] uppercase tracking-wider rounded hover:shadow-lg disabled:opacity-75 transition-all flex items-center justify-center gap-1.5"
-                        >
-                          {syncingVideos ? (
-                            <>
-                              <div className="w-3.5 h-3.5 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
-                              <span>Syncing...</span>
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw size={12} />
-                              <span>Sync to S3 & DynamoDB</span>
-                            </>
-                          )}
-                        </button>
-
-                        <div className="pt-2.5 border-t border-glass/35 space-y-2 text-[10px] font-semibold text-text-muted">
-                          <div className="flex justify-between items-center">
-                            <span>Database State:</span>
-                            {fetchingVideos ? (
-                              <span>...</span>
-                            ) : heroVideos ? (
-                              <span className="text-success font-bold">Active in DB</span>
+                          <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className="border border-dashed border-glass hover:border-primary/40 rounded-lg p-4 text-center cursor-pointer bg-glass-subtle/50 hover:bg-glass-subtle transition-all duration-300 flex flex-col items-center justify-center min-h-[90px]"
+                          >
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={handleFileChange}
+                              accept="image/*,application/pdf"
+                              className="hidden"
+                            />
+                            <UploadCloud size={20} className="text-text-muted mb-1.5" />
+                            {selectedFile ? (
+                              <span className="text-[10px] font-bold text-text-primary truncate max-w-[180px]">
+                                {selectedFile.name}
+                              </span>
                             ) : (
-                              <span className="text-warning font-bold">Local Fallback</span>
+                              <span className="text-[10px] text-text-muted font-bold">Choose local files</span>
                             )}
                           </div>
 
-                          {syncMessage && (
-                            <div className="p-2 rounded bg-success/10 border border-success/20 text-success text-[9px] font-bold flex gap-1.5">
-                              <CheckCircle size={12} className="shrink-0" />
-                              <span>{syncMessage}</span>
+                          {selectedFile && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleUploadToS3}
+                                disabled={uploading}
+                                className="flex-1 py-1.5 bg-primary hover:bg-primary-dark text-bg-dark font-extrabold text-[10px] uppercase tracking-wider rounded hover:shadow-lg disabled:opacity-75 transition-all flex items-center justify-center gap-1.5"
+                              >
+                                {uploading ? (
+                                  <div className="w-3 h-3 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <>
+                                    <span>Upload</span>
+                                    <ArrowRight size={11} />
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setSelectedFile(null)}
+                                disabled={uploading}
+                                className="px-2 py-1.5 rounded border border-glass bg-glass text-[10px] font-extrabold uppercase tracking-wider text-text-secondary hover:bg-glass-subtle transition-all"
+                              >
+                                Cancel
+                              </button>
                             </div>
                           )}
 
-                          {syncError && (
-                            <div className="p-2 rounded bg-error/10 border border-error/20 text-error text-[9px] font-bold flex gap-1.5">
-                              <AlertTriangle size={12} className="shrink-0" />
-                              <span>{syncError}</span>
+                          {uploadError && (
+                            <div className="p-2.5 rounded bg-error/10 border border-error/20 text-error text-[9px] font-semibold flex gap-1.5 leading-relaxed">
+                              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                              <span>{uploadError}</span>
+                            </div>
+                          )}
+
+                          {uploadedUrl && (
+                            <div className="space-y-1.5 pt-2 border-t border-glass/35">
+                              <div className="flex items-center gap-1 text-success font-bold text-[9px] uppercase tracking-wider">
+                                <CheckCircle size={11} />
+                                <span>Stored Successfully</span>
+                              </div>
+                              <input
+                                type="text"
+                                readOnly
+                                value={uploadedUrl}
+                                onClick={(e) => (e.target as HTMLInputElement).select()}
+                                className="w-full px-2 py-1.5 rounded border border-glass bg-bg-dark text-[9px] font-mono outline-none cursor-pointer"
+                              />
                             </div>
                           )}
                         </div>
+
+                        {/* Hero videos manager */}
+                        <div className="glass-panel border border-glass rounded-xl p-5 shadow-sm space-y-4">
+                          <div className="flex items-center gap-2 border-b border-glass pb-3">
+                            <Video className="text-primary" size={16} />
+                            <h3 className="text-sm font-bold font-display">Hero Video Sync</h3>
+                          </div>
+
+                          <p className="text-[10px] text-text-muted leading-relaxed">
+                            Synchronize client landing page background video assets to S3 and DynamoDB.
+                          </p>
+
+                          <button
+                            onClick={handleSyncHeroVideos}
+                            disabled={syncingVideos}
+                            className="w-full py-2 bg-primary hover:bg-primary-dark text-bg-dark font-extrabold text-[10px] uppercase tracking-wider rounded hover:shadow-lg disabled:opacity-75 transition-all flex items-center justify-center gap-1.5"
+                          >
+                            {syncingVideos ? (
+                              <>
+                                <div className="w-3.5 h-3.5 border-2 border-bg-dark border-t-transparent rounded-full animate-spin" />
+                                <span>Syncing...</span>
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw size={12} />
+                                <span>Sync to S3 & DynamoDB</span>
+                              </>
+                            )}
+                          </button>
+
+                          <div className="pt-2.5 border-t border-glass/35 space-y-2 text-[10px] font-semibold text-text-muted">
+                            <div className="flex justify-between items-center">
+                              <span>Database State:</span>
+                              {fetchingVideos ? (
+                                <span>...</span>
+                              ) : heroVideos ? (
+                                <span className="text-success font-bold">Active in DB</span>
+                              ) : (
+                                <span className="text-warning font-bold">Local Fallback</span>
+                              )}
+                            </div>
+
+                            {syncMessage && (
+                              <div className="p-2 rounded bg-success/10 border border-success/20 text-success text-[9px] font-bold flex gap-1.5">
+                                <CheckCircle size={12} className="shrink-0" />
+                                <span>{syncMessage}</span>
+                              </div>
+                            )}
+
+                            {syncError && (
+                              <div className="p-2 rounded bg-error/10 border border-error/20 text-error text-[9px] font-bold flex gap-1.5">
+                                <AlertTriangle size={12} className="shrink-0" />
+                                <span>{syncError}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                       </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
-
-          </div>
-        )}
+          )}
         </ErrorBoundary>
 
         {/* Custom Delete Confirmation Modal (Sidebar remains fixed & clear; overlay starts at lg:left-64) */}
@@ -3451,13 +3463,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
               initial={{ opacity: 0, y: -20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center gap-3 font-bold text-xs ${
-                toastMessage.type === 'success'
+              className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl flex items-center gap-3 font-bold text-xs ${toastMessage.type === 'success'
                   ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
                   : toastMessage.type === 'error'
-                  ? 'bg-rose-950/90 border-rose-500/40 text-rose-300'
-                  : 'bg-bg-card/90 border-primary/40 text-primary'
-              }`}
+                    ? 'bg-rose-950/90 border-rose-500/40 text-rose-300'
+                    : 'bg-bg-card/90 border-primary/40 text-primary'
+                }`}
             >
               <CheckCircle size={18} className="shrink-0" />
               <span>{toastMessage.message}</span>
@@ -3527,9 +3538,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         <button
           type="button"
           onClick={() => { setActiveTab('dashboard'); setIsMoreMenuOpen(false); }}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === 'dashboard' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
-          }`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'dashboard' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+            }`}
         >
           <LayoutGrid size={20} />
           <span className="mt-1">Dashboard</span>
@@ -3539,9 +3549,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         <button
           type="button"
           onClick={() => { setActiveTab('restaurants'); setIsMoreMenuOpen(false); }}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === 'restaurants' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
-          }`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'restaurants' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+            }`}
         >
           <Store size={20} />
           <span className="mt-1">Restaurants</span>
@@ -3551,9 +3560,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         <button
           type="button"
           onClick={() => { setActiveTab('orders'); setIsMoreMenuOpen(false); }}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === 'orders' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
-          }`}
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'orders' ? 'text-amber-600 dark:text-primary font-black' : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+            }`}
         >
           <ShoppingBag size={20} />
           <span className="mt-1">Orders</span>
@@ -3563,11 +3571,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         <button
           type="button"
           onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
-          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-            activeTab === 'delivery' || activeTab === 'settings' || isMoreMenuOpen
+          className={`flex flex-col items-center justify-center p-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${activeTab === 'delivery' || activeTab === 'settings' || isMoreMenuOpen
               ? 'text-amber-600 dark:text-primary font-black'
               : 'text-slate-500 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
-          }`}
+            }`}
         >
           <Settings size={20} />
           <span className="mt-1">More</span>
@@ -3609,11 +3616,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <button
                   type="button"
                   onClick={() => { setActiveTab('delivery'); setIsMoreMenuOpen(false); }}
-                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                    activeTab === 'delivery'
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${activeTab === 'delivery'
                       ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
                       : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
-                  }`}
+                    }`}
                 >
                   <Bike size={20} className="text-amber-600 dark:text-primary" />
                   <span>Delivery Assignments</span>
@@ -3622,11 +3628,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <button
                   type="button"
                   onClick={() => { setActiveTab('locations'); setIsMoreMenuOpen(false); }}
-                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                    activeTab === 'locations'
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${activeTab === 'locations'
                       ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
                       : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
-                  }`}
+                    }`}
                 >
                   <MapPin size={20} className="text-amber-600 dark:text-primary" />
                   <span>Delivery Locations</span>
@@ -3635,11 +3640,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <button
                   type="button"
                   onClick={() => { setActiveTab('cms'); setIsMoreMenuOpen(false); }}
-                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                    activeTab === 'cms'
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${activeTab === 'cms'
                       ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
                       : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
-                  }`}
+                    }`}
                 >
                   <Layers size={20} className="text-amber-600 dark:text-primary" />
                   <span>Website CMS</span>
@@ -3648,11 +3652,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <button
                   type="button"
                   onClick={() => { setActiveTab('invitations'); setIsMoreMenuOpen(false); }}
-                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                    activeTab === 'invitations'
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${activeTab === 'invitations'
                       ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
                       : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
-                  }`}
+                    }`}
                 >
                   <Mail size={20} className="text-amber-600 dark:text-primary" />
                   <span>Invitations Requests</span>
@@ -3661,11 +3664,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 <button
                   type="button"
                   onClick={() => { setActiveTab('settings'); setIsMoreMenuOpen(false); }}
-                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
-                    activeTab === 'settings'
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${activeTab === 'settings'
                       ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
                       : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
-                  }`}
+                    }`}
                 >
                   <Settings size={20} className="text-amber-600 dark:text-primary" />
                   <span>Settings</span>

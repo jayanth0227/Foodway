@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import buzzerService from '../services/buzzer.service';
 import { Helmet } from 'react-helmet-async';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -20,6 +21,8 @@ import {
   Moon,
   X,
   AlertTriangle,
+  AlertCircle,
+  KeyRound,
   ChevronRight,
   ChevronDown,
   ChevronUp,
@@ -88,7 +91,15 @@ export const DeliveryDashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
-  const [isOnDuty, setIsOnDuty] = useState<boolean>(true);
+  const [isOnDuty, setIsOnDuty] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('delivery_partner_duty');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch (e) {}
+    return true;
+  });
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
@@ -192,6 +203,12 @@ export const DeliveryDashboard: React.FC = () => {
   const handleToggleDuty = async (nextDutyState: boolean) => {
     setIsOnDuty(nextDutyState);
     try {
+      const uKey = user?.id ? `delivery_partner_duty_${user.id}` : 'delivery_partner_duty';
+      localStorage.setItem(uKey, String(nextDutyState));
+      localStorage.setItem('delivery_partner_duty', String(nextDutyState));
+    } catch (e) {}
+
+    try {
       await axios.put(`${API_BASE_URL}/delivery-partner/duty-status`, {
         userId: user?.id,
         name: user?.name,
@@ -203,8 +220,41 @@ export const DeliveryDashboard: React.FC = () => {
     }
   };
 
-  // Real-Time Incoming Order Popup Modal State
-  const [incomingOrderPopup, setIncomingOrderPopup] = useState<any | null>(null);
+  // Delivery OTP Verification State
+  const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
+  const [pinErrors, setPinErrors] = useState<Record<string, string | null>>({});
+
+  const handleVerifyPinAndComplete = async (orderId: string) => {
+    const enteredPin = (pinInputs[orderId] || '').trim();
+    if (!enteredPin || enteredPin.length < 4) {
+      setPinErrors(prev => ({ ...prev, [orderId]: 'Please enter the complete 4-digit PIN.' }));
+      return;
+    }
+
+    setUpdatingOrderId(orderId);
+    setPinErrors(prev => ({ ...prev, [orderId]: null }));
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/delivery-partner/orders/${orderId}/verify-pin`, { pin: enteredPin });
+
+      if (res.data && res.data.success) {
+        setOrders(prev => prev.map(o => {
+          if (o.id === orderId || o.orderId === orderId) {
+            return { ...o, orderStatus: 'DELIVERED', status: 'DELIVERED' };
+          }
+          return o;
+        }));
+
+        setActionSuccess(`✅ 4-Digit Delivery PIN Verified! Order #${orderId} delivered successfully!`);
+        setTimeout(() => setActionSuccess(null), 5000);
+      }
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Incorrect 4-digit PIN. Please ask the customer for the correct OTP.';
+      setPinErrors(prev => ({ ...prev, [orderId]: errMsg }));
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
 
   const fetchAssignedOrders = useCallback(async () => {
     if (!user) return;
@@ -223,24 +273,84 @@ export const DeliveryDashboard: React.FC = () => {
     }
   }, [user]);
 
+  const isOnDutyRef = useRef(isOnDuty);
   useEffect(() => {
+    isOnDutyRef.current = isOnDuty;
+  }, [isOnDuty]);
+
+  useEffect(() => {
+    buzzerService.setupAutoUnlock();
+    buzzerService.unlockAudio();
     fetchAssignedOrders();
 
     if (user) {
       socketService.joinDelivery(user.id);
 
+      // Restore saved duty status from localStorage
+      try {
+        const uKey = `delivery_partner_duty_${user.id || user.email}`;
+        const saved = localStorage.getItem(uKey) || localStorage.getItem('delivery_partner_duty');
+        if (saved !== null) {
+          setIsOnDuty(saved === 'true');
+        }
+      } catch (e) {}
+
+      // Fetch latest duty status from backend
+      const fetchDutyStatus = async () => {
+        try {
+          const partnerId = encodeURIComponent(user.id || user.email || user.name);
+          const res = await axios.get(`${API_BASE_URL}/delivery-partner/duty-status/${partnerId}`);
+          if (res.data && res.data.success && typeof res.data.isOnDuty === 'boolean') {
+            setIsOnDuty(res.data.isOnDuty);
+            const uKey = `delivery_partner_duty_${user.id || user.email}`;
+            localStorage.setItem(uKey, String(res.data.isOnDuty));
+            localStorage.setItem('delivery_partner_duty', String(res.data.isOnDuty));
+          }
+        } catch (e) {
+          console.warn('Failed to sync duty status from backend:', e);
+        }
+      };
+      fetchDutyStatus();
+
+      const isAssignedToThisPartner = (order: any) => {
+        const activeDuty = isOnDutyRef.current || isOnDuty || localStorage.getItem('delivery_partner_duty') !== 'false';
+        if (!user || !order || !activeDuty) return false;
+
+        let storedUser: any = null;
+        try {
+          const uStr = localStorage.getItem('foodway_user') || localStorage.getItem('user');
+          if (uStr) storedUser = JSON.parse(uStr);
+        } catch (e) {}
+
+        const uId = (user.id || (user as any).userId || storedUser?.id || storedUser?.userId || '').trim().toLowerCase();
+        const uName = (user.name || storedUser?.name || '').trim().toLowerCase();
+        const uEmail = (user.email || storedUser?.email || '').trim().toLowerCase();
+
+        const rider = (order.assignedRider || '').trim().toLowerCase();
+        const delUser = (order.deliveryUserId || order.riderId || '').trim().toLowerCase();
+        const delName = (order.deliveryPartnerName || '').trim().toLowerCase();
+        const delEmail = (order.deliveryPartnerEmail || '').trim().toLowerCase();
+
+        // Strictly do NOT show unassigned orders until Admin explicitly assigns this rider!
+        if (!rider && !delUser && !delName && !delEmail) {
+          return false;
+        }
+
+        return (
+          (rider && (rider === uName || rider === uEmail || rider === uId || uName.includes(rider) || rider.includes(uName))) ||
+          (delUser && (delUser === uId || delUser === uEmail || delUser === uName || uId.includes(delUser) || delUser.includes(uId))) ||
+          (delName && (delName === uName || delName === uEmail || delName === uId || uName.includes(delName) || delName.includes(uName))) ||
+          (delEmail && (delEmail === uEmail || delEmail === uName || delEmail === uId || uEmail.includes(delEmail) || delEmail.includes(uEmail)))
+        );
+      };
+
       const handleNewOrderAlert = (newPickupOrder: any) => {
-        console.log('⚡ [Socket Event: INSTANT REALTIME ORDER POPUP]:', newPickupOrder);
-        
+        if (!isAssignedToThisPartner(newPickupOrder)) {
+          return;
+        }
+
         // Instant update state without refreshing page
         setOrders(prev => [newPickupOrder, ...prev.filter(o => (o.id !== newPickupOrder.id && o.orderId !== newPickupOrder.orderId))]);
-        setIncomingOrderPopup(newPickupOrder);
-
-        // Sound alert chime
-        try {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-          audio.play().catch(() => { });
-        } catch (e) { }
       };
 
       const unsubscribePickup = socketService.onOrderReadyForPickup(handleNewOrderAlert);
@@ -250,16 +360,20 @@ export const DeliveryDashboard: React.FC = () => {
         const targetId = updatedOrder.orderId || updatedOrder.id;
         const st = (updatedOrder.status || updatedOrder.orderStatus || '').toLowerCase();
         
-        if (st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
-          handleNewOrderAlert(updatedOrder);
-        } else {
-          setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: updatedOrder.status, orderStatus: updatedOrder.status } : o));
+        if (isAssignedToThisPartner(updatedOrder)) {
+          if (st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
+            handleNewOrderAlert(updatedOrder);
+          } else {
+            setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: updatedOrder.status, orderStatus: updatedOrder.status } : o));
+          }
         }
       });
 
       const unsubscribeRider = socketService.onRiderStatusUpdated((updatedOrder: any) => {
         const targetId = updatedOrder.orderId || updatedOrder.id;
-        setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: updatedOrder.status, orderStatus: updatedOrder.status } : o));
+        if (isAssignedToThisPartner(updatedOrder)) {
+          setOrders(prev => prev.map(o => (o.orderId === targetId || o.id === targetId) ? { ...o, status: updatedOrder.status, orderStatus: updatedOrder.status } : o));
+        }
       });
 
       return () => {
@@ -308,7 +422,7 @@ export const DeliveryDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-bg-dark text-text-primary p-3 sm:p-6 lg:p-8 space-y-5 max-w-5xl mx-auto pb-28 sm:pb-8 font-sans animate-fadeIn">
       <Helmet>
-        <title>Delivery Partner Console | MK Delivery Service</title>
+        <title>Delivery Partner Console | Foodway Services</title>
       </Helmet>
 
       {/* TOP RIDER APP BAR & HEADER CARD - Redesigned Mobile-First Layout */}
@@ -377,11 +491,14 @@ export const DeliveryDashboard: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => logout()}
+            onClick={async () => {
+              await logout();
+              navigate('/login', { replace: true });
+            }}
             className="px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <LogOut size={14} />
-            <span className="hidden sm:inline">Logout</span>
+            <span>Logout</span>
           </button>
         </div>
       </header>
@@ -509,9 +626,25 @@ export const DeliveryDashboard: React.FC = () => {
 
               const customerName = order.customer?.name || order.customerName || 'Valued Customer';
               const customerPhone = order.customer?.phone || order.customerPhone || '';
-              const customerAddress = order.customer?.address || order.customerAddress || 'Customer Address';
-              const restaurantName = order.restaurant || order.restaurantName || 'Gourmet Kitchen';
-              const restaurantAddress = order.restaurantAddress || 'Main Hub Store';
+              let customerAddress = order.deliveryAddress || order.customer?.address || order.customerAddress || order.address || '';
+              if (!customerAddress || customerAddress === 'Customer Address') {
+                if (order.shippingAddress) {
+                  if (typeof order.shippingAddress === 'string') customerAddress = order.shippingAddress;
+                  else if (typeof order.shippingAddress === 'object') {
+                    const sa = order.shippingAddress;
+                    customerAddress = [sa.street || sa.address, sa.area || sa.locality, sa.city || sa.district, sa.pincode || sa.zip].filter(Boolean).join(', ');
+                  }
+                }
+              }
+              if (!customerAddress || customerAddress === 'Customer Address') {
+                customerAddress = 'Ravulapalem Main Center, Konaseema District - 533238';
+              }
+
+              const restaurantName = order.restaurant || order.restaurantName || order.shopName || 'Gourmet Kitchen';
+              let restaurantAddress = order.restaurantAddress || order.shopAddress || order.storeAddress || order.restaurantDetails?.address || order.shopDetails?.address || '';
+              if (!restaurantAddress || restaurantAddress === 'Main Hub Store') {
+                restaurantAddress = `${restaurantName}, Main Market Road, Ravulapalem, Konaseema District`;
+              }
               const totalAmount = Number(order.total || order.totalAmount || 0);
 
               const isOutForDelivery =
@@ -519,6 +652,11 @@ export const DeliveryDashboard: React.FC = () => {
                 currentStatus === 'in_transit' ||
                 currentStatus === 'out for delivery' ||
                 currentStatus === 'out_for_delivery';
+
+              const isReadyForPickup =
+                currentStatus === 'ready' ||
+                currentStatus === 'ready_for_pickup' ||
+                currentStatus === 'ready for pickup';
 
               return (
                 <motion.div
@@ -579,7 +717,7 @@ export const DeliveryDashboard: React.FC = () => {
                                   {vIdx + 1}. {vs.restaurantName}
                                 </span>
                                 {vs.restaurantAddress && (
-                                  <span className="text-[10px] text-text-muted block">{vs.restaurantAddress}</span>
+                                  <span className="text-[10px] text-text-muted block font-medium">{vs.restaurantAddress}</span>
                                 )}
                               </div>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
@@ -594,75 +732,51 @@ export const DeliveryDashboard: React.FC = () => {
                     </div>
                   ) : null}
 
-                  {/* PICKUP & CUSTOMER ADDRESS GRID */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* PICKUP LOCATION CARD */}
-                    <div className="p-3.5 rounded-xl bg-bg-darkSec/40 border border-glass/40 space-y-2 text-left">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-black text-amber-500 uppercase tracking-wider flex items-center gap-1.5">
-                          <Store size={14} />
-                          <span>Pickup Location</span>
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedMapOrder(order); setMapTarget('SHOP'); }}
-                          className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-black flex items-center gap-1 shadow-xs transition-all shrink-0 cursor-pointer"
-                          title="View Shop exact location on Leaflet Map"
-                        >
-                          <Navigation size={11} />
-                          <span>Shop Map</span>
-                        </button>
+                  {/* CLEAR FULL ADDRESS DISPLAY GRID */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* SHOP PICKUP FULL ADDRESS CARD */}
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 text-left">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center shrink-0">
+                          <Store size={15} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest block">
+                            SHOP PICKUP LOCATION
+                          </span>
+                          <h4 className="text-xs font-black text-text-primary tracking-tight">
+                            {restaurantName}
+                          </h4>
+                        </div>
                       </div>
-                      <p className="text-xs font-extrabold text-text-primary">
-                        {restaurantName}
-                      </p>
-                      <p className="text-[11px] text-text-muted leading-relaxed">
-                        {restaurantAddress}
-                      </p>
-                    </div>
-
-                    {/* CUSTOMER DELIVERY LOCATION CARD */}
-                    <div className="p-3.5 rounded-xl bg-bg-darkSec/40 border border-glass/40 space-y-2 text-left">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">
-                          <MapPin size={14} />
-                          <span>Customer Address</span>
-                        </span>
-
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedMapOrder(order); setMapTarget('CUSTOMER'); }}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-black flex items-center gap-1 shadow-xs transition-all shrink-0 cursor-pointer"
-                          title="View Customer exact location on Leaflet Map"
-                        >
-                          <Navigation size={11} />
-                          <span>Customer Map</span>
-                        </button>
+                      <div className="pt-1.5 border-t border-amber-500/20">
+                        <p className="text-xs text-text-primary font-semibold leading-relaxed">
+                          {restaurantAddress}
+                        </p>
                       </div>
-                      <p className="text-xs font-extrabold text-text-primary">
-                        {customerName}
-                      </p>
-                      <p className="text-[11px] text-text-muted leading-relaxed">
-                        {customerAddress}
-                      </p>
                     </div>
-                  </div>
 
-                  {/* COMBINED FULL ROUTE DIRECTIONS BAR (SHOP -> CUSTOMER) */}
-                  <div className="p-3 rounded-xl bg-primary/10 border border-primary/30 flex flex-col sm:flex-row items-center justify-between gap-2 text-left">
-                    <div className="flex items-center gap-2 text-xs font-bold text-text-primary">
-                      <Navigation size={14} className="text-primary shrink-0" />
-                      <span>Leaflet Route Map (Shop ➔ Customer)</span>
+                    {/* CUSTOMER DELIVERY FULL ADDRESS CARD */}
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2 text-left">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-500 flex items-center justify-center shrink-0">
+                          <MapPin size={15} />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest block">
+                            CUSTOMER DELIVERY ADDRESS
+                          </span>
+                          <h4 className="text-xs font-black text-text-primary tracking-tight">
+                            {customerName}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="pt-1.5 border-t border-emerald-500/20">
+                        <p className="text-xs text-text-primary font-semibold leading-relaxed">
+                          {customerAddress}
+                        </p>
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedMapOrder(order); setMapTarget('ROUTE'); }}
-                      className="w-full sm:w-auto px-3 py-1.5 rounded-lg bg-primary text-black font-black text-xs flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 transition-all cursor-pointer shrink-0"
-                    >
-                      <Navigation size={12} />
-                      <span>Open Leaflet Route Map</span>
-                    </button>
                   </div>
 
                   {/* QUICK CONTACT ACTION BUTTON */}
@@ -731,38 +845,100 @@ export const DeliveryDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* PRIMARY DELIVERABLE PROGRESSION BUTTON */}
+                  {/* PRIMARY DELIVERABLE PROGRESSION BUTTON WITH 4-DIGIT OTP VERIFICATION */}
                   <div className="pt-1">
                     {isOutForDelivery ? (
-                      <button
-                        onClick={() => handleUpdateOrderStatus(orderId, 'Delivered')}
-                        disabled={isUpdating}
-                        className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 text-black font-black text-xs uppercase tracking-wider shadow-md hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        {isUpdating ? (
-                          <RefreshCw size={16} className="animate-spin" />
-                        ) : (
-                          <>
-                            <CheckCircle2 size={18} />
-                            <span>Complete Delivery to Customer</span>
-                          </>
+                      /* STAGE 3: PACKAGE COLLECTED & IN TRANSIT -> CUSTOMER OTP VERIFICATION SCREEN */
+                      <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-primary/10 to-emerald-500/10 border border-primary/40 space-y-3 text-left">
+                        <div className="flex items-center gap-2 text-xs font-black text-text-primary">
+                          <KeyRound size={16} className="text-primary shrink-0" />
+                          <span>Ask Customer for 4-Digit Delivery Verification PIN (OTP):</span>
+                        </div>
+
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleVerifyPinAndComplete(orderId);
+                          }}
+                          className="flex flex-col sm:flex-row items-center gap-2"
+                        >
+                          <input
+                            type="text"
+                            maxLength={4}
+                            value={pinInputs[orderId] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                              setPinInputs(prev => ({ ...prev, [orderId]: val }));
+                              if (pinErrors[orderId]) setPinErrors(prev => ({ ...prev, [orderId]: null }));
+                            }}
+                            placeholder="Enter 4-Digit PIN"
+                            className="w-full sm:w-48 px-4 py-3 rounded-xl bg-black/60 border border-primary/50 text-center font-mono text-lg font-black text-primary tracking-widest placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+
+                          <button
+                            type="submit"
+                            disabled={isUpdating || (pinInputs[orderId] || '').length < 4}
+                            className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider shadow-md active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                          >
+                            {isUpdating ? (
+                              <RefreshCw size={16} className="animate-spin" />
+                            ) : (
+                              <>
+                                <CheckCircle2 size={18} />
+                                <span>Verify PIN & Complete Delivery</span>
+                              </>
+                            )}
+                          </button>
+                        </form>
+
+                        {pinErrors[orderId] && (
+                          <div className="text-xs font-bold text-rose-400 bg-rose-500/15 p-2.5 rounded-xl border border-rose-500/30 flex items-center gap-2">
+                            <AlertCircle size={14} className="shrink-0 text-rose-400" />
+                            <span>{pinErrors[orderId]}</span>
+                          </div>
                         )}
-                      </button>
+                      </div>
+                    ) : isReadyForPickup ? (
+                      /* STAGE 2: VENDOR HAS MARKED "READY FOR PICKUP" -> RIDER CAN COLLECT ORDER */
+                      <div className="space-y-2">
+                        <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-extrabold flex items-center gap-2">
+                          <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+                          <span>✅ Vendor has marked order as Ready for Pickup! Collect parcel below:</span>
+                        </div>
+
+                        <button
+                          onClick={() => handleUpdateOrderStatus(orderId, 'Out for Delivery')}
+                          disabled={isUpdating}
+                          className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider shadow-md hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          {isUpdating ? (
+                            <RefreshCw size={16} className="animate-spin" />
+                          ) : (
+                            <>
+                              <Package size={18} />
+                              <span>📦 Collect Order & Start Delivery</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => handleUpdateOrderStatus(orderId, 'Out for Delivery')}
-                        disabled={isUpdating}
-                        className="w-full py-3.5 px-4 rounded-xl bg-primary text-black font-black text-xs uppercase tracking-wider shadow-md hover:brightness-105 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                      >
-                        {isUpdating ? (
-                          <RefreshCw size={16} className="animate-spin" />
-                        ) : (
-                          <>
-                            <Bike size={18} />
-                            <span>Accept Order & Start Delivery</span>
-                          </>
-                        )}
-                      </button>
+                      /* STAGE 1: VENDOR HAS NOT MARKED READY YET (STILL PREPARING OR ACCEPTED) */
+                      <div className="space-y-2">
+                        <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 text-xs font-extrabold flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <Clock size={16} className="shrink-0 text-amber-400 animate-spin" />
+                            <span>⏳ Waiting for Vendor to mark order as "Ready for Pickup"...</span>
+                          </div>
+                        </div>
+
+                        <button
+                          disabled
+                          className="w-full py-3.5 px-4 rounded-xl bg-gray-800/60 border border-glass/40 text-gray-400 font-bold text-xs uppercase tracking-wider shadow-none flex items-center justify-center gap-2 cursor-not-allowed opacity-60"
+                        >
+                          <Package size={18} />
+                          <span>📦 Collect Order (Waiting for Vendor Ready Status)</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                 </motion.div>
@@ -949,7 +1125,10 @@ export const DeliveryDashboard: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => logout()}
+                  onClick={async () => {
+                    await logout();
+                    navigate('/login', { replace: true });
+                  }}
                   className="w-full p-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-500 text-center uppercase tracking-wider font-extrabold flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <LogOut size={16} />
@@ -961,104 +1140,7 @@ export const DeliveryDashboard: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* REALTIME INCOMING ORDER POPUP MODAL */}
-      <AnimatePresence>
-        {incomingOrderPopup && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIncomingOrderPopup(null)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-md cursor-pointer"
-            />
 
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', damping: 24, stiffness: 280 }}
-              className="relative z-10 w-full max-w-sm sm:max-w-md bg-bg-darkSec border-2 border-primary rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 my-auto text-left"
-            >
-              <div className="flex items-center justify-between border-b border-glass pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/20 border border-primary/40 flex items-center justify-center text-primary animate-bounce shrink-0">
-                    <Bike size={26} />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-primary tracking-widest block">
-                      ⚡ Ready For Pickup!
-                    </span>
-                    <h3 className="text-base sm:text-lg font-black font-mono text-text-primary">
-                      #{incomingOrderPopup.id || incomingOrderPopup.orderId}
-                    </h3>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIncomingOrderPopup(null)}
-                  className="p-2 rounded-xl bg-glass border border-glass text-text-muted hover:text-text-primary cursor-pointer shrink-0"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className="space-y-2.5">
-                <div className="p-3 rounded-xl bg-bg-dark border border-glass space-y-0.5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-black text-amber-500 uppercase tracking-wider">
-                    <Store size={14} />
-                    <span>Restaurant / Vendor</span>
-                  </div>
-                  <p className="text-xs font-extrabold text-text-primary">
-                    {incomingOrderPopup.restaurant || incomingOrderPopup.restaurantName || 'Gourmet Kitchen'}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-bg-dark border border-glass space-y-0.5">
-                  <div className="flex items-center gap-1.5 text-[11px] font-black text-emerald-500 uppercase tracking-wider">
-                    <MapPin size={14} />
-                    <span>Delivery Location</span>
-                  </div>
-                  <p className="text-xs font-extrabold text-text-primary">
-                    {incomingOrderPopup.customer?.name || incomingOrderPopup.customerName || 'Valued Customer'}
-                  </p>
-                  <p className="text-[11px] text-text-muted line-clamp-2">
-                    {incomingOrderPopup.customer?.address || incomingOrderPopup.deliveryAddress || 'Customer Address'}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-xl bg-primary/10 border border-primary/30 flex justify-between items-center text-xs font-black">
-                  <span className="text-text-muted">Order Value:</span>
-                  <span className="text-primary text-base font-display font-black">
-                    ₹{(incomingOrderPopup.total || incomingOrderPopup.totalAmount || 0).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex gap-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIncomingOrderPopup(null)}
-                  className="flex-1 py-3 rounded-xl bg-glass border border-glass text-text-muted font-extrabold text-xs uppercase tracking-wider cursor-pointer"
-                >
-                  Dismiss
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleUpdateOrderStatus(incomingOrderPopup.id || incomingOrderPopup.orderId, 'Out for Delivery');
-                    setIncomingOrderPopup(null);
-                  }}
-                  className="flex-[2] py-3 rounded-xl bg-primary text-black font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-transform cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Bike size={18} />
-                  <span>Accept Order</span>
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* LEAFLET MAP MODAL (OPENSTREETMAP) */}
       <AnimatePresence>
@@ -1280,6 +1362,47 @@ export const DeliveryDashboard: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* DELIVERY PARTNER MOBILE BOTTOM NAVIGATION BAR */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white backdrop-blur-2xl border-t border-slate-200 dark:border-glass px-2 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.15)] flex items-center justify-around">
+        {[
+          { id: 'ACTIVE', label: 'Active Tasks', icon: Clock, count: activeOrders.length },
+          { id: 'COMPLETED', label: 'History', icon: CheckCircle2, count: completedOrders.length },
+        ].map(item => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as any)}
+              className={`flex flex-col items-center justify-center py-1 px-4 rounded-xl transition-all duration-200 cursor-pointer relative ${isActive
+                  ? 'text-primary font-black scale-105'
+                  : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label={item.label}
+            >
+              <div className="relative">
+                <Icon size={20} className={isActive ? 'text-primary stroke-[2.5]' : ''} />
+                {item.count > 0 && (
+                  <span className="absolute -top-1.5 -right-2 bg-gradient-to-r from-amber-500 to-primary text-black font-black text-[9px] min-w-[16px] h-[16px] px-1 rounded-full flex items-center justify-center border border-white dark:border-bg-dark shadow-sm">
+                    {item.count}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] font-extrabold mt-0.5 tracking-tight truncate">
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div
+                  layoutId="riderBottomTabUnderline"
+                  className="absolute -bottom-1 w-6 h-1 bg-primary rounded-full shadow-[0_0_8px_rgba(197,147,99,0.6)]"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 };

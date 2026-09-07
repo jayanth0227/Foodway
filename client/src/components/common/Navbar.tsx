@@ -159,16 +159,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
     }
   };
 
-  const handleLogoutClick = () => {
-    logout();
+  const handleLogoutClick = async () => {
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   return (
     <>
       <header
         className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${isScrolled
-          ? 'bg-bg-dark/90 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury'
-          : 'bg-bg-dark/90 backdrop-blur-2xl border-b border-glass py-3.5 shadow-luxury lg:bg-transparent lg:border-transparent lg:py-6 lg:shadow-none'
+          ? 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury'
+          : 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury lg:bg-transparent lg:border-transparent lg:py-6 lg:shadow-none'
           }`}
       >
         {/* Scroll Progress Bar */}
@@ -230,17 +231,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
           {/* Right Actions */}
           <div className="flex items-center space-x-3">
-            {/* Theme Toggle Button - Desktop Only */}
+            {/* Theme Toggle Mode Switch Button - Desktop & Mobile Topbar */}
             <button
               onClick={toggleTheme}
-              className="hidden lg:block relative p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer"
+              className="relative p-2 sm:p-2.5 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/20 group cursor-pointer shrink-0"
               aria-label="Toggle theme"
               title="Toggle Theme"
             >
               {theme === 'light' ? (
                 <Moon size={18} className="group-hover:scale-110 group-hover:rotate-[15deg] transition-all duration-500" />
               ) : (
-                <Sun size={18} className="group-hover:scale-110 group-hover:rotate-[45deg] transition-all duration-500" />
+                <Sun size={18} className="text-amber-400 group-hover:scale-110 group-hover:rotate-[45deg] transition-all duration-500" />
               )}
             </button>
 
@@ -382,109 +383,114 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
 
       {/* Fixed Edge-to-Edge Solid Bottom Navigation Bar for Mobile/Tablet */}
       {!(
-        location.pathname.startsWith('/admin') ||
-        location.pathname.startsWith('/restaurant') ||
-        location.pathname.startsWith('/delivery') ||
+        (location.pathname || '').toLowerCase().startsWith('/admin') ||
+        (location.pathname || '').toLowerCase().startsWith('/restaurant/dashboard') ||
+        (location.pathname || '').toLowerCase().startsWith('/shop/dashboard') ||
+        (location.pathname || '').toLowerCase().startsWith('/delivery') ||
+        (location.pathname || '').toLowerCase().startsWith('/item/') ||
+        (location.pathname || '').toLowerCase().startsWith('/dishes/') ||
+        (location.pathname || '').toLowerCase() === '/login' ||
+        (location.pathname || '').toLowerCase() === '/register' ||
         isProfileModalOpen
       ) && (
-        <nav
-          className="fixed bottom-0 left-0 right-0 w-full z-[999999] lg:hidden bg-white/95 dark:bg-bg-darkSec/95 border-t border-slate-200/80 dark:border-glass backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around overflow-visible shadow-[0_-4px_25px_rgba(0,0,0,0.15)]"
-        >
-        {/* 1. Home */}
-        <button
-          onClick={() => {
-            navigate('/');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-            setActiveSection('home');
-          }}
-          className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/' && activeSection === 'home'
-            ? 'text-primary font-black'
-            : 'text-text-muted hover:text-text-primary'
-            }`}
-          aria-label="Home"
-        >
-          <Home size={19} className={location.pathname === '/' && activeSection === 'home' ? 'text-primary fill-primary/20' : ''} />
-          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_home')}</span>
-        </button>
-
-        {/* 2. Explore Categories */}
-        <button
-          onClick={() => navigate('/categories')}
-          className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/categories'
-            ? 'text-primary font-black'
-            : 'text-text-muted hover:text-text-primary'
-            }`}
-          aria-label="Explore Categories"
-        >
-          <LayoutGrid size={19} className={location.pathname === '/categories' ? 'text-primary fill-primary/20' : ''} />
-          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_explore')}</span>
-        </button>
-
-        {/* 3. CENTER ACTION BUTTON: Shops & Supermarkets */}
-        <button
-          onClick={() => navigate('/shops')}
-          className="relative -top-3 flex flex-col items-center justify-center cursor-pointer group z-20 shrink-0"
-          aria-label="Shops & Supermarkets"
-        >
-          {/* Solid Circular FAB Button */}
-          <div
-            className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants')
-              ? 'bg-primary text-black ring-4 ring-primary/30'
-              : 'bg-primary text-black hover:brightness-110'
-              }`}
+          <nav
+            className="fixed bottom-0 left-0 right-0 w-full z-[999999] lg:hidden bg-white/95 dark:bg-[#0D0F17]/95 text-slate-900 dark:text-white border-t border-slate-200/80 dark:border-glass backdrop-blur-2xl px-2 py-1.5 flex items-center justify-around overflow-visible shadow-[0_-4px_25px_rgba(0,0,0,0.15)]"
           >
-            <Utensils size={20} className="stroke-[2.5]" />
-          </div>
-          <span
-            className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants') ? 'text-primary font-black' : 'text-text-muted group-hover:text-text-primary'
-              }`}
-          >
-            Shops
-          </span>
-        </button>
+            {/* 1. Home */}
+            <button
+              onClick={() => {
+                navigate('/');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setActiveSection('home');
+              }}
+              className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/' && activeSection === 'home'
+                ? 'text-primary font-black'
+                : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label="Home"
+            >
+              <Home size={19} className={location.pathname === '/' && activeSection === 'home' ? 'text-primary fill-primary/20' : ''} />
+              <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_home')}</span>
+            </button>
 
-        {/* 4. My Orders */}
-        <button
-          onClick={() => {
-            if (isAuthenticated) {
-              navigate('/orders');
-            } else {
-              onOpenAuth('login');
-            }
-          }}
-          className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/orders'
-            ? 'text-primary font-black'
-            : 'text-text-muted hover:text-text-primary'
-            }`}
-          aria-label="My Orders"
-        >
-          <ReceiptText size={19} className={location.pathname === '/orders' ? 'text-primary' : ''} />
-          <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_orders')}</span>
-        </button>
+            {/* 2. Explore Categories */}
+            <button
+              onClick={() => navigate('/categories')}
+              className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/categories'
+                ? 'text-primary font-black'
+                : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label="Explore Categories"
+            >
+              <LayoutGrid size={19} className={location.pathname === '/categories' ? 'text-primary fill-primary/20' : ''} />
+              <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_explore')}</span>
+            </button>
 
-        {/* 5. Cart */}
-        {!location.pathname.startsWith('/admin') && (
-          <button
-            onClick={() => navigate('/cart')}
-            className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/cart'
-              ? 'text-primary font-black'
-              : 'text-text-muted hover:text-text-primary'
-              }`}
-            aria-label="Shopping Cart"
-          >
-            <div className="relative">
-              <ShoppingCart size={19} className={location.pathname === '/cart' ? 'text-primary' : ''} />
-              {totalItemsCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 bg-primary text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-bg-dark shadow-sm">
-                  {totalItemsCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_cart')}</span>
-          </button>
+            {/* 3. CENTER ACTION BUTTON: Shops & Supermarkets */}
+            <button
+              onClick={() => navigate('/shops')}
+              className="relative -top-3 flex flex-col items-center justify-center cursor-pointer group z-20 shrink-0"
+              aria-label="Shops & Supermarkets"
+            >
+              {/* Solid Circular FAB Button */}
+              <div
+                className={`w-11 h-11 min-w-[44px] min-h-[44px] rounded-full flex items-center justify-center shadow-luxury border-2 border-white dark:border-glass transition-transform duration-200 group-hover:scale-105 group-active:scale-95 ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants')
+                  ? 'bg-primary text-black ring-4 ring-primary/30'
+                  : 'bg-primary text-black hover:brightness-110'
+                  }`}
+              >
+                <Utensils size={20} className="stroke-[2.5]" />
+              </div>
+              <span
+                className={`text-[10px] font-black mt-0.5 tracking-tight ${location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants') ? 'text-primary font-black' : 'text-text-muted group-hover:text-text-primary'
+                  }`}
+              >
+                Shops
+              </span>
+            </button>
+
+            {/* 4. My Orders */}
+            <button
+              onClick={() => {
+                if (isAuthenticated) {
+                  navigate('/orders');
+                } else {
+                  onOpenAuth('login');
+                }
+              }}
+              className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/orders'
+                ? 'text-primary font-black'
+                : 'text-text-muted hover:text-text-primary'
+                }`}
+              aria-label="My Orders"
+            >
+              <ReceiptText size={19} className={location.pathname === '/orders' ? 'text-primary' : ''} />
+              <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_orders')}</span>
+            </button>
+
+            {/* 5. Cart */}
+            {!location.pathname.startsWith('/admin') && (
+              <button
+                onClick={() => navigate('/cart')}
+                className={`flex flex-col items-center justify-center py-0.5 px-2 rounded-xl transition-colors duration-200 cursor-pointer ${location.pathname === '/cart'
+                  ? 'text-primary font-black'
+                  : 'text-text-muted hover:text-text-primary'
+                  }`}
+                aria-label="Shopping Cart"
+              >
+                <div className="relative">
+                  <ShoppingCart size={19} className={location.pathname === '/cart' ? 'text-primary' : ''} />
+                  {totalItemsCount > 0 && (
+                    <span className="absolute -top-1.5 -right-2 bg-primary text-black text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-white dark:border-bg-dark shadow-sm">
+                      {totalItemsCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{t('nav_cart')}</span>
+              </button>
+            )}
+          </nav>
         )}
-      </nav>
-      )}
     </>
   );
 };

@@ -28,16 +28,17 @@ export const getFastAndAccurateLocation = (
   onError?: (errorMessage: string) => void
 ) => {
   if (!navigator.geolocation) {
-    if (onError) onError('Geolocation is not supported by your browser.');
+    // Fallback to IP Geolocation if browser doesn't support Geolocation API
+    fetchIpLocation(onLocationFound, onError);
     return;
   }
 
-  let fastAcquired = false;
+  let locationAcquired = false;
 
-  // Phase 1: Instant Fast Location (Low Power / Network)
+  // Phase 1: Fast Location Fix
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      fastAcquired = true;
+      locationAcquired = true;
       onLocationFound({
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
@@ -45,14 +46,15 @@ export const getFastAndAccurateLocation = (
       });
     },
     (err) => {
-      console.warn('Fast network location fallback:', err.message);
+      console.warn('Fast location attempt warning:', err.message);
     },
-    { enableHighAccuracy: false, timeout: 3500, maximumAge: 300000 }
+    { enableHighAccuracy: false, timeout: 6000, maximumAge: 60000 }
   );
 
-  // Phase 2: High Accuracy Precise Satellite Fix
+  // Phase 2: High Accuracy Satellite Fix
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      locationAcquired = true;
       onLocationFound({
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
@@ -60,13 +62,44 @@ export const getFastAndAccurateLocation = (
       });
     },
     (err) => {
-      console.warn('High accuracy GPS fix failed:', err.message);
-      if (!fastAcquired && onError) {
-        onError('Unable to detect precise GPS location. Please select on map.');
+      console.warn('High accuracy GPS fix warning:', err.message);
+      if (!locationAcquired) {
+        // Fallback to IP Geolocation API if browser GPS permissions denied or timeout
+        fetchIpLocation(onLocationFound, () => {
+          if (onError) {
+            if (err.code === err.PERMISSION_DENIED) {
+              onError('Location access denied in browser. Please enable location permissions or pick on map.');
+            } else {
+              onError('GPS signal weak. Click anywhere on the map to set your location.');
+            }
+          }
+        });
       }
     },
-    { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
+};
+
+// IP Geolocation Fallback Helper
+const fetchIpLocation = async (
+  onLocationFound: (result: FastLocationResult) => void,
+  onError?: () => void
+) => {
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    const data = await res.json();
+    if (data && data.latitude && data.longitude) {
+      onLocationFound({
+        latitude: parseFloat(data.latitude),
+        longitude: parseFloat(data.longitude),
+        isHighAccuracy: false
+      });
+      return;
+    }
+  } catch (e) {
+    console.warn('IP location fallback failed:', e);
+  }
+  if (onError) onError();
 };
 
 /**

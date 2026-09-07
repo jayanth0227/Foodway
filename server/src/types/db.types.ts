@@ -129,6 +129,8 @@ export interface IOrder {
   items?: IOrderItemDetail[];
   rawItems?: any[];
   deliveryUserId?: string; // References foodway-users.userId
+  deliveryPin?: string; // 4-digit PIN for customer delivery verification
+  deliveryOtp?: string; // Alias for 4-digit PIN
   paymentMethod: string;
   paymentStatus: PaymentStatus;
   subtotal: number;

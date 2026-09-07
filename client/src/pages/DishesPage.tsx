@@ -15,13 +15,19 @@ import {
   Info,
   Trash2,
   Sparkles,
-  Utensils
+  Utensils,
+  Zap,
+  ShoppingBag,
+  SlidersHorizontal,
+  ArrowRight
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
+import { ItemDetailsModal } from '../components/common/ItemDetailsModal';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 
 const FALLBACK_KONASEEMA_DISHES = [
   {
@@ -172,13 +178,15 @@ const FALLBACK_KONASEEMA_DISHES = [
 
 export const DishesPage: React.FC = () => {
   const navigate = useNavigate();
-  const { addToCart, reduceQuantity, removeFromCart, getItemQuantity } = useCart();
+  const { addToCart, reduceQuantity, removeFromCart, getItemQuantity, totalItemsCount, totalAmount } = useCart();
   const { t } = useLanguage();
 
   const [dishes, setDishes] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [sortBy, setSortBy] = useState<'rating' | 'price_asc' | 'price_desc'>('rating');
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
 
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -254,7 +262,7 @@ export const DishesPage: React.FC = () => {
     });
   };
 
-  // Filter & Sort Dishes by Rating Descending
+  // Filter & Sort Dishes
   const filteredDishes = dishes
     .filter((dish) => {
       const matchesSearch =
@@ -278,7 +286,11 @@ export const DishesPage: React.FC = () => {
 
       return matchesSearch && matchesCat;
     })
-    .sort((a, b) => Number(b.rating || 4.8) - Number(a.rating || 4.8));
+    .sort((a, b) => {
+      if (sortBy === 'price_asc') return Number(a.price) - Number(b.price);
+      if (sortBy === 'price_desc') return Number(b.price) - Number(a.price);
+      return Number(b.rating || 4.8) - Number(a.rating || 4.8);
+    });
 
   const categoriesList = ['All', 'Veg', 'Non-Veg', 'Konaseema Specials', 'Sweets', 'Fast Food'];
 
@@ -292,92 +304,117 @@ export const DishesPage: React.FC = () => {
         />
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-28 pb-24 px-4 sm:px-6 lg:px-12 relative">
-        {/* Ambient Glow */}
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[700px] h-[350px] bg-primary/10 rounded-full blur-[150px] pointer-events-none" />
+      <div className="min-h-screen bg-stone-50 dark:bg-[#090B10] pt-20 sm:pt-24 lg:pt-24 pb-32 lg:pb-16 px-3.5 sm:px-6 lg:px-12 relative font-sans transition-colors duration-400">
+        {/* Ambient Glowing Orbs */}
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-[#B87B4B]/10 dark:bg-[#B87B4B]/15 rounded-full blur-[140px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto relative z-10 space-y-6">
-          {/* Header Navigation Bar */}
-          <div className="shrink-0 space-y-4 pt-2 sm:pt-0 pb-4 border-b border-glass bg-bg-dark z-20">
+        <div className="max-w-7xl mx-auto relative z-10 space-y-4">
+          {/* Header Navigation & Search Bar Section */}
+          <div className="shrink-0 space-y-3.5 pt-0 pb-4 border-b border-slate-200/80 dark:border-white/10 z-20">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               {/* Back Button & Title */}
               <div className="flex items-center gap-3.5 flex-1 min-w-0">
                 <button
+                  type="button"
                   onClick={() => navigate('/')}
-                  className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-glass border border-glass hover:border-primary/50 text-text-primary transition-all active:scale-95 shadow-sm group shrink-0 cursor-pointer flex items-center justify-center"
+                  className="w-10 h-10 rounded-2xl bg-white dark:bg-[#181C25] border border-slate-200/90 dark:border-white/15 text-[#B87B4B] dark:text-[#D4986A] shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0 group"
                   aria-label="Back to Home"
                   title="Back to Home Screen"
                 >
-                  <ArrowLeft size={19} className="text-primary group-hover:-translate-x-0.5 transition-transform" />
+                  <ArrowLeft size={18} className="text-[#B87B4B] dark:text-[#D4986A] stroke-[2.2] group-hover:-translate-x-0.5 transition-transform" />
                 </button>
 
                 <div className="space-y-0.5 min-w-0">
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black font-display text-gradient-gold leading-tight truncate">
-                    Taste the Heart of Konaseema
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black font-display text-gradient-gold tracking-tight leading-tight truncate">
+                    Flavours of Konaseema
                   </h1>
-                  <p className="hidden sm:block text-xs sm:text-sm text-text-secondary font-medium truncate">
-                    Explore traditional recipes and gourmet dishes directly from Godavari kitchens.
+                  <p className="hidden sm:block text-xs sm:text-sm text-slate-500 dark:text-stone-400 font-medium truncate">
+                    Discover authentic Godavari recipes, traditional sweets & village kitchen delicacies.
                   </p>
                 </div>
               </div>
 
-              {/* Search Bar */}
-              <div className="relative w-full sm:w-72 lg:w-80 shrink-0">
-                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted" />
+              {/* Search Bar Input */}
+              <div className="relative w-full lg:w-80 shrink-0">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B87B4B] dark:text-[#D4986A]">
+                  <Search size={18} className="stroke-[2.2]" />
+                </div>
                 <input
                   type="text"
                   placeholder="Search dishes, sweets, or shops..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-11 pr-4 py-2.5 sm:py-3 rounded-2xl bg-glass border border-glass focus:border-primary/50 text-text-primary text-[15px] sm:text-xs font-bold focus:outline-none transition-all placeholder:text-text-muted shadow-sm"
+                  className="w-full pl-11 pr-10 py-3 rounded-2xl bg-white dark:bg-[#151921] border border-slate-200/90 dark:border-white/10 text-xs sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-stone-400 outline-none focus:border-[#B87B4B] focus:ring-2 focus:ring-[#B87B4B]/20 transition-all font-semibold shadow-xs"
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-white bg-slate-100 dark:bg-white/10 transition-colors cursor-pointer"
+                    aria-label="Clear Search"
+                  >
+                    <Search size={0} className="hidden" />
+                    <span className="text-xs font-bold px-1">✕</span>
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Category Filter Pills Bar */}
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2">
-              {categoriesList.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all cursor-pointer ${
-                    selectedCategory === cat
-                      ? 'bg-primary text-black shadow-luxury scale-105'
-                      : 'bg-glass border border-glass text-text-secondary hover:text-text-primary hover:border-primary/40'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar pt-2 pb-1">
+              {[
+                { id: 'All', label: 'All' },
+                { id: 'Veg', label: 'Veg' },
+                { id: 'Non-Veg', label: 'Non-Veg' },
+                { id: 'Konaseema Specials', label: 'Konaseema Specials' },
+                { id: 'Sweets', label: 'Sweets & Bakery' },
+                { id: 'Fast Food', label: 'Fast Food' },
+              ].map((cat) => {
+                const isActive = selectedCategory === cat.id;
+
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer shrink-0 border ${
+                      isActive
+                        ? 'bg-[#F4E6D8] dark:bg-[#B87B4B]/25 border-[#B87B4B] text-[#B87B4B] dark:text-[#D4986A] shadow-xs scale-105 font-black'
+                        : 'bg-white dark:bg-[#151921] border-slate-200/90 dark:border-white/15 text-slate-700 dark:text-stone-300 hover:border-[#B87B4B]/50 hover:text-[#B87B4B]'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Dishes Grid */}
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
               {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div key={i} className="h-72 rounded-2xl bg-glass/20 animate-pulse border border-glass" />
+                <div key={i} className="h-72 rounded-3xl bg-slate-200/60 dark:bg-white/5 animate-pulse border border-slate-200 dark:border-white/10" />
               ))}
             </div>
           ) : filteredDishes.length === 0 ? (
-            <div className="py-16 text-center glass-panel border border-glass rounded-3xl p-8 max-w-md mx-auto space-y-3">
-              <Utensils size={36} className="mx-auto text-text-muted opacity-50" />
-              <h3 className="text-lg font-bold text-text-primary">No Dishes Found</h3>
-              <p className="text-xs text-text-muted">
-                No items matched your search criteria. Try changing filters or clear search term.
+            <div className="py-16 text-center bg-white dark:bg-[#151921] border border-slate-200/80 dark:border-white/10 rounded-3xl p-8 max-w-md mx-auto space-y-3 shadow-xl">
+              <Utensils size={40} className="mx-auto text-slate-400 dark:text-stone-500 opacity-60" />
+              <h3 className="text-lg font-black text-slate-900 dark:text-white font-display">No Gourmet Dishes Found</h3>
+              <p className="text-xs text-slate-500 dark:text-stone-400 leading-relaxed font-medium">
+                No items matched your search criteria. Try changing your filters or searching for something else.
               </p>
               <button
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedCategory('All');
                 }}
-                className="px-5 py-2.5 rounded-xl bg-primary text-black font-extrabold text-xs shadow-md hover:scale-105 transition-all cursor-pointer"
+                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#B87B4B] via-[#C59363] to-[#A67C52] text-white font-black text-xs uppercase tracking-wider shadow-md hover:scale-105 transition-all cursor-pointer"
               >
                 Reset Filters
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6">
               {filteredDishes.map((dish) => {
                 const isFav = !!favorites[dish.id];
                 const isOutOfStock = dish.isAvailable === false || dish.status === 'disabled';
@@ -389,151 +426,133 @@ export const DishesPage: React.FC = () => {
                     layout
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 ${
+                    onClick={() => navigate(`/item/${dish.id || dish.menuItemId}`, { state: { dish } })}
+                    className={`group bg-white dark:bg-[#151921] border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-4 flex flex-col justify-between shadow-lg hover:shadow-2xl hover:border-[#B87B4B]/40 transition-all duration-300 cursor-pointer relative overflow-hidden ${
                       isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
                     }`}
                   >
                     <div>
-                      {/* Image Thumbnail */}
-                      <div className="relative h-32 sm:h-36 rounded-xl sm:rounded-2xl overflow-hidden border border-glass mb-3 bg-black/40">
-                        <img
-                          src={dish.image}
-                          alt={dish.name}
+                      {/* Image Thumbnail Container */}
+                      <div className="relative h-36 sm:h-40 rounded-xl sm:rounded-2xl overflow-hidden border border-slate-200/80 dark:border-white/10 mb-3 bg-stone-100 dark:bg-black/30">
+                        <ItemImageOrIcon
+                          image={dish.image}
+                          name={dish.name}
+                          category={dish.category}
+                          isVeg={dish.isVeg || dish.type === 'veg'}
                           className={`w-full h-full object-cover transition-transform duration-700 ease-out ${
                             isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
                           }`}
+                          containerClassName="w-full h-full"
+                          iconSize={32}
                         />
 
                         {/* Top Badges */}
-                        <div className="absolute top-2 left-2 z-20 flex items-center gap-1 flex-wrap">
+                        <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`text-[8px] sm:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md backdrop-blur-md shadow-md ${
+                            className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md backdrop-blur-md ${
                               dish.type === 'veg' || dish.isVeg
-                                ? 'bg-emerald-500/80 text-white border border-emerald-400/40'
-                                : 'bg-rose-600/80 text-white border border-rose-400/40'
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-rose-600 text-white'
                             }`}
                           >
-                            {dish.type === 'veg' || dish.isVeg ? 'Veg' : 'Non-Veg'}
+                            {dish.type === 'veg' || dish.isVeg ? 'VEG' : 'NON-VEG'}
                           </span>
 
                           {isOutOfStock && (
-                            <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-600/90 text-white shadow-md backdrop-blur-md">
+                            <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-600 text-white shadow-md">
                               Out of Stock
                             </span>
                           )}
+                        </div>
+
+                        {/* Rating Badge on Product Image (Right Side) */}
+                        <div className="absolute bottom-2.5 right-2.5 z-20 flex items-center gap-1 bg-emerald-600/90 text-white px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black shadow-md backdrop-blur-md border border-emerald-400/30">
+                          <Star size={10} className="fill-white text-white" />
+                          <span>{dish.rating || 4.8}</span>
                         </div>
 
                         {/* Wishlist Heart */}
                         <button
                           type="button"
                           onClick={(e) => toggleFavorite(dish, e)}
-                          className="absolute top-2 right-2 z-20 p-1.5 rounded-xl bg-black/50 backdrop-blur-md border border-white/20 text-white hover:text-rose-400 active:scale-95 transition-all shadow-md cursor-pointer"
+                          className="absolute top-2.5 right-2.5 z-20 w-8 h-8 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-white hover:text-rose-500 active:scale-95 transition-all shadow-md flex items-center justify-center cursor-pointer"
                           title="Favorite"
                         >
                           <Heart
-                            size={13}
+                            size={14}
                             className={isFav ? 'fill-rose-500 text-rose-500' : 'text-white'}
                           />
                         </button>
                       </div>
 
-                      {/* Restaurant Name */}
-                      <div className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-primary/90 truncate mb-1 flex items-center gap-1.5">
-                        <Store size={11} className="text-primary shrink-0" />
+                      {/* Restaurant / Store Name */}
+                      <div className="text-[10px] sm:text-[11px] font-black uppercase tracking-wider text-[#B87B4B] dark:text-[#D4986A] truncate mb-1 flex items-center gap-1.5">
+                        <Store size={12} className="text-[#B87B4B] dark:text-[#D4986A] shrink-0" />
                         <span className="truncate">{dish.restaurantName || 'Konaseema Kitchens'}</span>
                       </div>
 
-                      {/* Title & Rating */}
-                      <div className="flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <UtensilsCrossed size={12} className="text-amber-400/90 shrink-0" />
-                          <h3 className="font-display font-black text-xs sm:text-sm text-text-primary group-hover:text-primary transition-colors truncate">
-                            {dish.name}
-                          </h3>
-                        </div>
-
-                        <div className="flex items-center gap-0.5 shrink-0 bg-emerald-600 border border-emerald-500/40 px-1.5 py-0.5 rounded-md text-white text-[10px] sm:text-[11px] font-black shadow-sm">
-                          <Star size={10} className="fill-white text-white" />
-                          <span>{dish.rating || 4.8}</span>
-                        </div>
-                      </div>
-
-                      {/* Description */}
-                      <div className="flex items-start gap-1 mt-1">
-                        <Info size={11} className="text-text-muted shrink-0 mt-0.5 opacity-60" />
-                        <p className="text-[11px] text-text-muted leading-snug line-clamp-2 font-medium">
-                          {dish.description}
-                        </p>
+                      {/* Full Title */}
+                      <div className="flex items-start gap-1.5 min-h-[38px]">
+                        <UtensilsCrossed size={13} className="text-amber-500 shrink-0 mt-0.5" />
+                        <h3 className="font-display font-black text-xs sm:text-sm text-slate-900 dark:text-white group-hover:text-[#B87B4B] dark:group-hover:text-[#D4986A] transition-colors leading-snug">
+                          {dish.name}
+                        </h3>
                       </div>
                     </div>
 
                     {/* Price & Add to Cart Footer */}
-                    <div className="flex items-center justify-between pt-2.5 border-t border-glass/60 mt-3">
-                      <span className="text-sm sm:text-base font-black text-text-primary text-gradient-gold">
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-200/80 dark:border-white/10 mt-3.5 gap-1 min-w-0">
+                      <span className="text-sm sm:text-base font-black text-gradient-gold font-display shrink-0">
                         ₹{Number(dish.price).toFixed(0)}
                       </span>
 
-                      {/* Direct Add to Cart Actions */}
+                      {/* Direct Add to Cart Action */}
                       {isOutOfStock ? (
                         <button
                           disabled
-                          className="font-bold text-[10px] py-1.5 px-2.5 rounded-lg flex items-center gap-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed"
+                          className="font-bold text-[10px] py-1.5 px-2.5 rounded-xl flex items-center gap-1 bg-rose-500/10 text-rose-500 border border-rose-500/20 cursor-not-allowed uppercase shrink-0"
                         >
                           <Ban size={11} />
                           <span>Unavailable</span>
                         </button>
                       ) : quantity > 0 ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex items-center bg-primary/10 border border-primary/40 text-primary rounded-xl p-0.5 shadow-sm backdrop-blur-md">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                reduceQuantity(dish.id);
-                              }}
-                              className="w-6 h-6 rounded-lg bg-primary/20 hover:bg-primary hover:text-black text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                              title="Decrease quantity"
-                            >
-                              <Minus size={11} />
-                            </button>
+                        <div className="flex items-center bg-white dark:bg-slate-800 border border-[#B87B4B]/40 rounded-full p-1 shadow-md shadow-slate-200/60 dark:shadow-none shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              reduceQuantity(dish.id);
+                            }}
+                            className="w-7.5 h-7.5 rounded-full bg-[#B87B4B]/10 hover:bg-[#B87B4B] hover:text-white text-[#B87B4B] dark:text-[#D4986A] font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                            title="Decrease quantity"
+                          >
+                            <Minus size={13} className="stroke-[3]" />
+                          </button>
 
-                            <span className="w-6 text-center font-black text-xs text-primary">
-                              {quantity}
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleAddToCart(dish, e);
-                              }}
-                              className="w-6 h-6 rounded-lg bg-primary/20 hover:bg-primary hover:text-black text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                              title="Increase quantity"
-                            >
-                              <Plus size={11} />
-                            </button>
-                          </div>
+                          <span className="w-7 text-center font-black text-sm text-[#B87B4B] dark:text-[#D4986A]">
+                            {quantity}
+                          </span>
 
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              removeFromCart(dish.id);
+                              handleAddToCart(dish, e);
                             }}
-                            className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center cursor-pointer active:scale-95 shadow-sm"
-                            title="Remove item"
+                            className="w-7.5 h-7.5 rounded-full bg-[#B87B4B]/10 hover:bg-[#B87B4B] hover:text-white text-[#B87B4B] dark:text-[#D4986A] font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                            title="Increase quantity"
                           >
-                            <Trash2 size={12} />
+                            <Plus size={13} className="stroke-[3]" />
                           </button>
                         </div>
                       ) : (
                         <button
                           type="button"
                           onClick={(e) => handleAddToCart(dish, e)}
-                          className="px-3.5 py-1.5 rounded-xl bg-primary/10 border border-primary/40 text-primary hover:bg-primary hover:text-black font-extrabold text-[11px] uppercase tracking-wider shadow-sm transition-all duration-300 backdrop-blur-md active:scale-95 flex items-center gap-1 cursor-pointer"
+                          className="px-4 py-1.5 rounded-2xl bg-white dark:bg-slate-800 text-[#B87B4B] dark:text-[#D4986A] border border-slate-200/90 dark:border-slate-700/80 hover:border-[#B87B4B]/50 hover:bg-[#F4E6D8]/40 active:scale-95 font-black text-xs sm:text-sm tracking-wider shadow-md shadow-slate-200/60 dark:shadow-none transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
                         >
-                          <Plus size={12} />
-                          <span>Add</span>
+                          <span>ADD</span>
+                          <Plus size={14} className="stroke-[3] text-[#B87B4B] dark:text-[#D4986A]" />
                         </button>
                       )}
                     </div>
@@ -543,6 +562,15 @@ export const DishesPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Item Details Modal */}
+        {selectedDetailItem && (
+          <ItemDetailsModal
+            item={selectedDetailItem}
+            isOpen={!!selectedDetailItem}
+            onClose={() => setSelectedDetailItem(null)}
+          />
+        )}
       </div>
     </>
   );

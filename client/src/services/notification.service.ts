@@ -19,7 +19,6 @@ export const notificationService = {
       const token = await requestNotificationPermission();
       if (token) {
         await notificationService.updateFcmToken(token);
-        console.log('FCM token successfully registered with backend server.');
       }
     } catch (error) {
       console.error('Failed to sync FCM token with backend server:', error);

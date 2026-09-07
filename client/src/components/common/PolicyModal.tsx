@@ -25,7 +25,7 @@ export const PolicyModal: React.FC<PolicyModalProps> = ({
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
       <div className="bg-white dark:bg-bg-card border border-slate-200 dark:border-glass rounded-3xl max-w-xl w-full p-6 sm:p-8 space-y-5 shadow-2xl relative overflow-hidden max-h-[85vh] flex flex-col transition-all">
-        
+
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-glass shrink-0">
           <div className="flex items-center space-x-3">

@@ -8,6 +8,8 @@ import type { DishItem } from '../../utils/mockData';
 import { API_BASE_URL } from '../../utils/api';
 import { HomeDishCardSkeleton } from './HomePageSkeleton';
 import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
+import { ItemDetailsModal } from '../common/ItemDetailsModal';
+import ItemImageOrIcon from '../common/ItemImageOrIcon';
 
 const FALLBACK_KONASEEMA_DISHES: any[] = [];
 
@@ -25,6 +27,7 @@ export const PopularDishes: React.FC = () => {
   });
 
   const [cmsConfig, setCmsConfig] = useState<any>(null);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<any | null>(null);
 
   useEffect(() => {
     const fetchDishes = async () => {
@@ -60,6 +63,13 @@ export const PopularDishes: React.FC = () => {
 
     fetchDishes();
 
+    const handleCMSUpdate = () => {
+      fetchDishes();
+    };
+
+    window.addEventListener('homepage_cms_updated', handleCMSUpdate);
+    window.addEventListener('foodway_menu_updated', handleCMSUpdate);
+
     const syncWishlist = () => {
       const list = getWishlist();
       const favMap: Record<string, boolean> = {};
@@ -67,8 +77,14 @@ export const PopularDishes: React.FC = () => {
       setFavorites(favMap);
     };
 
-    window.addEventListener('foodway_wishlist_updated', syncWishlist);
-    return () => window.removeEventListener('foodway_wishlist_updated', syncWishlist);
+    syncWishlist();
+
+    window.addEventListener('wishlist_updated', syncWishlist);
+    return () => {
+      window.removeEventListener('homepage_cms_updated', handleCMSUpdate);
+      window.removeEventListener('foodway_menu_updated', handleCMSUpdate);
+      window.removeEventListener('wishlist_updated', syncWishlist);
+    };
   }, []);
 
   const toggleFavorite = (dish: any, e: React.MouseEvent) => {
@@ -117,19 +133,24 @@ export const PopularDishes: React.FC = () => {
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 ${
+        onClick={() => navigate(`/item/${dish.id || dish.menuItemId}`, { state: { dish } })}
+        className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 cursor-pointer ${
           isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
         }`}
       >
         <div>
           {/* Dish Image Container */}
           <div className="relative h-32 sm:h-36 rounded-xl sm:rounded-2xl overflow-hidden border border-glass mb-3 bg-black/40">
-            <img
-              src={dish.image}
-              alt={dish.name}
+            <ItemImageOrIcon
+              image={dish.image}
+              name={dish.name}
+              category={dish.category}
+              isVeg={dish.isVeg || dish.type === 'veg'}
               className={`w-full h-full object-cover transition-transform duration-700 ease-out ${
                 isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
               }`}
+              containerClassName="w-full h-full"
+              iconSize={30}
             />
 
             {/* Top Overlay Badges */}
@@ -149,6 +170,12 @@ export const PopularDishes: React.FC = () => {
                   Out of Stock
                 </span>
               )}
+            </div>
+
+            {/* Rating Badge on Product Image (Right Side) */}
+            <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1 bg-emerald-600/90 text-white px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black shadow-md backdrop-blur-md border border-emerald-400/30">
+              <Star size={10} className="fill-white text-white" />
+              <span>{dish.rating || 4.8}</span>
             </div>
 
             {/* Favorite Wishlist Heart Button */}
@@ -171,34 +198,18 @@ export const PopularDishes: React.FC = () => {
             <span className="truncate">{dish.restaurantName || 'Konaseema Kitchens'}</span>
           </div>
 
-          {/* Dish Title & Rating with UtensilsCrossed Icon */}
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <UtensilsCrossed size={12} className="text-amber-400/90 shrink-0" />
-              <h3 className="font-display font-black text-xs sm:text-sm text-text-primary group-hover:text-primary transition-colors truncate">
-                {dish.name}
-              </h3>
-            </div>
-            
-            <div className="flex items-center gap-0.5 shrink-0 bg-emerald-600 border border-emerald-500/40 px-1.5 py-0.5 rounded-md text-white text-[10px] sm:text-[11px] font-black shadow-sm">
-              <Star size={10} className="fill-white text-white" />
-              <span>{dish.rating || 4.8}</span>
-            </div>
+          {/* Dish Title with UtensilsCrossed Icon */}
+          <div className="flex items-start gap-1.5 min-h-[38px]">
+            <UtensilsCrossed size={12} className="text-amber-400/90 shrink-0 mt-0.5" />
+            <h3 className="font-display font-black text-xs sm:text-sm text-text-primary group-hover:text-primary transition-colors leading-snug">
+              {dish.name}
+            </h3>
           </div>
-
-          {/* Description with Info Icon */}
-          <div className="flex items-start gap-1 mt-1">
-            <Info size={11} className="text-text-muted shrink-0 mt-0.5 opacity-60" />
-            <p className="text-[11px] text-text-muted leading-snug line-clamp-2 font-medium">
-              {dish.description}
-            </p>
-          </div>
-
         </div>
 
         {/* Price & Add to Cart Footer */}
-        <div className="flex items-center justify-between pt-2.5 border-t border-glass/60 mt-3">
-          <span className="text-sm sm:text-base font-black text-text-primary text-gradient-gold">
+        <div className="flex items-center justify-between pt-2.5 border-t border-glass/60 mt-3 gap-1 min-w-0">
+          <span className="text-sm sm:text-base font-black text-text-primary text-gradient-gold shrink-0">
             ₹{Number(dish.price).toFixed(0)}
           </span>
 
@@ -206,64 +217,49 @@ export const PopularDishes: React.FC = () => {
           {isOutOfStock ? (
             <button
               disabled
-              className="font-bold text-[10px] py-1.5 px-2.5 rounded-lg flex items-center gap-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed"
+              className="font-bold text-[10px] py-1.5 px-2.5 rounded-lg flex items-center gap-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed shrink-0"
             >
               <Ban size={11} />
               <span>Unavailable</span>
             </button>
           ) : quantity > 0 ? (
-            <div className="flex items-center gap-1.5">
-              <div className="flex items-center bg-primary/10 border border-primary/40 text-primary rounded-xl p-0.5 shadow-sm backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    reduceQuantity(dish.id);
-                  }}
-                  className="w-6 h-6 rounded-lg bg-primary/20 hover:bg-primary hover:text-black text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                  title="Decrease quantity"
-                >
-                  <Minus size={11} />
-                </button>
-
-                <span className="w-6 text-center font-black text-xs text-primary">
-                  {quantity}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddToCart(dish, e);
-                  }}
-                  className="w-6 h-6 rounded-lg bg-primary/20 hover:bg-primary hover:text-black text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
-                  title="Increase quantity"
-                >
-                  <Plus size={11} />
-                </button>
-              </div>
-
-              {/* Trash/Delete Icon Button */}
+            <div className="flex items-center bg-white dark:bg-slate-800 border border-[#B87B4B]/40 rounded-full p-1 shadow-md shadow-slate-200/60 dark:shadow-none shrink-0">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  removeFromCart(dish.id);
+                  reduceQuantity(dish.id);
                 }}
-                className="w-7 h-7 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 hover:bg-rose-600 hover:text-white transition-all flex items-center justify-center cursor-pointer active:scale-95 shadow-sm"
-                title="Remove item"
+                className="w-7.5 h-7.5 rounded-full bg-[#B87B4B]/10 hover:bg-[#B87B4B] hover:text-white text-[#B87B4B] dark:text-[#D4986A] font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                title="Decrease quantity"
               >
-                <Trash2 size={12} />
+                <Minus size={13} className="stroke-[3]" />
+              </button>
+
+              <span className="w-7 text-center font-black text-sm text-[#B87B4B] dark:text-[#D4986A]">
+                {quantity}
+              </span>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAddToCart(dish, e);
+                }}
+                className="w-7.5 h-7.5 rounded-full bg-[#B87B4B]/10 hover:bg-[#B87B4B] hover:text-white text-[#B87B4B] dark:text-[#D4986A] font-black flex items-center justify-center transition-all cursor-pointer active:scale-95"
+                title="Increase quantity"
+              >
+                <Plus size={13} className="stroke-[3]" />
               </button>
             </div>
           ) : (
             <button
               type="button"
               onClick={(e) => handleAddToCart(dish, e)}
-              className="px-3.5 py-1.5 rounded-xl bg-primary/10 border border-primary/40 text-primary hover:bg-primary hover:text-black font-extrabold text-[11px] uppercase tracking-wider shadow-sm transition-all duration-300 backdrop-blur-md active:scale-95 flex items-center gap-1 cursor-pointer"
+              className="px-4 py-1.5 rounded-2xl bg-white dark:bg-slate-800 text-[#B87B4B] dark:text-[#D4986A] border border-slate-200/90 dark:border-slate-700/80 hover:border-[#B87B4B]/50 hover:bg-[#F4E6D8]/40 active:scale-95 font-black text-xs sm:text-sm tracking-wider shadow-md shadow-slate-200/60 dark:shadow-none transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
             >
-              <Plus size={12} />
-              <span>Add</span>
+              <span>ADD</span>
+              <Plus size={14} className="stroke-[3] text-[#B87B4B] dark:text-[#D4986A]" />
             </button>
           )}
         </div>

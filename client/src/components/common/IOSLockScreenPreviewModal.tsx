@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Flashlight, Camera, Utensils, Signal, Wifi, Battery } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 
 export interface LockScreenPayload {
   title: string;
@@ -20,17 +21,24 @@ interface IOSLockScreenPreviewModalProps {
 
 export const IOSLockScreenPreviewModal: React.FC<IOSLockScreenPreviewModalProps> = ({ payload, isOpen, onClose }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   if (!isOpen || !payload) return null;
 
   const handleNotificationTap = () => {
     onClose();
-    if (payload.orderId) {
-      navigate('/orders');
+    const userRole = (user?.role || '').toUpperCase();
+
+    if (userRole === 'ADMIN') {
+      navigate('/admin/dashboard?tab=orders', { state: { activeTab: 'orders' } });
+    } else if (userRole === 'SHOP' || userRole === 'RESTAURANT' || userRole === 'VENDOR') {
+      navigate('/shop/dashboard?tab=orders', { state: { activeTab: 'orders' } });
+    } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY' || userRole === 'RIDER') {
+      navigate('/delivery/dashboard');
     } else if (payload.actionUrl) {
       navigate(payload.actionUrl);
     } else {
-      navigate('/categories');
+      navigate('/orders');
     }
   };
 

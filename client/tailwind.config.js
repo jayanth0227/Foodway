@@ -20,15 +20,19 @@ export default {
         },
         bg: {
           dark: 'var(--bg-dark-color)',
+          darkSec: 'var(--bg-card-sec)',
           card: 'var(--bg-card)',
           cardSec: 'var(--bg-card-sec)',
         },
+        'card-bg': 'var(--bg-card)',
+        'border-color': 'var(--border-glass-color)',
         text: {
           primary: 'var(--text-primary-color)',
           secondary: 'var(--text-secondary-color)',
           muted: 'var(--text-muted-color)',
         },
         glass: {
+          DEFAULT: 'var(--border-glass-color)',
           subtle: 'var(--bg-glass-subtle)',
           subtleHover: 'var(--bg-glass-subtle-hover)',
         },
@@ -43,6 +47,7 @@ export default {
       },
       borderColor: {
         glass: 'var(--border-glass-color)',
+        'border-color': 'var(--border-glass-color)',
       },
       animation: {
         'float': 'float 6s ease-in-out infinite',

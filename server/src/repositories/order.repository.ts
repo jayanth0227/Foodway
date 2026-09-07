@@ -6,12 +6,34 @@ import { OrderStatus } from '../types/enums';
 export class OrderRepository {
   async findByOrderId(orderId: string): Promise<IOrder | null> {
     try {
-      const command = new GetCommand({
+      try {
+        const command = new GetCommand({
+          TableName: ordersTableName,
+          Key: { id: orderId }
+        });
+        const response = await dynamoDocClient.send(command);
+        if (response.Item) return response.Item as IOrder;
+      } catch (e) {}
+
+      try {
+        const command2 = new GetCommand({
+          TableName: ordersTableName,
+          Key: { orderId }
+        });
+        const response2 = await dynamoDocClient.send(command2);
+        if (response2.Item) return response2.Item as IOrder;
+      } catch (e) {}
+
+      const scanCommand = new ScanCommand({
         TableName: ordersTableName,
-        Key: { orderId }
+        FilterExpression: 'id = :oid OR orderId = :oid',
+        ExpressionAttributeValues: { ':oid': orderId }
       });
-      const response = await dynamoDocClient.send(command);
-      return (response.Item as IOrder) || null;
+      const responseScan = await dynamoDocClient.send(scanCommand);
+      if (responseScan.Items && responseScan.Items.length > 0) {
+        return responseScan.Items[0] as IOrder;
+      }
+      return null;
     } catch (error) {
       console.error(`Error in OrderRepository.findByOrderId(${orderId}):`, error);
       return null;
@@ -94,24 +116,39 @@ export class OrderRepository {
     return order;
   }
 
-  async updateStatus(orderId: string, status: OrderStatus): Promise<IOrder | null> {
+  async updateStatus(orderId: string, status: OrderStatus | string): Promise<IOrder | null> {
     const existing = await this.findByOrderId(orderId);
     if (!existing) return null;
 
     const now = new Date().toISOString();
-    const timeUpdates: Partial<IOrder> = {
-      status,
+    const upperStatus = String(status).toUpperCase();
+
+    const timeUpdates: any = {
+      status: upperStatus,
+      orderStatus: upperStatus,
       updatedAt: now
     };
 
-    if (status === 'ACCEPTED') timeUpdates.acceptedAt = now;
-    if (status === 'PREPARING') timeUpdates.preparedAt = now;
-    if (status === 'PICKED_UP') timeUpdates.pickedUpAt = now;
-    if (status === 'DELIVERED') timeUpdates.deliveredAt = now;
+    if (upperStatus === 'ACCEPTED' || upperStatus === 'ACCEPTED_BY_RIDER') {
+      timeUpdates.acceptedAt = now;
+    }
+    if (upperStatus === 'PREPARING') timeUpdates.preparedAt = now;
+    if (upperStatus === 'PICKED_UP' || upperStatus === 'OUT_FOR_DELIVERY') {
+      timeUpdates.pickedUpAt = now;
+      timeUpdates.status = 'OUT_FOR_DELIVERY';
+      timeUpdates.orderStatus = 'OUT_FOR_DELIVERY';
+    }
+    if (upperStatus === 'DELIVERED' || upperStatus === 'COMPLETED') {
+      timeUpdates.deliveredAt = now;
+      timeUpdates.status = 'DELIVERED';
+      timeUpdates.orderStatus = 'DELIVERED';
+    }
 
     const updated: IOrder = {
       ...existing,
-      ...timeUpdates
+      ...timeUpdates,
+      id: (existing as any).id || (existing as any).orderId || orderId,
+      orderId: (existing as any).orderId || (existing as any).id || orderId
     };
 
     const command = new PutCommand({

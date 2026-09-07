@@ -126,6 +126,21 @@
   textarea,
   select {
     color: var(--text-primary-color);
+    background-color: var(--bg-card-sec);
+    border-color: var(--border-glass-color);
+  }
+
+  .dark input:not(.bg-transparent),
+  .dark textarea:not(.bg-transparent),
+  .dark select:not(.bg-transparent) {
+    color: #FFFFFF !important;
+    background-color: #11141B !important;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  input.bg-transparent,
+  .dark input.bg-transparent {
+    background-color: transparent !important;
   }
 
   /* Prevent browser default white autofill background in dark mode */
@@ -139,9 +154,23 @@
   select:-webkit-autofill:hover,
   select:-webkit-autofill:focus {
     -webkit-text-fill-color: var(--text-primary-color) !important;
-    -webkit-box-shadow: 0 0 0px 1000px var(--bg-card) inset !important;
-    box-shadow: 0 0 0px 1000px var(--bg-card) inset !important;
+    -webkit-box-shadow: 0 0 0px 1000px var(--bg-card-sec) inset !important;
+    box-shadow: 0 0 0px 1000px var(--bg-card-sec) inset !important;
     transition: background-color 5000s ease-in-out 0s;
+  }
+
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover,
+  .dark input:-webkit-autofill:focus,
+  .dark textarea:-webkit-autofill,
+  .dark textarea:-webkit-autofill:hover,
+  .dark textarea:-webkit-autofill:focus,
+  .dark select:-webkit-autofill,
+  .dark select:-webkit-autofill:hover,
+  .dark select:-webkit-autofill:focus {
+    -webkit-text-fill-color: #FFFFFF !important;
+    -webkit-box-shadow: 0 0 0px 1000px #11141B inset !important;
+    box-shadow: 0 0 0px 1000px #11141B inset !important;
   }
 }
 

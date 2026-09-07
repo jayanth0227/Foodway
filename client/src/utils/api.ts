@@ -39,7 +39,7 @@ export const API_BASE_URL = getApiUrl();
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (typeof window !== 'undefined' && (!error.response || error.code === 'ERR_NETWORK' || (error.message && error.message.includes('Network Error')))) {
+    if (typeof window !== 'undefined' && !navigator.onLine) {
       window.dispatchEvent(new Event('foodway_network_error'));
     }
     return Promise.reject(error);

@@ -11,20 +11,14 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem('foodway_language') as Language;
-    return saved && ['en', 'te', 'hi'].includes(saved) ? saved : 'en';
-  });
+  const [language, setLanguageState] = useState<Language>('en');
 
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem('foodway_language', lang);
+  const setLanguage = (_lang: Language) => {
+    setLanguageState('en');
+    localStorage.setItem('foodway_language', 'en');
   };
 
   const t = (key: string): string => {
-    if (translations[language] && translations[language][key]) {
-      return translations[language][key];
-    }
     if (translations.en && translations.en[key]) {
       return translations.en[key];
     }
@@ -32,7 +26,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t }}>
+    <LanguageContext.Provider value={{ language: 'en', setLanguage, t }}>
       {children}
     </LanguageContext.Provider>
   );

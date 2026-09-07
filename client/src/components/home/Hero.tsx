@@ -28,14 +28,29 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
   });
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/cms/homepage`)
-      .then(res => res.json())
-      .then(data => {
-        if (data?.success && data?.cms?.heroStats) {
-          setHeroStats(data.cms.heroStats);
-        }
-      })
-      .catch(() => {});
+    const fetchHeroStats = () => {
+      fetch(`${API_BASE_URL}/cms/homepage`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.success && data?.cms?.heroStats) {
+            setHeroStats(data.cms.heroStats);
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchHeroStats();
+
+    const handleCMSUpdate = (e: any) => {
+      if (e.detail?.heroStats) {
+        setHeroStats(e.detail.heroStats);
+      } else {
+        fetchHeroStats();
+      }
+    };
+
+    window.addEventListener('homepage_cms_updated', handleCMSUpdate);
+    return () => window.removeEventListener('homepage_cms_updated', handleCMSUpdate);
   }, []);
 
   const [videoUrls, setVideoUrls] = useState<{
@@ -233,7 +248,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
       id="home"
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center pt-20 sm:pt-28 pb-12 sm:pb-20 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
+      className="relative min-h-[90vh] sm:min-h-screen flex items-center justify-center pt-24 sm:pt-28 pb-20 sm:pb-28 lg:pb-24 overflow-hidden bg-bg-dark bg-cover bg-[80%_center] lg:bg-center bg-no-repeat select-none"
     >
 
 
@@ -355,11 +370,11 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
           >
             <form
               onSubmit={handleSearchSubmit}
-              className={`flex items-center bg-bg-cardSec/80 backdrop-blur-xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 ${searchFocused ? 'border-primary/60 shadow-[0_0_35px_rgba(197,147,99,0.18)]' : 'border-glass'
+              className={`flex items-center bg-white/15 dark:bg-black/60 backdrop-blur-2xl border rounded-2xl sm:rounded-[22px] p-1.5 sm:p-2 transition-all duration-500 shadow-luxury ${searchFocused ? 'border-primary ring-2 ring-primary/30 shadow-[0_0_35px_rgba(197,147,99,0.25)]' : 'border-glass dark:border-white/20'
                 }`}
             >
               <div className="flex-1 flex items-center px-2.5 sm:px-4 space-x-2 sm:space-x-3">
-                <Search size={16} className={`transition-colors duration-300 ${searchFocused ? 'text-primary' : 'text-text-muted'}`} />
+                <Search size={18} className={`transition-colors duration-300 shrink-0 ${searchFocused ? 'text-primary' : 'text-primary/80'}`} />
                 <div className="relative flex-grow">
                   {/* Real Search Input */}
                   <input
@@ -369,13 +384,13 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
                     onFocus={() => setSearchFocused(true)}
                     onBlur={() => setSearchFocused(false)}
                     aria-label="Search restaurants and cuisines"
-                    className="w-full bg-transparent border-none outline-none text-text-primary text-xs sm:text-sm py-2 sm:py-3 font-medium relative z-10"
+                    className="w-full bg-transparent !bg-transparent border-none outline-none text-text-primary dark:text-white text-xs sm:text-sm py-2 sm:py-3 font-semibold relative z-10"
                   />
                   {/* Dynamic placeholder typing overlay */}
                   {!searchQuery && (
-                    <span className="absolute left-0 right-2 top-1/2 -translate-y-1/2 text-text-muted/60 text-xs sm:text-sm font-medium pointer-events-none select-none z-0 truncate">
+                    <span className="absolute left-0 right-2 top-1/2 -translate-y-1/2 text-text-secondary dark:text-gray-300 text-xs sm:text-sm font-semibold pointer-events-none select-none z-0 truncate">
                       {placeholderText}
-                      <span className="w-[1.5px] h-3.5 sm:h-4 bg-primary/70 inline-block align-middle ml-0.5 animate-pulse" />
+                      <span className="w-[2px] h-3.5 sm:h-4 bg-primary inline-block align-middle ml-0.5 animate-pulse" />
                     </span>
                   )}
                 </div>
@@ -383,10 +398,10 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               <button
                 type="submit"
                 aria-label="Submit search query"
-                className="btn-primary px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-[15px] font-bold text-[11px] sm:text-xs uppercase tracking-wider flex items-center space-x-1 shrink-0"
+                className="btn-primary px-3.5 sm:px-6 py-2.5 sm:py-3.5 rounded-xl sm:rounded-[15px] font-extrabold text-[11px] sm:text-xs uppercase tracking-wider flex items-center space-x-1 shrink-0 cursor-pointer shadow-luxury hover:scale-[1.02] active:scale-95 transition-all"
               >
                 <span>Find Dishes</span>
-                <ChevronRight size={13} />
+                <ChevronRight size={14} className="stroke-[3]" />
               </button>
             </form>
           </motion.div>
@@ -441,34 +456,52 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             </button>
           </motion.div>
 
-          {/* Stats Indicators */}
+          {/* Stats Indicators / Count Badges */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.6 }}
-            className="grid grid-cols-3 gap-2 pt-3 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto lg:gap-4"
+            className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-4 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto"
           >
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
-              <User className="text-primary shrink-0" size={14} />
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                <User size={15} className="sm:w-4 sm:h-4" />
+              </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.customers || '20K+'}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Customers</span>
+                <span className="text-xs sm:text-sm font-black font-display text-slate-900 dark:text-text-primary leading-tight truncate">
+                  {heroStats.customers || '20K+'}
+                </span>
+                <span className="text-[8px] sm:text-[9.5px] font-extrabold text-slate-500 dark:text-text-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                  Customers
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
-              <Store className="text-primary shrink-0" size={14} />
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                <Store size={15} className="sm:w-4 sm:h-4" />
+              </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.restaurants || '500+'}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Restaurants</span>
+                <span className="text-xs sm:text-sm font-black font-display text-slate-900 dark:text-text-primary leading-tight truncate">
+                  {heroStats.restaurants || '500+'}
+                </span>
+                <span className="text-[8px] sm:text-[9.5px] font-extrabold text-slate-500 dark:text-text-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                  Restaurants
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center space-x-1.5 sm:space-x-2.5 glass-panel border border-glass px-2 py-2 sm:px-4.5 sm:py-2.5 rounded-xl sm:rounded-2xl">
-              <Clock className="text-primary shrink-0" size={14} />
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+                <Clock size={15} className="sm:w-4 sm:h-4" />
+              </div>
               <div className="flex flex-col text-left min-w-0">
-                <span className="text-xs sm:text-sm font-black text-text-primary leading-tight">{heroStats.deliveryTime || '30 min'}</span>
-                <span className="text-[7px] sm:text-[8px] font-bold text-text-muted uppercase tracking-wider truncate leading-tight">Delivery</span>
+                <span className="text-xs sm:text-sm font-black font-display text-slate-900 dark:text-text-primary leading-tight truncate">
+                  {heroStats.deliveryTime || '30 min'}
+                </span>
+                <span className="text-[8px] sm:text-[9.5px] font-extrabold text-slate-500 dark:text-text-muted uppercase tracking-wider truncate leading-tight mt-0.5">
+                  Delivery
+                </span>
               </div>
             </div>
           </motion.div>

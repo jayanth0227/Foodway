@@ -2,15 +2,18 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, UtensilsCrossed, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check } from 'lucide-react';
+import { ArrowLeft, MapPin, Star, Search, ShoppingBag, Utensils, UtensilsCrossed, Plus, Minus, Layers, X, AlertTriangle, Lock, Clock, Heart, ChevronDown, Check, ArrowRight, LayoutGrid, List } from 'lucide-react';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { API_BASE_URL } from '../utils/api';
-import { MobileMenuSkeleton } from '../components/common/MobileSkeletonLoader';
+import { MobileMenuSkeleton, MobileGridSkeleton } from '../components/common/MobileSkeletonLoader';
 import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
 import socketService from '../services/socket.service';
 import GooeyPopover from '../components/GooeyPopover';
 import shopService from '../services/shop.service';
+import { ItemDetailsModal } from '../components/common/ItemDetailsModal';
+import { getItemVariantLabel } from '../utils/variantUtils';
+import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 
 const removeEmojis = (str: string) => {
   if (!str) return '';
@@ -20,7 +23,7 @@ const removeEmojis = (str: string) => {
 export const RestaurantDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addToCart, reduceQuantity, getItemQuantity } = useCart();
+  const { cartItems, totalAmount, totalItemsCount, addToCart, reduceQuantity, getItemQuantity, setCartOpen } = useCart();
 
   const [restaurant, setRestaurant] = useState<any | null>(null);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -28,8 +31,10 @@ export const RestaurantDetailsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedDietary, setSelectedDietary] = useState<'All' | 'Veg' | 'Non-Veg'>('All');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedVariantsMap, setSelectedVariantsMap] = useState<Record<string, any>>({});
   const [activePickerDish, setActivePickerDish] = useState<any | null>(null);
+  const [activeDetailItem, setActiveDetailItem] = useState<any | null>(null);
   const [isCategoryFabOpen, setIsCategoryFabOpen] = useState<boolean>(false);
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -48,7 +53,6 @@ export const RestaurantDetailsPage: React.FC = () => {
       const handleStatusUpdate = () => fetchRestaurantDetails(id, false);
 
       const unsubscribeMenu = socketService.onMenuUpdated((data: any) => {
-        console.log('⚡ [Live Socket Event: MENU_UPDATED] Received in RestaurantDetailsPage:', data);
         const updatedItem = data?.item || data?.dish || data;
         if (!updatedItem) return;
 
@@ -221,47 +225,52 @@ export const RestaurantDetailsPage: React.FC = () => {
   return (
     <>
       <Helmet>
-        <title>{restaurant ? `${restaurant.name} | Menu & Orders` : 'Restaurant Details'} | MK Delivery Services</title>
+        <title>{restaurant ? `${restaurant.name} | Menu & Orders` : 'Restaurant Details'} | Foodway Services</title>
       </Helmet>
 
-      <div className="min-h-screen bg-bg-dark pt-16 sm:pt-28 pb-24 sm:pb-28 px-3.5 sm:px-6 lg:px-12 relative overflow-hidden">
+      <div className="min-h-screen bg-bg-dark pt-20 sm:pt-24 lg:pt-24 pb-32 lg:pb-16 px-3 sm:px-6 lg:px-12 relative overflow-hidden">
         {/* Ambient background decoration */}
         <div className="absolute top-20 left-0 w-96 h-96 rounded-full bg-primary/5 blur-[120px] pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 relative z-10">
+        <div className="max-w-7xl mx-auto space-y-2.5 sm:space-y-3 relative z-10">
 
           {/* Redesigned Integrated Mobile Shop Header Card */}
           {loading ? (
-            <div className="block sm:hidden glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
+            <div className="block sm:hidden glass-panel border border-glass rounded-2xl h-36 animate-pulse" />
           ) : restaurant && (
-            <div className="block sm:hidden glass-panel border border-glass rounded-3xl p-4 shadow-luxury bg-bg-cardSec space-y-3.5 relative overflow-hidden">
+            <div className="block sm:hidden glass-panel border border-glass rounded-2xl p-3.5 shadow-luxury bg-bg-cardSec space-y-3 relative overflow-hidden">
               {/* Top Row: Back Button (Left) + Wishlist Heart (Right) */}
-              <div className="flex items-center justify-between gap-2 border-b border-glass/80 pb-2.5">
+              <div className="flex items-center justify-between gap-2 border-b border-glass/80 pb-2">
                 <button
                   type="button"
-                  onClick={() => navigate('/shops')}
-                  className="w-8 h-8 rounded-xl bg-glass border border-glass hover:bg-glass-subtle text-text-primary flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-xs"
-                  title="Back to Stores"
+                  onClick={() => {
+                    if (window.history.state && window.history.state.idx > 0) {
+                      navigate(-1);
+                    } else {
+                      navigate('/shops');
+                    }
+                  }}
+                  className="w-10 h-10 rounded-2xl bg-white dark:bg-white/10 border border-slate-200/90 dark:border-white/15 text-[#B87B4B] dark:text-[#D4986A] shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0 group"
+                  title="Go Back"
+                  aria-label="Go Back"
                 >
-                  <ArrowLeft size={16} className="stroke-[2.5]" />
+                  <ArrowLeft size={18} className="text-[#B87B4B] dark:text-[#D4986A] stroke-[2.2] group-hover:-translate-x-0.5 transition-transform" />
                 </button>
 
                 <button
                   type="button"
                   onClick={(e) => toggleFav(restaurant, e)}
-                  className={`p-1.5 rounded-xl border transition-all duration-300 active:scale-95 cursor-pointer flex items-center justify-center ${favorites[restaurant.id || id || '']
-                    ? 'bg-rose-500/15 border-rose-500/35 text-rose-500'
-                    : 'bg-glass border-glass text-text-muted hover:text-rose-400'
-                    }`}
+                  className="w-10 h-10 rounded-2xl bg-transparent hover:bg-slate-100/80 dark:hover:bg-white/10 transition-all duration-300 active:scale-95 cursor-pointer flex items-center justify-center shrink-0"
                   title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
+                  aria-label={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
                 >
-                  <Heart size={16} className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-text-muted"} />
+                  <Heart size={20} className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500 scale-110 transition-transform" : "text-slate-700 dark:text-slate-200 hover:text-rose-500 transition-colors"} />
                 </button>
               </div>
 
               {/* Middle Row: Shop Logo Avatar + Name & Address */}
               <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0 shadow-md">
+                <div className="w-12 h-12 rounded-xl overflow-hidden border border-glass bg-bg-dark shrink-0 shadow-md">
                   <img
                     src={restaurant.logo || restaurant.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400"}
                     alt={restaurant.name}
@@ -270,7 +279,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-0.5 text-left min-w-0 flex-1">
-                  <h1 className="text-lg font-black font-display text-text-primary leading-snug truncate">
+                  <h1 className="text-base sm:text-lg font-black font-display text-text-primary leading-snug truncate">
                     {restaurant.name}
                   </h1>
 
@@ -285,7 +294,7 @@ export const RestaurantDetailsPage: React.FC = () => {
 
               {/* Bottom Badges Row: Open for Orders (Left) + Rating Badge (Right) */}
               <div className="flex items-center justify-between gap-2 pt-0.5 flex-wrap">
-                <span className={`px-3 py-1 rounded-xl text-[10.5px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isResOpen ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
+                <span className={`px-2.5 py-0.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isResOpen ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30'
                   }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isResOpen ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
                   <span>{isResOpen ? 'OPEN FOR ORDERS' : 'CLOSED NOW'}</span>
@@ -293,89 +302,87 @@ export const RestaurantDetailsPage: React.FC = () => {
 
                 <div className="flex items-center gap-1.5 ml-auto">
                   {restaurant.deliveryTime && (
-                    <span className="px-2.5 py-1 rounded-xl bg-glass border border-glass text-text-secondary text-[10.5px] font-extrabold flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-xl bg-glass border border-glass text-text-secondary text-[10px] font-extrabold flex items-center gap-1">
                       <Clock size={11} className="text-primary shrink-0" />
                       <span>{restaurant.deliveryTime}</span>
                     </span>
                   )}
 
-                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-600 text-white text-[10.5px] font-black shrink-0 shadow-xs border border-emerald-500">
-                    <Star size={11} className="fill-white text-white shrink-0" />
-                    <span>{restaurant.rating || 4.8} Rating</span>
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 font-black text-xs shrink-0">
+                    <Star size={13} className="fill-emerald-400 text-emerald-400 shrink-0" />
+                    <span>{restaurant.rating || 4.8}</span>
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Restructured Navigation Header Bar with Back Button & Breadcrumbs (Desktop Only) */}
-          <div className="hidden sm:flex items-center justify-between gap-3 bg-bg-cardSec/80 backdrop-blur-md border border-glass/80 p-2.5 sm:p-3.5 rounded-2xl shadow-luxury">
-            <button
-              onClick={() => navigate('/shops')}
-              className="px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/30 text-primary font-black text-xs flex items-center gap-2 cursor-pointer shadow-sm active:scale-95 transition-all group"
-            >
-              <ArrowLeft size={16} className="text-primary group-hover:-translate-x-1 transition-transform" />
-              <span>Back to Restaurants</span>
-            </button>
 
-            <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-text-muted">
-              <span>Stores</span>
-              <span>/</span>
-              <span className="text-primary font-black truncate max-w-xs">{restaurant?.name || 'Store Details'}</span>
-            </div>
-
-            {restaurant && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-black shrink-0">
-                <Star size={13} className="fill-emerald-400 text-emerald-400" />
-                <span>{restaurant.rating || 4.8} Rating</span>
-              </div>
-            )}
-          </div>
 
           {/* Desktop-Only Banner Header */}
           {loading ? (
-            <div className="hidden sm:block glass-panel border border-glass rounded-3xl h-48 animate-pulse" />
+            <div className="hidden sm:block glass-panel border border-glass rounded-3xl h-56 animate-pulse" />
           ) : restaurant && (
-            <div className="hidden sm:block relative rounded-3xl overflow-hidden border border-glass shadow-luxury bg-bg-darkSec">
-              <div className="h-48 sm:h-56 relative overflow-hidden">
+            <div className="hidden sm:block relative rounded-3xl overflow-hidden border border-glass/80 shadow-luxury bg-bg-darkSec">
+              <div className="h-56 relative overflow-hidden flex flex-col justify-between p-5">
                 {/* Background Cover Image */}
                 <img
                   src={restaurant.image || restaurant.bannerImage || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1200"}
                   alt={restaurant.name}
-                  className={`w-full h-full object-cover scale-105 filter ${!isResOpen ? 'grayscale brightness-75' : 'brightness-90'}`}
+                  className={`absolute inset-0 w-full h-full object-cover filter ${!isResOpen ? 'grayscale brightness-75' : 'brightness-95'}`}
                 />
-                {/* Gradient Overlays */}
-                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-bg-dark/70 to-black/30" />
+                {/* Dark Gradient Overlay for crystal clear text readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-bg-dark/70 to-black/35" />
 
-                {/* Top Badges Row */}
-                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 flex items-center gap-2 flex-wrap z-10">
-                  <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider backdrop-blur-md shadow-lg border flex items-center gap-1.5 ${isResOpen ? 'bg-emerald-500/90 text-white border-emerald-400/40' : 'bg-rose-600/90 text-white border-rose-400/40'
-                    }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${isResOpen ? 'bg-emerald-300 animate-pulse' : 'bg-white'}`} />
-                    <span>{isResOpen ? 'OPEN FOR ORDERS' : 'CLOSED NOW'}</span>
-                  </span>
+                {/* Top Floating Action Bar */}
+                <div className="relative z-10 flex items-center justify-between gap-4">
+                  {/* Left Side: Back Arrow & Status Badges */}
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.history.state && window.history.state.idx > 0) {
+                          navigate(-1);
+                        } else {
+                          navigate('/shops');
+                        }
+                      }}
+                      className="w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 text-white border border-white/20 backdrop-blur-md flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-lg group"
+                      title="Back to all shops"
+                    >
+                      <ArrowLeft size={16} className="stroke-[2.5] text-white group-hover:-translate-x-0.5 transition-transform" />
+                    </button>
 
-                  {restaurant.deliveryTime && (
-                    <span className="px-3 py-1 rounded-full text-[11px] font-extrabold bg-black/60 text-white border border-glass backdrop-blur-md flex items-center gap-1.5">
-                      <Clock size={12} className="text-primary" />
-                      <span>{restaurant.deliveryTime}</span>
+                    {/* Highlighted OPEN FOR ORDERS / CLOSED NOW Status Badge */}
+                    <span className={`px-3.5 py-1.5 rounded-full text-xs font-black uppercase tracking-wider backdrop-blur-md shadow-lg border flex items-center gap-1.5 ${isResOpen 
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white border-emerald-300/50 shadow-emerald-600/30' 
+                      : 'bg-gradient-to-r from-rose-600 to-rose-500 text-white border-rose-300/50 shadow-rose-600/30'
+                      }`}>
+                      <span className={`w-2 h-2 rounded-full ${isResOpen ? 'bg-emerald-200 animate-pulse' : 'bg-white'}`} />
+                      <span>{isResOpen ? 'OPEN FOR ORDERS' : 'CLOSED NOW'}</span>
                     </span>
-                  )}
-                </div>
 
-                {/* Top Right Rating Badge */}
-                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-black font-black text-xs shadow-xl border border-amber-300">
-                    <Star size={13} className="fill-black text-black" />
-                    <span>{restaurant.rating || 4.8} Rating</span>
+                    {restaurant.deliveryTime && (
+                      <span className="px-3 py-1.5 rounded-full text-xs font-extrabold bg-black/60 text-white border border-white/20 backdrop-blur-md flex items-center gap-1.5 shadow-md">
+                        <Clock size={13} className="text-primary" />
+                        <span>{restaurant.deliveryTime}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Right Side: Rating Badge */}
+                  <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-xs backdrop-blur-md border border-emerald-500/40 shadow-lg">
+                    <Star size={14} className="fill-emerald-400 text-emerald-400 shrink-0" />
+                    <span className="text-sm font-extrabold">{restaurant.rating || 4.8}</span>
                   </div>
                 </div>
 
-                {/* Bottom Main Content Row */}
-                <div className="absolute bottom-3.5 left-3.5 right-3.5 sm:bottom-5 sm:left-5 sm:right-5 flex flex-col sm:flex-row sm:items-end justify-between gap-3 z-10">
-                  <div className="flex items-end gap-3 sm:gap-4">
-                    {/* Restaurant Logo Avatar */}
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl overflow-hidden border-2 border-primary/40 shadow-2xl shrink-0 bg-black/60 backdrop-blur-md">
+                {/* Bottom Main Content Section */}
+                <div className="relative z-10 flex items-end justify-between gap-4">
+                  {/* Left Side: Logo Avatar & Shop Details */}
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    {/* Logo Avatar */}
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-white/30 shadow-2xl shrink-0 bg-black/60 backdrop-blur-md">
                       <img
                         src={restaurant.logo || restaurant.image || "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=400"}
                         alt={restaurant.name}
@@ -383,48 +390,45 @@ export const RestaurantDetailsPage: React.FC = () => {
                       />
                     </div>
 
-                    {/* Restaurant Name & Categories + Wishlist Button */}
-                    <div className="space-y-0.5 text-left">
-                      <div className="flex items-center gap-3">
-                        <h1 className="text-xl sm:text-3xl font-black font-display text-gradient-gold tracking-tight drop-shadow-md">
-                          {restaurant.name}
-                        </h1>
-
-                        <button
-                          type="button"
-                          onClick={(e) => toggleFav(restaurant, e)}
-                          className={`p-2 rounded-2xl border backdrop-blur-md transition-all duration-300 active:scale-95 cursor-pointer shrink-0 ${favorites[restaurant.id || id || '']
-                            ? 'bg-rose-500/20 border-rose-500/40 text-rose-500'
-                            : 'bg-black/40 border-white/20 text-white hover:border-rose-400/50 hover:bg-rose-500/10'
-                            }`}
-                          title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
-                        >
-                          <Heart size={16} className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-white"} />
-                        </button>
-
-
-                      </div>
+                    {/* Shop Details */}
+                    <div className="space-y-1 text-left min-w-0 flex-1">
+                      <h1 className="text-2xl sm:text-3xl font-black font-display text-white tracking-tight drop-shadow-lg truncate">
+                        {restaurant.name}
+                      </h1>
 
                       {restaurant.address && (
-                        <p className="text-[11px] sm:text-xs text-text-secondary flex items-center gap-1 font-semibold">
-                          <MapPin size={12} className="text-primary shrink-0" />
-                          <span>{restaurant.address}</span>
+                        <p className="text-xs sm:text-sm text-text-secondary flex items-center gap-1.5 font-medium">
+                          <MapPin size={13} className="text-primary shrink-0" />
+                          <span className="truncate max-w-xl">{restaurant.address}</span>
                         </p>
                       )}
 
-                      {/* Dynamic Categories List Badges */}
-                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      {/* Categories Pills */}
+                      <div className="flex items-center gap-2 flex-wrap pt-1">
                         {(categories.filter(c => c && c.trim() !== '' && c !== 'All').length > 0
                           ? categories.filter(c => c && c.trim() !== '' && c !== 'All')
                           : [restaurant.cuisine || 'Multi-Cuisine']
                         ).map((catName, idx) => (
-                          <span key={catName || `cat-${idx}`} className="px-2.5 py-0.5 rounded-lg bg-primary/20 text-primary text-[10px] sm:text-xs font-black uppercase tracking-wider border border-primary/30 backdrop-blur-sm">
+                          <span key={catName || `cat-${idx}`} className="px-3 py-0.5 rounded-lg bg-black/60 text-white text-xs font-extrabold uppercase tracking-wider border border-white/20 backdrop-blur-md">
                             {removeEmojis(catName)}
                           </span>
                         ))}
                       </div>
                     </div>
                   </div>
+
+                  {/* Right Side: Favorite Heart Button (Moved to Bottom Right) */}
+                  <button
+                    type="button"
+                    onClick={(e) => toggleFav(restaurant, e)}
+                    className={`w-11 h-11 rounded-2xl border backdrop-blur-md transition-all duration-300 flex items-center justify-center active:scale-95 cursor-pointer shrink-0 shadow-xl ${favorites[restaurant.id || id || '']
+                      ? 'bg-rose-500/30 border-rose-500/60 text-rose-400 shadow-rose-500/20'
+                      : 'bg-black/60 border-white/20 text-white hover:border-rose-400/50 hover:bg-rose-500/20'
+                      }`}
+                    title={favorites[restaurant.id || id || ''] ? "Remove from Favorites" : "Add to Favorites"}
+                  >
+                    <Heart size={20} className={favorites[restaurant.id || id || ''] ? "fill-rose-500 text-rose-500" : "text-white"} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -458,13 +462,13 @@ export const RestaurantDetailsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedDietary(selectedDietary === 'Veg' ? 'All' : 'Veg')}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Veg'
-                        ? 'bg-emerald-600 text-white shadow-md border border-emerald-400'
-                        : 'bg-glass hover:bg-glass-subtle border border-emerald-500/30 text-emerald-400'
+                      className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 shrink-0 transition-all cursor-pointer bg-transparent ${selectedDietary === 'Veg'
+                        ? 'border-2 border-emerald-400 text-emerald-400 shadow-sm'
+                        : 'border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10'
                         }`}
                     >
-                      <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
-                        <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                      <div className="w-3.5 h-3.5 rounded-sm border border-emerald-500 p-0.5 flex items-center justify-center shrink-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                       </div>
                       <span>{isPureVegShop ? 'Pure Veg' : 'Veg'}</span>
                     </button>
@@ -474,13 +478,13 @@ export const RestaurantDetailsPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setSelectedDietary(selectedDietary === 'Non-Veg' ? 'All' : 'Non-Veg')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${selectedDietary === 'Non-Veg'
-                          ? 'bg-rose-600 text-white shadow-md border border-rose-400'
-                          : 'bg-glass hover:bg-glass-subtle border border-rose-500/30 text-rose-400'
+                        className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 shrink-0 transition-all cursor-pointer bg-transparent ${selectedDietary === 'Non-Veg'
+                          ? 'border-2 border-rose-400 text-rose-400 shadow-sm'
+                          : 'border border-rose-500/50 text-rose-400 hover:bg-rose-500/10'
                           }`}
                       >
-                        <div className="w-3.5 h-3.5 rounded-sm border border-current p-0.5 flex items-center justify-center shrink-0">
-                          <div className="w-1.5 h-1.5 rounded-full bg-current" />
+                        <div className="w-3.5 h-3.5 rounded-sm border border-rose-500 p-0.5 flex items-center justify-center shrink-0">
+                          <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
                         </div>
                         <span>Non-Veg</span>
                       </button>
@@ -488,36 +492,64 @@ export const RestaurantDetailsPage: React.FC = () => {
 
                     <div className="h-4 w-px bg-glass shrink-0 mx-1" />
 
-                {/* Category Drawer Trigger Button */}
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryFabOpen(true)}
-                  className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-primary/15 text-primary hover:bg-primary/25 border border-primary/30 transition-all cursor-pointer shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm"
-                >
-                  <Layers size={14} />
-                  <span>Categories ({categories.filter(c => c !== 'All').length})</span>
-                </button>
+                    {/* Category Drawer Trigger Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryFabOpen(true)}
+                      className="px-3.5 py-1.5 rounded-full text-xs font-black bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-white hover:bg-slate-200 border border-slate-300 dark:border-white/20 transition-all cursor-pointer shrink-0 flex items-center gap-1.5 active:scale-95 shadow-xs"
+                    >
+                      <Layers size={14} />
+                      <span>Categories ({categories.filter(c => c !== 'All').length})</span>
+                    </button>
 
-                {/* Selected Category Pill */}
-                {selectedCategory !== 'All' && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategory('All')}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1.5 shrink-0 hover:bg-amber-500/30 transition-all cursor-pointer"
-                  >
-                    <span>{removeEmojis(selectedCategory)}</span>
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
+                    {/* Selected Category Pill */}
+                    {selectedCategory !== 'All' && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCategory('All')}
+                        className="px-3.5 py-1.5 rounded-full bg-transparent border border-slate-800 dark:border-white text-slate-900 dark:text-white font-extrabold text-xs flex items-center gap-1.5 shrink-0 hover:bg-slate-900/10 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+                      >
+                        <span>{removeEmojis(selectedCategory)}</span>
+                        <X size={13} className="stroke-[2.5]" />
+                      </button>
+                    )}
+
+                    <div className="h-4 w-px bg-glass shrink-0 mx-1" />
+
+                    {/* Grid / List Layout Switcher */}
+                    <div className="flex items-center gap-1 bg-bg-dark/80 p-1 rounded-xl border border-glass shrink-0 shadow-inner">
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('grid')}
+                        className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${viewMode === 'grid'
+                          ? 'bg-primary text-black font-extrabold shadow-sm'
+                          : 'text-text-muted hover:text-text-primary'
+                          }`}
+                        title="Grid View"
+                      >
+                        <LayoutGrid size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('list')}
+                        className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${viewMode === 'list'
+                          ? 'bg-primary text-black font-extrabold shadow-sm'
+                          : 'text-text-muted hover:text-text-primary'
+                          }`}
+                        title="List View"
+                      >
+                        <List size={15} />
+                      </button>
+                    </div>
+                  </div>
                 );
               })()}
             </div>
           </div>
 
-          {/* Food Items List */}
+          {/* Food Items Grid / List */}
           {loading ? (
-            <MobileMenuSkeleton count={5} />
+            viewMode === 'grid' ? <MobileGridSkeleton count={6} /> : <MobileMenuSkeleton count={5} />
           ) : filteredMenuItems.length === 0 ? (
             <div className="py-20 text-center glass-panel border border-glass rounded-3xl p-12 max-w-lg mx-auto space-y-4">
               <Utensils size={48} className="mx-auto text-text-muted opacity-50" />
@@ -527,9 +559,9 @@ export const RestaurantDetailsPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="flex flex-col space-y-4 w-full">
-              {filteredMenuItems.map(item => {
-                const dishId = item.menuItemId || item.id;
+            <div className={viewMode === 'grid' ? "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 gap-3.5 sm:gap-5 md:gap-6 w-full" : "flex flex-col space-y-4 w-full"}>
+              {filteredMenuItems.map((item, idx) => {
+                const dishId = item.menuItemId || item.id || `dish-${idx}`;
                 const isRestaurantClosed = isResClosed;
                 const isOutOfStock = isRestaurantClosed || item.isAvailable === false || item.status === 'UNAVAILABLE' || item.status === 'disabled';
 
@@ -550,7 +582,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                   description: removeEmojis(item.description || ''),
                   price: effectivePrice,
                   category: removeEmojis(item.category || item.foodCategory || 'General'),
-                  image: item.foodImage || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+                  image: item.foodImage || item.image || '',
                   type: (item.isVeg !== false ? 'veg' : 'non-veg') as 'veg' | 'non-veg',
                   isVeg: item.isVeg !== false,
                   isAvailable: !isOutOfStock,
@@ -561,6 +593,199 @@ export const RestaurantDetailsPage: React.FC = () => {
                   variants: itemVariants
                 };
 
+                if (viewMode === 'grid') {
+                  return (
+                    <motion.div
+                      key={dishId}
+                      initial={false}
+                      animate={{ opacity: 1, y: 0 }}
+                      onClick={() => navigate(`/item/${dishObj.id}`, { state: { dish: dishObj } })}
+                      className={`glass-panel border rounded-2xl p-2.5 sm:p-3.5 flex flex-col justify-between shadow-luxury transition-all duration-300 w-full relative overflow-hidden bg-bg-cardSec group hover:border-primary/40 cursor-pointer h-full ${isOutOfStock
+                        ? 'opacity-70 border-rose-500/20 bg-bg-dark/40'
+                        : 'border-glass'
+                        }`}
+                    >
+                      {/* Image Container with Overlays */}
+                      <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-bg-dark border border-glass/60 shrink-0">
+                        <ItemImageOrIcon
+                          image={dishObj.image}
+                          name={dishObj.name}
+                          category={dishObj.category}
+                          isVeg={dishObj.isVeg}
+                          className={`w-full h-full object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'group-hover:scale-105'}`}
+                          containerClassName="w-full h-full"
+                          iconSize={32}
+                        />
+
+                        {/* Top-Left: Veg / Non-Veg Indicator */}
+                        <div className="absolute top-2.5 left-2.5 z-10 flex items-center justify-center">
+                          <div
+                            className={`w-4 h-4 rounded-[3px] border-2 flex items-center justify-center bg-transparent shrink-0 shadow-sm ${
+                              dishObj.isVeg ? 'border-emerald-500' : 'border-rose-500'
+                            }`}
+                          >
+                            <div
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                dishObj.isVeg ? 'bg-emerald-400' : 'bg-rose-500'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Top-Right: Wishlist Heart */}
+                        <button
+                          type="button"
+                          onClick={(e) => toggleFav(dishObj, e)}
+                          className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white flex items-center justify-center active:scale-95 transition-all shadow-md cursor-pointer hover:bg-black/80"
+                          title="Favorite"
+                        >
+                          <Heart size={13} className={favorites[dishId] ? "fill-rose-500 text-rose-500" : "text-white"} />
+                        </button>
+
+                        {/* Bottom-Left: Discount Badge */}
+                        {activeVariant?.compareAtPrice && Number(activeVariant.compareAtPrice) > effectivePrice && (
+                          <div className="absolute bottom-2 left-2 z-10">
+                            {(() => {
+                              const disc = Math.round(((Number(activeVariant.compareAtPrice) - effectivePrice) / Number(activeVariant.compareAtPrice)) * 100);
+                              return disc > 0 ? (
+                                <span className="bg-emerald-600/90 backdrop-blur-md text-white text-[9px] sm:text-[10px] font-black px-1.5 py-0.5 rounded-md border border-emerald-400/40 shadow-sm uppercase tracking-wider">
+                                  {disc}% OFF
+                                </span>
+                              ) : null;
+                            })()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Content Section */}
+                      <div className="space-y-1.5 pt-2.5 flex-1 flex flex-col justify-between text-left">
+                        <div className="space-y-1">
+                          {/* Category Badge */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] sm:text-[10px] font-black text-primary uppercase tracking-wider bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 truncate">
+                              {dishObj.category}
+                            </span>
+                          </div>
+
+                          {/* Item Title */}
+                          <h3 className="font-extrabold text-xs sm:text-base text-text-primary line-clamp-1 h-5 leading-tight group-hover:text-primary transition-colors truncate">
+                            {dishObj.name}
+                          </h3>
+
+                          {/* Variant / Portion Badge (Sleek Clean Pill UI) */}
+                          <div className="flex items-center pt-0.5 max-w-full">
+                            {hasMultipleVariants ? (
+                              <div
+                                className="inline-flex items-center gap-1 p-0.5 rounded-full bg-slate-100 dark:bg-bg-dark/90 border border-slate-200 dark:border-glass/80 overflow-x-auto max-w-full scroll-smooth shadow-inner [&::-webkit-scrollbar]:hidden"
+                                style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
+                              >
+                                {itemVariants.map((v: any, idx: number) => {
+                                  const isSelected = (activeVariant?.id || activeVariant?.variantId) === (v.id || v.variantId);
+                                  const rawLabel = v.label || `${v.quantity} ${v.unit}`;
+
+                                  return (
+                                    <button
+                                      key={v.id || idx}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVariantsMap(prev => ({ ...prev, [dishId]: v }));
+                                      }}
+                                      className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-extrabold transition-all duration-200 cursor-pointer shrink-0 ${isSelected
+                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-black shadow-xs'
+                                        : 'text-slate-600 dark:text-text-muted hover:text-slate-900 dark:hover:text-white border border-transparent'
+                                        }`}
+                                    >
+                                      <span>{rawLabel}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-text-muted bg-transparent px-2 py-0.5 rounded-md border border-slate-300/80 dark:border-white/15 inline-flex items-center truncate">
+                                <span>{getItemVariantLabel(dishObj)}</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Bottom Footer: Price & ADD Button */}
+                        <div className="pt-2 flex items-center justify-between gap-1.5 border-t border-glass/60 mt-2">
+                          <div className="flex flex-col text-left">
+                            <div className="font-black text-sm sm:text-lg text-text-primary font-display flex items-baseline gap-1">
+                              <span>₹{Number.isInteger(effectivePrice) ? effectivePrice : effectivePrice.toFixed(2)}</span>
+                            </div>
+                            {activeVariant?.compareAtPrice && Number(activeVariant.compareAtPrice) > effectivePrice && (
+                              <span className="text-[10px] sm:text-xs text-text-muted line-through font-normal -mt-0.5">
+                                ₹{Number.isInteger(Number(activeVariant.compareAtPrice)) ? Number(activeVariant.compareAtPrice) : Number(activeVariant.compareAtPrice).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div onClick={(e) => e.stopPropagation()}>
+                            {isRestaurantClosed ? (
+                              <button
+                                disabled
+                                className="px-2.5 py-1 rounded-xl text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed uppercase"
+                              >
+                                Closed
+                              </button>
+                            ) : isOutOfStock ? (
+                              <button
+                                disabled
+                                className="px-2.5 py-1 rounded-xl text-[10px] font-extrabold bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed uppercase"
+                              >
+                                Unavailable
+                              </button>
+                            ) : qtyInCart > 0 ? (
+                              <div className="flex items-center bg-bg-cardSec text-primary rounded-full px-1.5 py-0.5 sm:px-2 sm:py-1 shadow-md border-2 border-primary">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    reduceQuantity(itemKey);
+                                  }}
+                                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                                  title="Decrease quantity"
+                                >
+                                  <Minus size={11} className="stroke-[3]" />
+                                </button>
+                                <span className="w-5 text-center font-black text-xs font-display text-primary">
+                                  {qtyInCart}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addToCart(dishObj, activeVariant);
+                                  }}
+                                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                                  title="Increase quantity"
+                                >
+                                  <Plus size={11} className="stroke-[3]" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addToCart(dishObj, activeVariant);
+                                }}
+                                className="px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-xl bg-primary/15 text-primary hover:bg-primary hover:text-black border border-primary/40 font-black text-[11px] sm:text-xs uppercase tracking-wider shadow-md transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
+                              >
+                                <span>ADD</span>
+                                <Plus size={12} className="stroke-[3]" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                }
+
+                // List View Layout
                 return (
                   <motion.div
                     key={dishId}
@@ -594,11 +819,11 @@ export const RestaurantDetailsPage: React.FC = () => {
                         {dishObj.name}
                       </h3>
 
-                      {/* Classic iOS Segmented Control for Variant Selection (Option 2) */}
-                      {hasMultipleVariants && (
-                        <div className="pt-1.5 pb-1 max-w-full">
+                      {/* Portion / Variant Container (Ensures Uniform Card Spacing in List View) */}
+                      <div className="h-7 sm:h-8 flex items-center my-0.5 max-w-full">
+                        {hasMultipleVariants ? (
                           <div
-                            className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-200/80 dark:bg-bg-dark/90 border border-slate-300/80 dark:border-glass/80 overflow-x-auto max-w-full scroll-smooth shadow-inner [&::-webkit-scrollbar]:hidden"
+                            className="inline-flex items-center gap-1 p-0.5 rounded-full bg-slate-100 dark:bg-bg-dark/90 border border-slate-200 dark:border-glass/80 overflow-x-auto max-w-full scroll-smooth shadow-inner [&::-webkit-scrollbar]:hidden"
                             style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
                           >
                             {itemVariants.map((v: any, idx: number) => {
@@ -615,9 +840,9 @@ export const RestaurantDetailsPage: React.FC = () => {
                                   key={v.id || idx}
                                   type="button"
                                   onClick={() => setSelectedVariantsMap(prev => ({ ...prev, [dishId]: v }))}
-                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer shrink-0 ${isSelected
-                                    ? 'bg-white dark:bg-primary text-slate-900 dark:text-black shadow-md scale-[1.02]'
-                                    : 'text-slate-600 dark:text-text-muted hover:text-slate-900 dark:hover:text-white'
+                                  className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-extrabold transition-all duration-200 cursor-pointer shrink-0 ${isSelected
+                                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 font-black shadow-xs'
+                                    : 'text-slate-600 dark:text-text-muted hover:text-slate-900 dark:hover:text-white border border-transparent'
                                     }`}
                                 >
                                   <span>{shortLabel}</span>
@@ -625,8 +850,12 @@ export const RestaurantDetailsPage: React.FC = () => {
                               );
                             })}
                           </div>
-                        </div>
-                      )}
+                        ) : (
+                          <span className="text-[10px] sm:text-xs font-bold text-slate-600 dark:text-text-muted bg-transparent px-2 py-0.5 rounded-md border border-slate-300/80 dark:border-white/15 inline-flex items-center truncate">
+                            <span>{getItemVariantLabel(item)}</span>
+                          </span>
+                        )}
+                      </div>
 
                       {/* Dish Price & Discount Badge */}
                       <div className="font-black text-base sm:text-lg text-text-primary font-display flex items-center gap-2 pt-0.5 flex-wrap">
@@ -648,21 +877,20 @@ export const RestaurantDetailsPage: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Description */}
-                      {dishObj.description && (
-                        <p className="text-[11px] text-text-muted line-clamp-2 leading-relaxed pt-0.5">
-                          {dishObj.description}
-                        </p>
-                      )}
                     </div>
 
                     {/* Right Side: Dish Image & Swiggy/Zomato Floating ADD Button */}
                     <div className="relative shrink-0 flex flex-col items-center">
                       <div className="relative w-24 h-24 sm:w-32 sm:h-28 rounded-2xl overflow-hidden border border-glass bg-bg-dark shrink-0">
-                        <img
-                          src={dishObj.image}
-                          alt={dishObj.name}
+                        <ItemImageOrIcon
+                          image={dishObj.image}
+                          name={dishObj.name}
+                          category={dishObj.category}
+                          isVeg={dishObj.isVeg}
                           className={`w-full h-full object-cover transition-transform duration-500 ${isOutOfStock ? 'grayscale' : 'hover:scale-105'}`}
+                          containerClassName="w-full h-full"
+                          iconSize={24}
+                          showCategoryLabel={false}
                         />
                         <button
                           type="button"
@@ -691,11 +919,11 @@ export const RestaurantDetailsPage: React.FC = () => {
                             Unavailable
                           </button>
                         ) : qtyInCart > 0 ? (
-                          <div className="flex items-center bg-bg-cardSec text-primary rounded-xl px-2 py-1 shadow-md border-2 border-primary">
+                          <div className="flex items-center bg-bg-cardSec text-primary rounded-full px-1.5 py-1 shadow-md border-2 border-primary">
                             <button
                               type="button"
                               onClick={() => reduceQuantity(itemKey)}
-                              className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                               title="Decrease quantity"
                             >
                               <Minus size={11} className="stroke-[3]" />
@@ -706,7 +934,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => addToCart(dishObj, activeVariant)}
-                              className="w-5 h-5 rounded-md hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full hover:bg-primary/20 text-primary font-black flex items-center justify-center transition-all cursor-pointer active:scale-90"
                               title="Increase quantity"
                             >
                               <Plus size={11} className="stroke-[3]" />
@@ -716,10 +944,10 @@ export const RestaurantDetailsPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => addToCart(dishObj, activeVariant)}
-                            className="px-4 py-1.5 rounded-xl bg-bg-cardSec text-primary border-2 border-primary/80 hover:border-primary font-black text-xs uppercase tracking-wider shadow-md hover:bg-primary hover:text-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 whitespace-nowrap"
+                            className="px-4 py-1.5 rounded-2xl bg-white dark:bg-slate-800 text-[#B87B4B] dark:text-[#D4986A] border border-slate-200/90 dark:border-slate-700/80 hover:border-[#B87B4B]/50 hover:bg-[#F4E6D8]/40 active:scale-95 font-black text-xs sm:text-sm tracking-wider shadow-md shadow-slate-200/60 dark:shadow-none transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
                           >
                             <span>ADD</span>
-                            <Plus size={12} className="stroke-[3]" />
+                            <Plus size={14} className="stroke-[3] text-[#B87B4B] dark:text-[#D4986A]" />
                           </button>
                         )}
                       </div>
@@ -736,16 +964,16 @@ export const RestaurantDetailsPage: React.FC = () => {
       {/* Variant Picker Pop-up Bottom Sheet Modal (Option 3) */}
       <AnimatePresence>
         {activePickerDish && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
+          <div className="fixed inset-0 z-[1000000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-md animate-fadeIn">
             <motion.div
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="w-full max-w-md bg-bg-cardSec border-t sm:border border-glass rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto"
+              className="w-full max-w-md bg-bg-cardSec border-t sm:border border-glass rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl flex flex-col max-h-[85vh] sm:max-h-[80vh] overflow-hidden"
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-glass pb-3">
+              <div className="flex items-center justify-between border-b border-glass pb-3 shrink-0">
                 <div className="flex items-center gap-3">
                   <img
                     src={activePickerDish.image}
@@ -768,18 +996,25 @@ export const RestaurantDetailsPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Options List */}
-              <div className="space-y-2.5 py-1">
+              {/* Options List with Smooth Scroll */}
+              <div className="space-y-2.5 py-2 my-2 overflow-y-auto max-h-[50vh] sm:max-h-[45vh] pr-1 touch-pan-y flex-1 custom-scrollbar">
                 {activePickerDish.variants.map((v: any, idx: number) => {
                   const currentActive = selectedVariantsMap[activePickerDish.id] || activePickerDish.variants[0];
-                  const isSelected = (currentActive?.id || currentActive?.variantId) === (v.id || v.variantId);
+                  const isSelected =
+                    (currentActive?.id && v.id && String(currentActive.id) === String(v.id)) ||
+                    (currentActive?.variantId && v.variantId && String(currentActive.variantId) === String(v.variantId)) ||
+                    (currentActive?.label && v.label && currentActive.label === v.label && Number(currentActive.price) === Number(v.price)) ||
+                    (currentActive?.quantity === v.quantity && currentActive?.unit === v.unit && Number(currentActive?.price) === Number(v.price)) ||
+                    (currentActive === v) ||
+                    (!selectedVariantsMap[activePickerDish.id] && idx === 0);
+
                   const vLabel = v.label || `${v.quantity} ${v.unit}`;
                   const priceNum = Number(v.price);
                   const formattedPrice = Number.isInteger(priceNum) ? priceNum : priceNum.toFixed(2);
 
                   return (
                     <button
-                      key={v.id || idx}
+                      key={v.id || v.variantId || idx}
                       type="button"
                       onClick={() => setSelectedVariantsMap(prev => ({ ...prev, [activePickerDish.id]: v }))}
                       className={`w-full flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${isSelected
@@ -819,7 +1054,7 @@ export const RestaurantDetailsPage: React.FC = () => {
                       addToCart(activePickerDish, activeV);
                       setActivePickerDish(null);
                     }}
-                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-amber-400 text-black font-black text-sm shadow-luxury hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-between px-5 cursor-pointer"
+                    className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-amber-400 text-black font-black text-sm shadow-luxury hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-between px-5 cursor-pointer shrink-0 mt-2"
                   >
                     <span>ADD ITEM TO CART</span>
                     <span className="bg-black/20 px-2.5 py-1 rounded-lg text-xs font-black">
@@ -835,7 +1070,7 @@ export const RestaurantDetailsPage: React.FC = () => {
 
       {/* Liquid Viscous SVG Gooey Popover Menu */}
       {categories.length > 1 && (
-        <div className="fixed bottom-[88px] right-4 sm:right-8 z-40">
+        <div className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-[1000000]">
           <GooeyPopover
             isOpen={isCategoryFabOpen}
             onOpenChange={setIsCategoryFabOpen}

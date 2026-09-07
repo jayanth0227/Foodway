@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, XCircle, CheckCircle2, ChefHat, Bike, ShoppingBag, Utensils } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../hooks/useAuth';
 
 export interface NotificationDetailData {
   id: string;
@@ -25,6 +26,7 @@ interface NotificationDetailModalProps {
 
 export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = ({ notification, isOpen, onClose }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   if (!isOpen || !notification) return null;
 
@@ -230,7 +232,16 @@ export const NotificationDetailModal: React.FC<NotificationDetailModalProps> = (
               <button
                 onClick={() => {
                   onClose();
-                  navigate('/orders');
+                  const userRole = (user?.role || '').toUpperCase();
+                  if (userRole === 'ADMIN') {
+                    navigate('/admin/dashboard?tab=orders', { state: { activeTab: 'orders' } });
+                  } else if (userRole === 'SHOP' || userRole === 'RESTAURANT' || userRole === 'VENDOR') {
+                    navigate('/shop/dashboard?tab=orders', { state: { activeTab: 'orders' } });
+                  } else if (userRole === 'DELIVERY_PARTNER' || userRole === 'DELIVERY' || userRole === 'RIDER') {
+                    navigate('/delivery/dashboard');
+                  } else {
+                    navigate('/orders');
+                  }
                 }}
                 className="w-full py-3 rounded-2xl bg-primary hover:bg-primary-dark text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-luxury cursor-pointer transition-all"
               >

@@ -14,7 +14,7 @@ export const translations: Record<Language, Record<string, string>> = {
     nav_stores: 'Stores',
     nav_wishlist: 'Favourites',
     nav_cart: 'Cart',
-    app_subtitle: 'MK DELIVERY',
+    app_subtitle: 'FOODWAY',
 
     // Section Titles & Labels
     food_categories: 'Food Categories',
@@ -161,7 +161,7 @@ export const translations: Record<Language, Record<string, string>> = {
 
     // Mobile Profile Keys
     profile_title: 'My Profile',
-    profile_welcome: 'Welcome to MK Delivery!',
+    profile_welcome: 'Welcome to Foodway!',
     profile_guest_subtitle: 'Log in to manage orders & saved items.',
     login: 'Log In',
     register: 'Register',

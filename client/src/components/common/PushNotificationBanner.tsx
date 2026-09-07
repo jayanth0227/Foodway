@@ -23,11 +23,6 @@ export const PushNotificationBanner: React.FC = () => {
       const customEvt = e as CustomEvent<PushNotificationPayload>;
       if (customEvt.detail) {
         setCurrentPush(customEvt.detail);
-        // Play subtle alert sound
-        try {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-          audio.play().catch(() => {});
-        } catch (err) {}
       }
     };
 

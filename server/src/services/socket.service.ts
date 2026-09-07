@@ -2,7 +2,7 @@ import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { verifyToken, JwtUserPayload } from '../utils/jwt.utils';
 import { dynamoDocClient, usersTableName, ordersTableName } from '../config/aws';
-import { UpdateCommand, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { UpdateCommand, GetCommand, ScanCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { apiGatewayWS } from './api-gateway-websocket.service';
 import userRepository from '../repositories/user.repository';
 
@@ -139,23 +139,25 @@ export class SocketService {
 
   // --- REGISTER WEBSOCKET CONNECTION ID IN EXISTING TABLES ---
   public async registerUserSocketId(userId: string, connectionId: string, orderId?: string): Promise<void> {
-    if (!userId || !connectionId) {
-      console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=MISSING_PARAMETERS`);
+    if (!connectionId) {
+      console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=MISSING_CONNECTION_ID`);
       return;
     }
 
+    const effectiveUserId = userId && userId.trim() ? userId.trim() : `guest_${connectionId}`;
+
     try {
       // 1. Resolve user via repository or direct identifier match
-      let user = await userRepository.findByUserId(userId) || await userRepository.findByIdentifier(userId);
+      let user = await userRepository.findByUserId(effectiveUserId) || await userRepository.findByIdentifier(effectiveUserId);
       
       // Fallback: If not found by findByUserId, attempt direct scan/query
-      if (!user) {
+      if (!user && userId) {
         try {
           const scanRes = await dynamoDocClient.send(
             new ScanCommand({
               TableName: usersTableName,
               FilterExpression: 'userId = :uid OR id = :uid OR email = :uid',
-              ExpressionAttributeValues: { ':uid': userId }
+              ExpressionAttributeValues: { ':uid': effectiveUserId }
             })
           );
           if (scanRes.Items && scanRes.Items.length > 0) {
@@ -165,8 +167,27 @@ export class SocketService {
       }
 
       if (!user) {
-        console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=USER_NOT_FOUND`);
-        return;
+        // Register guest or new socket connection directly in users table
+        try {
+          await dynamoDocClient.send(
+            new PutCommand({
+              TableName: usersTableName,
+              Item: {
+                id: effectiveUserId,
+                userId: effectiveUserId,
+                email: `${effectiveUserId}@foodway.guest`,
+                role: 'GUEST',
+                socketConnectionId: connectionId,
+                lastSocketConnectedAt: new Date().toISOString()
+              }
+            })
+          );
+          console.log(`[WS GUEST REGISTER SUCCESS] connectionId=${connectionId} guestId=${effectiveUserId}`);
+          return;
+        } catch (guestErr: any) {
+          console.warn(`[WS GUEST REGISTER FAILED] connectionId=${connectionId} error=${guestErr?.message}`);
+          return;
+        }
       }
 
       const keyCandidates: any[] = [];
@@ -374,13 +395,44 @@ export class SocketService {
     await this.dispatchEvent(rooms, 'vendor_items_cancelled', payload);
   }
 
+  // Real-Time Homepage CMS Broadcast
+  async emitCMSUpdated(cms: any): Promise<void> {
+    console.log(`📡 [Socket Emit: HOMEPAGE_CMS_UPDATED] -> Broadcasting Homepage CMS updates live!`);
+    await Promise.all([
+      this.dispatchEvent(['admin', 'public'], 'homepage_cms_updated', cms),
+      this.dispatchEvent(['public'], 'cms_updated', cms)
+    ]);
+  }
+
+  // Real-Time Categories Management Broadcast
+  async emitCategoryUpdated(category: any): Promise<void> {
+    console.log(`📡 [Socket Emit: CATEGORY_UPDATED] -> Category update broadcast:`, category);
+    await Promise.all([
+      this.dispatchEvent(['admin', 'public'], 'category_updated', category),
+      this.dispatchEvent(['public'], 'foodway_category_updated', category)
+    ]);
+  }
+
+  // Real-Time Profile Broadcast
+  async emitProfileUpdated(user: any): Promise<void> {
+    const userId = user.id || user.userId || user.email;
+    console.log(`📡 [Socket Emit: PROFILE_UPDATED] -> User profile updated for #${userId}`);
+    await Promise.all([
+      this.dispatchEvent([`user_${userId}`, 'admin'], 'profile_updated', user),
+      this.dispatchEvent(['public'], 'foodway_profile_updated', user)
+    ]);
+  }
+
   // Real-Time Delivery Settings & Rates Broadcast
   async emitDeliverySettingsUpdated(settings: any): Promise<void> {
     console.log(`📡 [Socket Emit: DELIVERY_SETTINGS_UPDATED] -> Rates updated live!`, settings);
-    await this.dispatchEvent(['public'], 'delivery_settings_updated', settings);
-    await this.dispatchEvent(['public'], 'foodway_delivery_settings_updated', settings);
+    await Promise.all([
+      this.dispatchEvent(['public'], 'delivery_settings_updated', settings),
+      this.dispatchEvent(['public'], 'foodway_delivery_settings_updated', settings)
+    ]);
   }
 }
 
 export const socketService = new SocketService();
 export default socketService;
+

@@ -1,21 +1,40 @@
 import { getToken } from "firebase/messaging";
 import { messaging } from "../config/firebase";
 
-export const requestNotificationPermission = async () => {
+export const requestNotificationPermission = async (): Promise<string | null> => {
   try {
-    if (typeof window === "undefined" || !("Notification" in window) || !messaging) {
+    if (typeof window === "undefined") return null;
+
+    if (!("Notification" in window)) {
       return null;
     }
 
-    const permission = await Notification.requestPermission();
+    if (!messaging) {
+      return null;
+    }
+
+    let permission = Notification.permission;
+
+    // Request native browser permission
+    if (permission === "default") {
+      try {
+        permission = await Notification.requestPermission();
+      } catch (e) {
+        permission = await new Promise((resolve) => {
+          Notification.requestPermission((p) => resolve(p));
+        });
+      }
+    }
 
     if (permission === "granted") {
       let swRegistration: ServiceWorkerRegistration | undefined = undefined;
+
       if ("serviceWorker" in navigator) {
         try {
-          swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+          swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+          await navigator.serviceWorker.ready;
         } catch (swErr) {
-          console.warn("Service worker registration warning:", swErr);
+          // Ignore service worker registration warnings
         }
       }
 
@@ -24,10 +43,8 @@ export const requestNotificationPermission = async () => {
         serviceWorkerRegistration: swRegistration,
       });
 
-      console.log("✅ FCM Push Notifications Enabled");
-      return token;
+      return token || null;
     } else {
-      console.warn("⚠️ Notification permission was not granted:", permission);
       return null;
     }
   } catch (error) {

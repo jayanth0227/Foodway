@@ -450,32 +450,39 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
     );
   };
 
-  const languagesList: { id: Language; label: string }[] = [
-    { id: 'en', label: 'English' },
-    { id: 'te', label: 'తెలుగు' },
-    { id: 'hi', label: 'हिंदी' }
-  ];
-
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div
-          initial={{ opacity: 0, x: '100%' }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: '100%' }}
-          transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-          className="fixed inset-0 z-[100000] bg-bg-dark text-text-primary h-[100dvh] flex flex-col font-sans lg:hidden"
-        >
+        <>
+          {/* Ambient Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[99999] bg-black/65 backdrop-blur-sm lg:hidden"
+          />
+
+          {/* Premium Bottom Slide-Up Sheet Modal */}
+          <motion.div
+            initial={{ opacity: 0, y: '100%', scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: '100%', scale: 0.97 }}
+            transition={{ type: 'spring', damping: 32, stiffness: 300, mass: 0.8 }}
+            className="fixed inset-0 z-[100000] bg-bg-dark text-text-primary h-[100dvh] flex flex-col font-sans lg:hidden overflow-hidden shadow-2xl"
+          >
           {/* 1. Top Header Bar */}
           <div className="sticky top-0 z-30 bg-bg-card/95 dark:bg-bg-cardSec/95 backdrop-blur-md border-b border-glass px-4 py-3 flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center space-x-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="w-9 h-9 rounded-xl bg-glass-subtle hover:bg-glass border border-glass text-text-primary flex items-center justify-center transition-all cursor-pointer shrink-0"
+                className="w-10 h-10 rounded-2xl bg-white dark:bg-white/10 border border-slate-200/90 dark:border-white/15 text-[#B87B4B] dark:text-[#D4986A] shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0 group"
                 aria-label="Back"
+                title="Back"
               >
-                <ArrowLeft size={19} />
+                <ArrowLeft size={18} className="text-[#B87B4B] dark:text-[#D4986A] stroke-[2.2] group-hover:-translate-x-0.5 transition-transform" />
               </button>
               <div>
                 <h1 className="text-base font-black text-text-primary tracking-tight font-display">
@@ -756,37 +763,6 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                             </div>
                           </div>
 
-                          <div>
-                            <label className="text-[10px] uppercase font-bold text-text-muted block mb-1">
-                              Choose Preset Avatar
-                            </label>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {AVATAR_PRESETS.map((url, idx) => (
-                                <button
-                                  key={idx}
-                                  type="button"
-                                  onClick={() => setEditProfileImage(url)}
-                                  className={`w-9 h-9 rounded-xl overflow-hidden border-2 transition-all ${
-                                    editProfileImage === url
-                                      ? 'border-primary ring-2 ring-primary/40 scale-105'
-                                      : 'border-glass'
-                                  }`}
-                                >
-                                  <img src={url} alt={`Avatar ${idx}`} className="w-full h-full object-cover" />
-                                </button>
-                              ))}
-                              {editProfileImage && (
-                                <button
-                                  type="button"
-                                  onClick={() => setEditProfileImage('')}
-                                  className="text-[10px] text-text-muted hover:text-error px-2 py-1"
-                                >
-                                  Clear
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
                           <div className="flex items-center gap-2 pt-2">
                             <button
                               type="button"
@@ -872,36 +848,6 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
                         </div>
                         <span className="text-[11px] font-bold text-text-primary">{t('support')}</span>
                       </a>
-                    </div>
-
-                    {/* Language Selector */}
-                    <div className="p-3 rounded-2xl bg-bg-cardSec border border-glass shadow-xs space-y-2">
-                      <div className="flex items-center space-x-2 text-text-muted px-1">
-                        <Globe size={15} className="text-primary" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-text-muted">
-                          {t('app_language')}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {languagesList.map((lang) => {
-                          const isActive = language === lang.id;
-                          return (
-                            <button
-                              key={lang.id}
-                              type="button"
-                              onClick={() => setLanguage(lang.id)}
-                              className={`py-2 px-2 rounded-xl text-xs font-extrabold transition-all flex items-center justify-center space-x-1.5 cursor-pointer border ${
-                                isActive
-                                  ? 'bg-primary text-black border-primary shadow-xs'
-                                  : 'bg-bg-card border-glass text-text-primary hover:bg-glass'
-                              }`}
-                            >
-                              {isActive && <Check size={13} className="stroke-[3]" />}
-                              <span>{lang.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
                     </div>
 
                     {/* Theme Switcher */}
@@ -1487,6 +1433,7 @@ export const MobileProfileOverlay: React.FC<MobileProfileOverlayProps> = ({
             )}
           </AnimatePresence>
         </motion.div>
+        </>
       )}
     </AnimatePresence>
   );

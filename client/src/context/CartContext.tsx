@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, LogIn, X, ShoppingBag, ArrowRight, ShieldCheck, Zap, Tag } from 'lucide-react';
+import { Lock, LogIn, X, ShoppingBag, ArrowRight, ShieldCheck, Zap, Tag, MapPin, Compass } from 'lucide-react';
 import type { DishItem } from '../utils/mockData';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
@@ -90,6 +90,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCartOpen, setCartOpen] = useState(false);
   const [lastAddedItem, setLastAddedItem] = useState<{ name: string; quantity: number; image: string; price: number; variantLabel?: string; timestamp?: number } | null>(null);
 
+  // Vendor Conflict Modal State (Enforces single-vendor orders per transaction)
+  const [vendorConflict, setVendorConflict] = useState<{
+    newDish: DishItem;
+    newVariant?: any;
+    existingVendorName: string;
+    newVendorName: string;
+  } | null>(null);
+
   // React to User Auth State Changes & Sync Active Cart Across Local Storage & DB
   useEffect(() => {
     const activeUser = user || getCurrentUser();
@@ -148,7 +156,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Listen for Real-Time Menu Item Price & Details & Availability Updates from Vendors
       const unsubscribeMenu = socketService.onMenuUpdated((data: any) => {
-        console.log('⚡ [Live Socket Event: MENU_UPDATED] Received in CartContext:', data);
         const updatedItem = data?.item || data?.dish || data;
         if (!updatedItem && !data?.deletedId) return;
 
@@ -205,7 +212,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Listen for Real-Time Shop Open/Closed Status Updates
       const unsubscribeShopStatus = socketService.onShopStatusUpdated((data: any) => {
         if (!data) return;
-        console.log('⚡ [Live Socket Event: SHOP_STATUS_UPDATED] Received in CartContext:', data);
         const eventShopId = String(data.shopId || data.restaurantId || data.id || '').toLowerCase().replace(/[-_]/g, '');
         const isClosed = data.isOpen === false || data.isOpen === 'false' || data.status === 'closed' || data.status === 'inactive' || data.status === 'offline';
 
@@ -288,6 +294,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (dish.isAvailable === false || (dish as any).isOpen === false || (dish as any).restaurantIsOpen === false) {
       alert('This shop is currently closed or offline and not accepting orders.');
+      return;
+    }
+
+    // Single-Vendor Cart Enforcement: Detect multi-vendor cart conflicts
+    const newDishVendorId = String(
+      dish.restaurantId ||
+      (dish as any).shopId ||
+      (dish as any).restaurantId ||
+      (dish as any).restaurant ||
+      (dish as any).vendorId ||
+      ''
+    ).toLowerCase().trim();
+
+    const existingCartItem = cartItems.find(item => item && item.dish);
+    const existingVendorId = existingCartItem ? String(
+      existingCartItem.dish.restaurantId ||
+      (existingCartItem.dish as any).shopId ||
+      (existingCartItem.dish as any).restaurantId ||
+      (existingCartItem.dish as any).restaurant ||
+      (existingCartItem.dish as any).vendorId ||
+      ''
+    ).toLowerCase().trim() : '';
+
+    if (cartItems.length > 0 && newDishVendorId && existingVendorId && newDishVendorId !== existingVendorId) {
+      const existingVendorName = existingCartItem?.dish.restaurantName || (existingCartItem?.dish as any).shopName || (existingCartItem?.dish as any).restaurant || 'another restaurant';
+      const newVendorName = dish.restaurantName || (dish as any).shopName || (dish as any).restaurant || 'this restaurant';
+      setVendorConflict({
+        newDish: dish,
+        newVariant: selectedVariant,
+        existingVendorName,
+        newVendorName
+      });
       return;
     }
 
@@ -437,56 +475,56 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       {/* Redesigned Premium Login Required Popup Modal (Light & Dark Adaptive) */}
       {showAuthModal && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/70 dark:bg-black/85 backdrop-blur-xl animate-fade-in">
-          <div className="bg-white/95 dark:bg-[#151921]/95 border border-amber-200/80 dark:border-white/10 p-7 sm:p-9 rounded-3xl shadow-[0_25px_70px_rgba(0,0,0,0.18)] dark:shadow-[0_25px_70px_rgba(0,0,0,0.7)] max-w-md w-full text-center relative overflow-hidden transform transition-all animate-scale-up">
-            {/* Multi-layered Glowing Background Orbs */}
-            <div className="absolute -top-20 -right-20 w-44 h-44 bg-amber-400/25 dark:bg-[#C59363]/25 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute -bottom-20 -left-20 w-44 h-44 bg-orange-400/15 dark:bg-[#9D6A43]/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/75 dark:bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-white dark:bg-[#151921] border border-slate-200/90 dark:border-white/10 p-6 sm:p-8 rounded-3xl shadow-2xl max-w-md w-full text-center relative overflow-hidden transform transition-all animate-scale-up">
+            {/* Multi-layered Ambient Background Orbs */}
+            <div className="absolute -top-20 -right-20 w-44 h-44 bg-emerald-500/10 dark:bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-44 h-44 bg-amber-500/10 dark:bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
 
             {/* Glowing Icon Header */}
-            <div className="relative mx-auto mb-5 w-20 h-20 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-[#C59363] via-[#D0A67F] to-[#9D6A43] opacity-30 blur-md animate-pulse" />
-              <div className="relative w-full h-full rounded-3xl bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-[#1E232E] dark:via-[#151921] dark:to-[#1E232E] border border-amber-300/80 dark:border-primary/40 flex items-center justify-center text-[#9D6A43] dark:text-[#D0A67F] shadow-lg">
-                <ShoppingBag size={34} className="text-[#9D6A43] dark:text-[#D0A67F]" />
-                <div className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-gradient-to-r from-[#B87C44] to-[#9D6A43] dark:bg-[#C59363] text-white dark:text-black shadow-md border-2 border-white dark:border-[#151921]">
-                  <Lock size={13} strokeWidth={3} />
+            <div className="relative mx-auto mb-4 w-16 h-16 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center relative shadow-xs">
+                <ShoppingBag size={28} className="text-amber-600 dark:text-amber-400" />
+                <div className="absolute -bottom-1 -right-1 p-1 rounded-lg bg-amber-500 text-white shadow-md border-2 border-white dark:border-[#151921]">
+                  <Lock size={12} strokeWidth={2.5} />
                 </div>
               </div>
             </div>
 
             {/* Top Pill Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-100/90 dark:bg-primary/15 border border-amber-300/90 dark:border-primary/30 text-amber-900 dark:text-primary-dark text-[11px] font-black uppercase tracking-wider mb-3 shadow-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-600 dark:bg-primary animate-ping" />
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] font-black uppercase tracking-wider mb-2.5 shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
               Authentication Required
             </div>
 
             {/* Title & Body Description */}
-            <h3 className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight mb-2.5">
+            <h3 className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight mb-2">
               Log In to Order Food
             </h3>
-            <p className="text-sm text-slate-600 dark:text-gray-300 font-medium leading-relaxed mb-6 px-1">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed mb-5 max-w-xs mx-auto">
               Please log in or create an account to add your favorite gourmet dishes to your cart and place instant orders.
             </p>
 
             {/* Value Perk Badges */}
-            <div className="grid grid-cols-3 gap-2 mb-7">
-              <div className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-amber-50/70 dark:bg-white/[0.04] border border-amber-200/80 dark:border-white/10 text-center shadow-xs">
-                <Zap size={16} className="text-amber-600 dark:text-amber-400" />
-                <span className="text-[11px] font-bold text-slate-800 dark:text-gray-200">Fast Delivery</span>
+            <div className="grid grid-cols-3 gap-2.5 mb-6">
+              <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-center shadow-xs">
+                <Zap size={18} className="text-amber-500 mb-1" />
+                <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 leading-tight">Fast Delivery</span>
               </div>
-              <div className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-amber-50/70 dark:bg-white/[0.04] border border-amber-200/80 dark:border-white/10 text-center shadow-xs">
-                <Tag size={16} className="text-[#B87C44] dark:text-primary" />
-                <span className="text-[11px] font-bold text-slate-800 dark:text-gray-200">Best Offers</span>
+              <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-center shadow-xs">
+                <Tag size={18} className="text-emerald-500 mb-1" />
+                <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 leading-tight">Best Offers</span>
               </div>
-              <div className="flex flex-col items-center gap-1 p-2.5 rounded-2xl bg-amber-50/70 dark:bg-white/[0.04] border border-amber-200/80 dark:border-white/10 text-center shadow-xs">
-                <ShieldCheck size={16} className="text-emerald-600 dark:text-emerald-400" />
-                <span className="text-[11px] font-bold text-slate-800 dark:text-gray-200">Secure Pay</span>
+              <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center shadow-xs">
+                <MapPin size={18} className="text-blue-500 mb-1" />
+                <span className="text-[11px] font-black text-slate-800 dark:text-slate-200 leading-tight">Live Tracking</span>
               </div>
             </div>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5">
               <button
+                type="button"
                 onClick={() => {
                   setShowAuthModal(false);
                   if (navigate) {
@@ -497,29 +535,125 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   }
                   window.location.href = '/login';
                 }}
-                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-[#B87C44] via-[#C59363] to-[#9D6A43] hover:from-[#A76D38] hover:to-[#865731] text-white font-extrabold text-sm sm:text-base shadow-xl shadow-[#C59363]/30 hover:shadow-[#C59363]/50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-300 flex items-center justify-center gap-2.5 group cursor-pointer"
+                className="w-full h-12 sm:h-13 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer group"
               >
-                <LogIn size={20} className="group-hover:scale-110 transition-transform" />
+                <LogIn size={18} className="group-hover:scale-110 transition-transform" />
                 <span>Log In / Register Now</span>
-                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </button>
 
               <button
+                type="button"
                 onClick={() => setShowAuthModal(false)}
-                className="w-full py-3.5 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200/80 border border-slate-300/80 text-slate-700 dark:bg-white/5 dark:hover:bg-white/10 dark:border-white/10 dark:text-gray-300 dark:hover:text-white font-bold text-sm transition-all duration-200 cursor-pointer"
+                className="w-full h-11 rounded-2xl bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-text-primary font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 group"
               >
-                Continue Browsing
+                <Compass size={16} className="text-slate-500 dark:text-slate-400 group-hover:rotate-45 transition-transform duration-300" />
+                <span>Continue Browsing</span>
               </button>
             </div>
 
             {/* Top Right Close Button */}
             <button
+              type="button"
               onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 p-2 rounded-2xl text-slate-400 hover:text-slate-900 hover:bg-slate-200/60 border border-transparent hover:border-slate-300/60 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/10 dark:hover:border-white/10 transition-all duration-200 cursor-pointer"
+              className="absolute top-4 right-4 w-9 h-9 rounded-2xl bg-slate-100 dark:bg-white/10 text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/20 transition-all flex items-center justify-center cursor-pointer"
               aria-label="Close modal"
             >
               <X size={18} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Vendor Conflict Modal: Single Vendor Order Enforcement */}
+      {vendorConflict && (
+        <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 sm:p-6 bg-slate-950/70 dark:bg-black/80 backdrop-blur-md animate-fade-in select-none">
+          <div className="bg-white dark:bg-[#181c26] border border-slate-200 dark:border-white/10 p-6 sm:p-7 rounded-3xl shadow-2xl max-w-md w-full text-center relative overflow-hidden transform transition-all animate-scale-up">
+            {/* Top Right Close Button */}
+            <button
+              type="button"
+              onClick={() => setVendorConflict(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-white/10 transition-all cursor-pointer"
+              aria-label="Close modal"
+            >
+              <X size={16} />
+            </button>
+
+            {/* Top Icon Pill */}
+            <div className="mx-auto mb-3 w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center border border-rose-500/20 shadow-xs">
+              <ShoppingBag size={22} className="stroke-[2.5]" />
+            </div>
+
+            {/* Sub-badge */}
+            <span className="inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 mb-3">
+              Single Restaurant Order Only
+            </span>
+
+            {/* Main Header */}
+            <h3 className="text-xl sm:text-2xl font-black font-display text-slate-900 dark:text-white tracking-tight mb-2">
+              Replace Cart Items?
+            </h3>
+
+            {/* Visual Store Swap Box */}
+            <div className="my-4 p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 flex items-center justify-between gap-2 text-left">
+              {/* Existing Store */}
+              <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-white dark:bg-bg-dark border border-slate-200 dark:border-white/10">
+                <span className="text-[9px] font-bold text-slate-400 dark:text-gray-400 uppercase tracking-wider block">CURRENT CART</span>
+                <p className="text-xs font-black text-slate-800 dark:text-amber-400 truncate pt-0.5">{vendorConflict.existingVendorName}</p>
+              </div>
+
+              {/* Arrow Indicator */}
+              <div className="w-7 h-7 rounded-full bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0 border border-rose-500/30">
+                <ArrowRight size={14} className="stroke-[3]" />
+              </div>
+
+              {/* New Store */}
+              <div className="flex-1 min-w-0 p-2.5 rounded-xl bg-white dark:bg-bg-dark border border-emerald-500/30">
+                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">NEW STORE</span>
+                <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 truncate pt-0.5">{vendorConflict.newVendorName}</p>
+              </div>
+            </div>
+
+            {/* Explanation Message */}
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-gray-300 font-medium leading-relaxed mb-6">
+              Your cart can only contain dishes from one store at a time. Replacing will clear your current cart items.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const { newDish, newVariant } = vendorConflict;
+                  const variantToUse = newVariant || (newDish.variants && newDish.variants.length > 0 ? newDish.variants[0] : newDish.selectedVariant);
+                  const itemKey = variantToUse ? `${newDish.id}-${variantToUse.id || variantToUse.variantId}` : newDish.id;
+                  const effectivePrice = variantToUse ? Number(variantToUse.price) : Number(newDish.price);
+                  const variantLabel = variantToUse ? `${variantToUse.quantity} ${variantToUse.unit}` : undefined;
+
+                  setCartItems([{ dish: newDish, quantity: 1, selectedVariant: variantToUse, itemKey }]);
+                  setLastAddedItem({
+                    name: newDish.name,
+                    quantity: 1,
+                    image: newDish.image,
+                    price: effectivePrice,
+                    variantLabel,
+                    timestamp: Date.now()
+                  });
+                  setVendorConflict(null);
+                }}
+                className="w-full py-3.5 px-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs sm:text-sm shadow-md shadow-rose-600/30 active:scale-95 transition-all cursor-pointer uppercase tracking-wider"
+              >
+                Clear Cart & Add Item
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setVendorConflict(null)}
+                className="w-full py-3 px-5 rounded-2xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-gray-300 font-extrabold text-xs active:scale-95 transition-all cursor-pointer border border-slate-200/80 dark:border-white/10"
+              >
+                Keep Existing Cart
+              </button>
+            </div>
           </div>
         </div>
       )}

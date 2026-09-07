@@ -50,16 +50,24 @@ export const WishlistPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg-dark text-text-primary pt-24 pb-28 px-4 sm:px-8 max-w-6xl mx-auto">
+    <div className="min-h-screen bg-bg-dark text-text-primary pt-24 sm:pt-28 lg:pt-28 pb-32 lg:pb-16 px-4 sm:px-8 max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigate(-1)}
-            className="p-2.5 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 text-text-secondary hover:text-primary transition-all duration-300"
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate('/');
+              }
+            }}
+            className="w-10 h-10 rounded-2xl bg-white dark:bg-white/10 border border-slate-200/90 dark:border-white/15 text-[#B87B4B] dark:text-[#D4986A] shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0 group"
             aria-label="Back"
+            title="Back"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} className="text-[#B87B4B] dark:text-[#D4986A] stroke-[2.2] group-hover:-translate-x-0.5 transition-transform" />
           </button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-display font-bold text-text-primary">

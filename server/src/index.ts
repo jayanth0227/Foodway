@@ -13,15 +13,17 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName, menuItemsTableName, ordersTableName } from './config/aws';
+import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName, menuItemsTableName, ordersTableName, settingsTableName, reviewsTableName } from './config/aws';
 import { uploadAndSeedVideos } from './utils/videoUploader';
 import { ensureAllTablesExist } from './utils/setupTables';
 import restaurantRouter from './routes/restaurant.routes';
 import authRouter from './routes/auth.routes';
+import { forgotPassword, resetPassword } from './controllers/auth.controller';
 import notificationRouter from './routes/notification.routes';
 import deliveryLocationRouter from './routes/deliveryLocation.routes';
 import { menuService } from './services/menu.service';
 import { orderService } from './services/order.service';
+import orderRepository from './repositories/order.repository';
 import { orderItemRepository } from './repositories/orderItem.repository';
 import { RestaurantStatus } from './types/enums';
 import shopService, { restaurantService } from './services/restaurant.service';
@@ -31,6 +33,7 @@ import { userRepository } from './repositories/user.repository';
 import { hashPassword, comparePassword } from './utils/hash.utils';
 import { generateUserId } from './utils/idGenerator';
 import { socketService } from './services/socket.service';
+import notificationService from './services/notification.service';
 import categoryService from './services/category.service';
 
 import cookieParser from 'cookie-parser';
@@ -41,6 +44,27 @@ const app = express();
 
 // Disable technology disclosure header
 app.disable('x-powered-by');
+
+// Enable top-level cors middleware for standard CORS handling
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'token', 'userid'],
+  exposedHeaders: ['Authorization', 'Set-Cookie']
+}));
+
+// Strip AWS API Gateway Stage Prefixes if present in req.url (/production, /prod, /stage)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.url.startsWith('/production/')) {
+    req.url = req.url.substring('/production'.length);
+  } else if (req.url.startsWith('/prod/')) {
+    req.url = req.url.substring('/prod'.length);
+  } else if (req.url.startsWith('/stage/')) {
+    req.url = req.url.substring('/stage'.length);
+  }
+  next();
+});
 
 // Enable security headers & cookie parser middleware
 app.use(securityHeaders);
@@ -65,9 +89,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   );
   res.setHeader('Access-Control-Expose-Headers', 'Authorization, Set-Cookie');
 
-  // Fast-respond to HTTP OPTIONS preflight checks with 204 No Content
+  // Fast-respond to HTTP OPTIONS preflight checks with 200 OK
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return res.status(200).end();
   }
 
   next();
@@ -182,24 +206,58 @@ let _settingsCache: typeof defaultPlatformSettings | null = null;
 async function getPlatformSettings(forceRefresh = false): Promise<typeof defaultPlatformSettings> {
   if (_settingsCache && !forceRefresh) return _settingsCache;
 
-  // 1. Try reading from DynamoDB
-  const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
-  for (const tName of tablesToTry) {
-    try {
-      const result = await dynamoDocClient.send(new GetCommand({ TableName: tName, Key: { id: 'platform_settings', email: 'platform_settings' } }));
-      if (result.Item && typeof result.Item.deliveryFeePerKm === 'number') {
-        _settingsCache = {
-          deliveryFeePerKm: Number(result.Item.deliveryFeePerKm),
-          baseDeliveryFee: Number(result.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
-          freeDeliveryThreshold: Number(result.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
-        };
-        saveSettingsToFile(_settingsCache);
-        return _settingsCache;
-      }
-    } catch (e) { }
-  }
+  // 1. Try reading from dedicated settingsTableName ('foodway-settings')
+  try {
+    const resSettings = await dynamoDocClient.send(new GetCommand({
+      TableName: settingsTableName,
+      Key: { settingId: 'platform_settings' }
+    }));
+    if (resSettings.Item && typeof resSettings.Item.deliveryFeePerKm === 'number') {
+      _settingsCache = {
+        deliveryFeePerKm: Number(resSettings.Item.deliveryFeePerKm),
+        baseDeliveryFee: Number(resSettings.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
+        freeDeliveryThreshold: Number(resSettings.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
+      };
+      saveSettingsToFile(_settingsCache);
+      return _settingsCache;
+    }
+  } catch (e) {}
 
-  // 2. Try reading from local disk file
+  // 2. Try reading from usersTableName ('foodway-users') with userId PK schema
+  try {
+    const resUsers = await dynamoDocClient.send(new GetCommand({
+      TableName: usersTableName,
+      Key: { userId: 'platform_settings' }
+    }));
+    if (resUsers.Item && typeof resUsers.Item.deliveryFeePerKm === 'number') {
+      _settingsCache = {
+        deliveryFeePerKm: Number(resUsers.Item.deliveryFeePerKm),
+        baseDeliveryFee: Number(resUsers.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
+        freeDeliveryThreshold: Number(resUsers.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
+      };
+      saveSettingsToFile(_settingsCache);
+      return _settingsCache;
+    }
+  } catch (e) {}
+
+  // 3. Try reading from tableName ('mk-delivery-services')
+  try {
+    const resTable = await dynamoDocClient.send(new GetCommand({
+      TableName: tableName,
+      Key: { id: 'platform_settings' }
+    }));
+    if (resTable.Item && typeof resTable.Item.deliveryFeePerKm === 'number') {
+      _settingsCache = {
+        deliveryFeePerKm: Number(resTable.Item.deliveryFeePerKm),
+        baseDeliveryFee: Number(resTable.Item.baseDeliveryFee ?? defaultPlatformSettings.baseDeliveryFee),
+        freeDeliveryThreshold: Number(resTable.Item.freeDeliveryThreshold ?? defaultPlatformSettings.freeDeliveryThreshold)
+      };
+      saveSettingsToFile(_settingsCache);
+      return _settingsCache;
+    }
+  } catch (e) {}
+
+  // 4. Try reading from local disk file
   const fileSettings = readSettingsFromFile();
   if (fileSettings && typeof fileSettings.deliveryFeePerKm === 'number') {
     _settingsCache = {
@@ -222,7 +280,7 @@ app.get('/api/admin/settings', async (req: Request, res: Response) => {
 
 // GET Public / Cart Delivery Settings
 app.get('/api/settings/delivery', async (req: Request, res: Response) => {
-  const settings = await getPlatformSettings();
+  const settings = await getPlatformSettings(true);
   res.json({
     success: true,
     deliveryFeePerKm: settings.deliveryFeePerKm,
@@ -233,14 +291,14 @@ app.get('/api/settings/delivery', async (req: Request, res: Response) => {
 });
 
 app.get('/api/settings', async (req: Request, res: Response) => {
-  const settings = await getPlatformSettings();
+  const settings = await getPlatformSettings(true);
   res.json({ success: true, settings });
 });
 
 // UPDATE Admin System Settings (Delivery Charge Per KM & Base Rate)
 app.put('/api/admin/settings', async (req: Request, res: Response) => {
   try {
-    const settings = await getPlatformSettings();
+    const settings = await getPlatformSettings(true);
     const { deliveryFeePerKm, baseDeliveryFee, freeDeliveryThreshold } = req.body;
     if (typeof deliveryFeePerKm === 'number' && !isNaN(deliveryFeePerKm) && deliveryFeePerKm >= 0) {
       settings.deliveryFeePerKm = Number(deliveryFeePerKm);
@@ -253,27 +311,30 @@ app.put('/api/admin/settings', async (req: Request, res: Response) => {
     }
     _settingsCache = settings;
 
-    // 1. Save to local disk file for instant persistence
+    // 1. Save to local disk file
     saveSettingsToFile(settings);
 
-    // 2. Persist to DynamoDB tables
-    const tablesToUpdate = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
-    for (const tName of tablesToUpdate) {
-      try {
-        await dynamoDocClient.send(new PutCommand({
-          TableName: tName,
-          Item: {
-            id: 'platform_settings',
-            userId: 'platform_settings',
-            email: 'platform_settings',
-            settingId: 'platform_settings',
-            pk: 'platform_settings',
-            ...settings,
-            updatedAt: new Date().toISOString()
-          }
-        }));
-      } catch (e) { }
-    }
+    // 2. Persist to DynamoDB tables with matching PK schemas for each table
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: { settingId: 'platform_settings', id: 'platform_settings', ...settings, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: { userId: 'platform_settings', id: 'platform_settings', settingId: 'platform_settings', ...settings, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: tableName,
+        Item: { id: 'platform_settings', settingId: 'platform_settings', ...settings, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
 
     // 3. Broadcast real-time live update to all active customer sessions
     if (socketService) {
@@ -284,8 +345,8 @@ app.put('/api/admin/settings', async (req: Request, res: Response) => {
       message: 'Delivery fee settings updated and saved to DynamoDB successfully.',
       settings
     });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: 'Failed to update settings.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to update admin settings.', details: error.message });
   }
 });
 
@@ -303,25 +364,25 @@ const defaultHomepageCMS = {
   },
   whyChooseUs: {
     title: 'Why Choose MK Delivery..!',
-    subtitle: 'From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.',
+    subtitle: 'From fresh hot meals to groceries, pooja essentials, and daily necessities, discover how we deliver all your essential needs right to your doorstep.',
     features: [
       {
         id: 'feat-1',
-        title: 'Fresh & Quality Food',
-        badge: 'FRESH',
-        description: 'We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care.'
+        title: 'All Essentials & Fresh Meals',
+        badge: 'ALL-IN-ONE',
+        description: 'Order groceries, fresh food, pooja items, bakery treats, and daily household essentials from trusted local shops.'
       },
       {
         id: 'feat-2',
-        title: 'Fast Delivery',
+        title: 'Express Superfast Delivery',
         badge: '20-30 MINS',
-        description: 'Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting.'
+        description: 'Get your food, groceries, vegetables, and daily necessities delivered lightning fast across Konaseema.'
       },
       {
         id: 'feat-3',
         title: 'Live Order Tracking',
         badge: 'LIVE',
-        description: 'Track your order in real time from restaurant confirmation until it arrives at your home.'
+        description: 'Track your essential order in real time from store confirmation until our delivery partner reaches your doorstep.'
       }
     ]
   },
@@ -371,26 +432,64 @@ function saveCMSToFile(cms: any) {
 async function getHomepageCMS(forceRefresh = false): Promise<typeof defaultHomepageCMS> {
   if (_cmsCache && !forceRefresh) return _cmsCache;
 
-  // 1. Try reading from DynamoDB
-  const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
-  for (const tName of tablesToTry) {
-    try {
-      const result = await dynamoDocClient.send(new GetCommand({ TableName: tName, Key: { id: 'homepage_cms', email: 'homepage_cms' } }));
-      if (result.Item && (result.Item.heroStats || result.Item.faqs || result.Item.contactDetails)) {
-        _cmsCache = {
-          heroStats: { ...defaultHomepageCMS.heroStats, ...(result.Item.heroStats || {}) },
-          flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(result.Item.flavoursOfKonaseema || {}) },
-          whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(result.Item.whyChooseUs || {}) },
-          faqs: Array.isArray(result.Item.faqs) && result.Item.faqs.length > 0 ? result.Item.faqs : defaultHomepageCMS.faqs,
-          contactDetails: { ...defaultHomepageCMS.contactDetails, ...(result.Item.contactDetails || {}) }
-        };
-        saveCMSToFile(_cmsCache);
-        return _cmsCache;
-      }
-    } catch (e) { }
-  }
+  // 1. Try reading from dedicated settingsTableName ('foodway-settings')
+  try {
+    const resSettings = await dynamoDocClient.send(new GetCommand({
+      TableName: settingsTableName,
+      Key: { settingId: 'homepage_cms' }
+    }));
+    if (resSettings.Item && (resSettings.Item.heroStats || resSettings.Item.faqs || resSettings.Item.contactDetails)) {
+      _cmsCache = {
+        heroStats: { ...defaultHomepageCMS.heroStats, ...(resSettings.Item.heroStats || {}) },
+        flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(resSettings.Item.flavoursOfKonaseema || {}) },
+        whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(resSettings.Item.whyChooseUs || {}) },
+        faqs: Array.isArray(resSettings.Item.faqs) && resSettings.Item.faqs.length > 0 ? resSettings.Item.faqs : defaultHomepageCMS.faqs,
+        contactDetails: { ...defaultHomepageCMS.contactDetails, ...(resSettings.Item.contactDetails || {}) }
+      };
+      saveCMSToFile(_cmsCache);
+      return _cmsCache;
+    }
+  } catch (e) {}
 
-  // 2. Try reading from local file
+  // 2. Try reading from usersTableName ('foodway-users') with userId PK
+  try {
+    const resUsers = await dynamoDocClient.send(new GetCommand({
+      TableName: usersTableName,
+      Key: { userId: 'homepage_cms' }
+    }));
+    if (resUsers.Item && (resUsers.Item.heroStats || resUsers.Item.faqs || resUsers.Item.contactDetails)) {
+      _cmsCache = {
+        heroStats: { ...defaultHomepageCMS.heroStats, ...(resUsers.Item.heroStats || {}) },
+        flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(resUsers.Item.flavoursOfKonaseema || {}) },
+        whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(resUsers.Item.whyChooseUs || {}) },
+        faqs: Array.isArray(resUsers.Item.faqs) && resUsers.Item.faqs.length > 0 ? resUsers.Item.faqs : defaultHomepageCMS.faqs,
+        contactDetails: { ...defaultHomepageCMS.contactDetails, ...(resUsers.Item.contactDetails || {}) }
+      };
+      saveCMSToFile(_cmsCache);
+      return _cmsCache;
+    }
+  } catch (e) {}
+
+  // 3. Try reading from tableName ('mk-delivery-services')
+  try {
+    const resTable = await dynamoDocClient.send(new GetCommand({
+      TableName: tableName,
+      Key: { id: 'homepage_cms' }
+    }));
+    if (resTable.Item && (resTable.Item.heroStats || resTable.Item.faqs || resTable.Item.contactDetails)) {
+      _cmsCache = {
+        heroStats: { ...defaultHomepageCMS.heroStats, ...(resTable.Item.heroStats || {}) },
+        flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(resTable.Item.flavoursOfKonaseema || {}) },
+        whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(resTable.Item.whyChooseUs || {}) },
+        faqs: Array.isArray(resTable.Item.faqs) && resTable.Item.faqs.length > 0 ? resTable.Item.faqs : defaultHomepageCMS.faqs,
+        contactDetails: { ...defaultHomepageCMS.contactDetails, ...(resTable.Item.contactDetails || {}) }
+      };
+      saveCMSToFile(_cmsCache);
+      return _cmsCache;
+    }
+  } catch (e) {}
+
+  // 4. Try reading from local file
   try {
     if (fs.existsSync(cmsFilePath)) {
       const fileData = JSON.parse(fs.readFileSync(cmsFilePath, 'utf-8'));
@@ -403,7 +502,7 @@ async function getHomepageCMS(forceRefresh = false): Promise<typeof defaultHomep
       };
       return _cmsCache;
     }
-  } catch (e) { }
+  } catch (e) {}
 
   _cmsCache = { ...defaultHomepageCMS };
   return _cmsCache;
@@ -411,14 +510,14 @@ async function getHomepageCMS(forceRefresh = false): Promise<typeof defaultHomep
 
 // GET Public Homepage CMS
 app.get('/api/cms/homepage', async (req: Request, res: Response) => {
-  const cms = await getHomepageCMS();
+  const cms = await getHomepageCMS(true);
   res.json({ success: true, cms });
 });
 
 // UPDATE Admin Homepage CMS (Saves to DynamoDB and local storage)
 app.put('/api/admin/cms/homepage', async (req: Request, res: Response) => {
   try {
-    const currentCMS = await getHomepageCMS();
+    const currentCMS = await getHomepageCMS(true);
     const { heroStats, flavoursOfKonaseema, whyChooseUs, faqs, contactDetails } = req.body;
 
     const updatedCMS = {
@@ -432,23 +531,29 @@ app.put('/api/admin/cms/homepage', async (req: Request, res: Response) => {
     _cmsCache = updatedCMS;
     saveCMSToFile(updatedCMS);
 
-    const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
-    for (const tName of tablesToTry) {
-      try {
-        await dynamoDocClient.send(
-          new PutCommand({
-            TableName: tName,
-            Item: {
-              id: 'homepage_cms',
-              userId: 'homepage_cms',
-              email: 'homepage_cms',
-              pk: 'homepage_cms',
-              ...updatedCMS,
-              updatedAt: new Date().toISOString()
-            }
-          })
-        );
-      } catch (e) { }
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: { settingId: 'homepage_cms', id: 'homepage_cms', ...updatedCMS, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: { userId: 'homepage_cms', id: 'homepage_cms', settingId: 'homepage_cms', ...updatedCMS, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: tableName,
+        Item: { id: 'homepage_cms', settingId: 'homepage_cms', ...updatedCMS, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    if (socketService) {
+      await socketService.emitCMSUpdated(updatedCMS);
     }
 
     res.json({ success: true, message: 'Homepage CMS updated successfully', cms: updatedCMS });
@@ -740,15 +845,39 @@ app.put('/api/restaurant/status/:resId', async (req: Request, res: Response) => 
   }
 });
 
-// Public Endpoint: Fetch All Restaurants directly from DynamoDB
+// Public Endpoint: Fetch All Restaurants directly from DynamoDB with Dynamic Ratings
 app.get('/api/public/restaurants', async (req: Request, res: Response) => {
   try {
     const rawRestaurants = await restaurantService.getAllRestaurants();
+
+    // Compute average ratings from foodway-reviews table
+    let ratingsMap: Record<string, { sum: number; count: number }> = {};
+    try {
+      if (reviewsTableName) {
+        const scanRev = new ScanCommand({ TableName: reviewsTableName });
+        const revResp = await dynamoDocClient.send(scanRev);
+        (revResp.Items || []).forEach((rev: any) => {
+          const resId = rev.restaurantId || rev.shopId;
+          if (resId && rev.rating) {
+            if (!ratingsMap[resId]) ratingsMap[resId] = { sum: 0, count: 0 };
+            ratingsMap[resId].sum += Number(rev.rating);
+            ratingsMap[resId].count += 1;
+          }
+        });
+      }
+    } catch (e) { }
+
     const mapped = rawRestaurants.map((r: any) => {
       const isClosed = r.isOpen === false || r.isOpen === 'false' || r.status === 'closed' || r.status === 'inactive' || r.status === 'INACTIVE' || r.status === 'OFFLINE' || r.status === 'offline' || r.status === 'CLOSED';
       const resId = r.shopId || r.restaurantId || r.id;
       const resName = r.shopName || r.restaurantName || r.name;
       const dietaryType = r.dietaryType || (r.isVegOnly ? 'PURE_VEG' : 'BOTH');
+
+      let dynamicRating = Number(r.rating || 4.8);
+      if (ratingsMap[resId] && ratingsMap[resId].count > 0) {
+        dynamicRating = Number((ratingsMap[resId].sum / ratingsMap[resId].count).toFixed(1));
+      }
+
       return {
         id: resId,
         shopId: resId,
@@ -756,8 +885,11 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
         name: resName,
         shopName: resName,
         restaurantName: resName,
-        cuisine: r.cuisine || 'Multi-Cuisine',
-        rating: r.rating || 4.8,
+        cuisine: r.cuisine || r.category || r.shopType || 'Multi-Cuisine',
+        category: r.category || r.shopType || r.cuisine || 'General Store',
+        shopType: r.shopType || r.category || r.cuisine || 'FOOD',
+        rating: dynamicRating,
+        ratingCount: ratingsMap[resId]?.count || 0,
         deliveryTime: '20-30 mins',
         image: r.logo || r.bannerImage || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=85',
         isOpen: !isClosed,
@@ -772,6 +904,112 @@ app.get('/api/public/restaurants', async (req: Request, res: Response) => {
     res.json({ success: true, restaurants: mapped });
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch public restaurants.' });
+  }
+});
+
+// Submit Rating & Feedback for a Completed Order (DynamoDB Persisted)
+app.post('/api/orders/:orderId/review', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { rating, feedback, reviewText, customerName } = req.body;
+
+    const numRating = Math.max(1, Math.min(5, Number(rating || 5)));
+    const text = (feedback || reviewText || '').trim();
+
+    let targetOrder: any = null;
+    if (ordersTableName) {
+      const scanCmd = new ScanCommand({ TableName: ordersTableName });
+      const scanResp = await dynamoDocClient.send(scanCmd);
+      const items = scanResp.Items || [];
+      targetOrder = items.find((o: any) => o.id === orderId || o.orderId === orderId);
+
+      if (targetOrder) {
+        await dynamoDocClient.send(new PutCommand({
+          TableName: ordersTableName,
+          Item: {
+            ...targetOrder,
+            rating: numRating,
+            feedback: text,
+            reviewText: text,
+            reviewedAt: new Date().toISOString()
+          }
+        }));
+      }
+    }
+
+    const reviewId = `rev_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const reviewItem = {
+      reviewId,
+      orderId,
+      restaurantId: targetOrder?.restaurantId || targetOrder?.shopId || 'res_default',
+      restaurantName: targetOrder?.restaurant || targetOrder?.restaurantName || targetOrder?.shopName || 'Gourmet Merchant',
+      customerName: customerName || targetOrder?.customer?.name || targetOrder?.customerName || 'Valued Patron',
+      customerEmail: targetOrder?.customer?.email || targetOrder?.customerEmail || '',
+      rating: numRating,
+      feedback: text,
+      reviewText: text,
+      createdAt: new Date().toISOString()
+    };
+
+    if (reviewsTableName) {
+      try {
+        await dynamoDocClient.send(new PutCommand({
+          TableName: reviewsTableName,
+          Item: reviewItem
+        }));
+      } catch (err) {
+        console.warn('Error saving to reviewsTableName:', err);
+      }
+    }
+
+    res.json({ success: true, message: 'Rating and review submitted successfully!', review: reviewItem });
+  } catch (error: any) {
+    console.error('Error submitting order review:', error);
+    res.status(500).json({ success: false, error: 'Failed to submit review.' });
+  }
+});
+
+// Fetch All Customer Reviews for Homepage Testimonials & Store Reviews
+app.get('/api/public/reviews', async (req: Request, res: Response) => {
+  try {
+    let reviews: any[] = [];
+
+    if (reviewsTableName) {
+      try {
+        const scanCmd = new ScanCommand({ TableName: reviewsTableName });
+        const resp = await dynamoDocClient.send(scanCmd);
+        reviews = resp.Items || [];
+      } catch (e) { }
+    }
+
+    // Fallback scan orders table for reviewed orders if reviewsTableName empty
+    if (reviews.length === 0 && ordersTableName) {
+      try {
+        const scanCmd = new ScanCommand({ TableName: ordersTableName });
+        const resp = await dynamoDocClient.send(scanCmd);
+        const orders = resp.Items || [];
+        reviews = orders
+          .filter((o: any) => o.rating)
+          .map((o: any) => ({
+            reviewId: `rev_${o.id || o.orderId}`,
+            orderId: o.id || o.orderId,
+            restaurantId: o.restaurantId || o.shopId || '',
+            restaurantName: o.restaurant || o.restaurantName || o.shopName || 'Gourmet Merchant',
+            customerName: o.customer?.name || o.customerName || 'Valued Patron',
+            rating: Number(o.rating || 5),
+            feedback: o.feedback || o.reviewText || 'Excellent delivery service and quality food!',
+            reviewText: o.feedback || o.reviewText || 'Excellent delivery service and quality food!',
+            createdAt: o.reviewedAt || o.createdAt || new Date().toISOString()
+          }));
+      } catch (e) { }
+    }
+
+    // Sort newest first
+    reviews.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    res.json({ success: true, reviews });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch public reviews.' });
   }
 });
 
@@ -796,7 +1034,7 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
       description: item.description || '',
       price: Number(item.price),
       category: item.category || 'Main Course',
-      image: item.foodImage || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800',
+      image: item.foodImage || item.image || '',
       isVeg: item.isVeg !== undefined ? item.isVeg : true,
       type: item.isVeg ? 'veg' : 'non-veg',
       isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
@@ -812,6 +1050,75 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Failed to fetch public dishes.' });
   }
 });
+
+// Public Endpoint: Fetch Single Dish by ID
+app.get('/api/public/dishes/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const scanCommand = new ScanCommand({ TableName: menuItemsTableName });
+    const response = await dynamoDocClient.send(scanCommand);
+    const items = response.Items || [];
+
+    const found = items.find((i: any) => String(i.menuItemId || i.id || i._id) === String(id));
+    if (!found) {
+      return res.status(404).json({ success: false, error: 'Dish not found' });
+    }
+
+    let restaurantName = found.restaurantName || 'Partner Store';
+    try {
+      if (found.restaurantId) {
+        const resObj = await restaurantService.getRestaurantById(found.restaurantId);
+        if (resObj && ((resObj as any).restaurantName || (resObj as any).name || (resObj as any).shopName)) {
+          restaurantName = (resObj as any).restaurantName || (resObj as any).name || (resObj as any).shopName;
+        }
+      }
+    } catch (e) { }
+
+    const isVeg = found.isVeg !== undefined ? found.isVeg : found.type !== 'non-veg' && found.type !== 'nonveg';
+    const isAvailable = found.isAvailable !== false && found.status !== 'UNAVAILABLE' && found.status !== 'disabled';
+
+    let variants = Array.isArray(found.variants) ? found.variants : [];
+    if (variants.length === 0) {
+      variants = [{
+        id: `${found.menuItemId || id}-V1`,
+        variantId: `${found.menuItemId || id}-V1`,
+        quantity: 1,
+        unit: 'pcs',
+        price: Number(found.price || 0),
+        label: 'Standard',
+        isAvailable: isAvailable
+      }];
+    }
+
+    const mappedDish = {
+      id: found.menuItemId || id,
+      menuItemId: found.menuItemId || id,
+      name: found.foodName || found.name || 'Delicious Item',
+      foodName: found.foodName || found.name || 'Delicious Item',
+      description: found.description || '',
+      price: Number(found.price || 0),
+      category: found.category || found.foodCategory || 'General',
+      foodCategory: found.category || found.foodCategory || 'General',
+      image: found.foodImage || found.image || '',
+      foodImage: found.foodImage || found.image || '',
+      isVeg: isVeg,
+      type: isVeg ? 'veg' : 'non-veg',
+      isAvailable: isAvailable,
+      status: isAvailable ? 'active' : 'disabled',
+      rating: found.rating || 4.8,
+      prepTime: found.preparationTime || '15-20 mins',
+      restaurantId: found.restaurantId || 'kona-res',
+      restaurantName: restaurantName,
+      shopName: restaurantName,
+      variants: variants
+    };
+
+    res.json({ success: true, dish: mappedDish });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch dish details' });
+  }
+});
+
 
 
 // Public Endpoint: Fetch All Unique Categories dynamically from DynamoDB
@@ -832,7 +1139,7 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
             description: c.description || `Signature selection of ${catName} items from top kitchens.`,
             itemCount: 0,
             restaurants: new Set(c.restaurantId ? [c.restaurantId] : []),
-            image: c.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+            image: c.image || ''
           };
         } else if (c.restaurantId) {
           categoryMap[catName].restaurants.add(c.restaurantId);
@@ -857,7 +1164,7 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
             description: `Signature selection of ${catName} items from top kitchens.`,
             itemCount: 1,
             restaurants: new Set(item.restaurantId ? [item.restaurantId] : []),
-            image: item.foodImage || item.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+            image: item.foodImage || item.image || ''
           };
         } else {
           categoryMap[catName].itemCount += 1;
@@ -886,7 +1193,7 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
                 description: `Signature selection of ${trimmed} items from top kitchens.`,
                 itemCount: 0,
                 restaurants: new Set(shop.id || shop.restaurantId || shop.shopId ? [shop.id || shop.restaurantId || shop.shopId] : []),
-                image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800'
+                image: ''
               };
             } else if (shop.id || shop.restaurantId || shop.shopId) {
               categoryMap[trimmed].restaurants.add(shop.id || shop.restaurantId || shop.shopId);
@@ -1095,11 +1402,23 @@ app.post('/api/orders', async (req: Request, res: Response) => {
       deliveryFee,
       taxes,
       restaurantId: bodyResId,
-      restaurantName: bodyResName
+      restaurantName: bodyResName,
+      distanceKm,
+      latitude,
+      longitude
     } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ success: false, error: 'Order must contain at least one item.' });
+    }
+
+    // Strict 20km Maximum Delivery Radius Check
+    const MAX_DELIVERY_RADIUS_KM = 20.0;
+    if (distanceKm && Number(distanceKm) > MAX_DELIVERY_RADIUS_KM) {
+      return res.status(400).json({
+        success: false,
+        error: `Delivery distance (${Number(distanceKm).toFixed(1)} km) exceeds the maximum allowed radius of ${MAX_DELIVERY_RADIUS_KM} km. Orders cannot be booked outside the 20 km delivery zone.`
+      });
     }
 
     // Group items by vendor / restaurantId
@@ -1116,7 +1435,14 @@ app.post('/api/orders', async (req: Request, res: Response) => {
 
     const vendorIds = Object.keys(vendorItemsMap);
 
-    // Validate store status and item availability before order creation
+    if (vendorIds.length > 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Multi-vendor orders are not supported in a single order. Please place separate orders for items from different restaurants.'
+      });
+    }
+
+    // Validate store status, item availability, and distance before order creation
     for (let index = 0; index < vendorIds.length; index++) {
       const vId = vendorIds[index];
       const { restaurantName: vName, items: vItems } = vendorItemsMap[vId];
@@ -1131,6 +1457,30 @@ app.post('/api/orders', async (req: Request, res: Response) => {
             success: false,
             error: `Store "${shopName}" is currently closed and not accepting online orders right now.`
           });
+        }
+
+        // Validate Geodesic distance if store and customer coordinates exist
+        const shopLat = Number(shop.latitude || (shop as any).lat);
+        const shopLng = Number(shop.longitude || (shop as any).lng || (shop as any).lon);
+        const custLat = Number(latitude);
+        const custLng = Number(longitude);
+
+        if (!isNaN(shopLat) && !isNaN(shopLng) && !isNaN(custLat) && !isNaN(custLng) && shopLat !== 0 && custLat !== 0) {
+          const R = 6371; // Earth radius in KM
+          const dLat = (custLat - shopLat) * (Math.PI / 180);
+          const dLon = (custLng - shopLng) * (Math.PI / 180);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(shopLat * (Math.PI / 180)) * Math.cos(custLat * (Math.PI / 180)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          const directKm = R * c;
+          if (directKm > MAX_DELIVERY_RADIUS_KM) {
+            return res.status(400).json({
+              success: false,
+              error: `Delivery distance (${directKm.toFixed(1)} km) exceeds the maximum allowed radius of ${MAX_DELIVERY_RADIUS_KM} km. Order cannot be booked.`
+            });
+          }
         }
       }
 
@@ -1223,14 +1573,21 @@ app.post('/api/orders', async (req: Request, res: Response) => {
 
       (created.order as any).items = vItems;
 
-      // ⚡ Real-Time Socket Emission to Merchant Room & Broadcast
+      // ⚡ Real-Time Socket Emission & FCM Push Notification to Merchant
       try {
         if (socketService) {
           await socketService.emitOrderCreated(newOrderObj);
           console.log(`📡 [Real-Time Order Alert] Emitted order_created for Order #${created.order.orderId} to vendor ${vId}`);
         }
+        void notificationService.notifyMerchantNewOrder({
+          orderId: newOrderObj.orderId || newOrderObj.id || vId,
+          restaurantId: vId,
+          customerName: req.body?.customerName || customerName || 'Customer',
+          totalAmount: newOrderObj.totalAmount || newOrderObj.total || 0,
+          itemsCount: (vItems || []).length
+        });
       } catch (e: any) {
-        console.warn('⚠️ Socket emission error on order creation:', e?.message);
+        console.warn('⚠️ Socket/FCM emission error on order creation:', e?.message);
       }
 
       createdSubOrders.push(newOrderObj);
@@ -1264,6 +1621,34 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
     }
 
     const upperStatus = String(status).toUpperCase() as any;
+
+    // 🔒 Cancellation Policy Enforcement: Customer can only cancel UNTIL vendor accepts the order
+    if (upperStatus === 'CANCELLED' && (cancelledBy === 'CUSTOMER' || (req as any).user?.role === 'USER')) {
+      const existingOrder = await orderRepository.findByOrderId(orderId);
+      if (existingOrder) {
+        const currentSt = String(existingOrder.status || (existingOrder as any).orderStatus || '').toUpperCase();
+        const nonCancellableStatuses = [
+          'ACCEPTED',
+          'CONFIRMED',
+          'PREPARING',
+          'FOOD_READY',
+          'READY',
+          'READY_FOR_PICKUP',
+          'ASSIGNED',
+          'OUT_FOR_DELIVERY',
+          'PICKED_UP',
+          'DELIVERED',
+          'COMPLETED'
+        ];
+        if (nonCancellableStatuses.includes(currentSt)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Order cannot be cancelled after the store has accepted it.'
+          });
+        }
+      }
+    }
+
     const updated = await orderService.updateOrderStatus(orderId, upperStatus, cancelledBy);
 
     if (!updated) {
@@ -1334,8 +1719,19 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
           }
         } else {
           await socketService.emitOrderStatusUpdated(updated);
-          await socketService.emitRiderStatusUpdated(updated);
+          if (['ASSIGNED', 'OUT_FOR_DELIVERY', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(upperStatus)) {
+            await socketService.emitRiderStatusUpdated(updated);
+          }
         }
+
+        // 🔔 FCM Push Notification to Customer for Status Update
+        void notificationService.notifyCustomerOrderStatus({
+          orderId: parentId,
+          customerId: updated.customerId,
+          customerEmail: updated.customerEmail,
+          restaurantName: updated.restaurantName || updated.shopName,
+          status: (upperStatus as any) || 'UPDATED'
+        });
 
         const st = String(updated.status || status).toLowerCase();
 
@@ -1346,13 +1742,19 @@ const handleOrderStatusUpdate = async (req: Request, res: Response) => {
         });
 
         if (allActiveReady || st === 'ready' || st === 'ready_for_pickup' || st === 'ready for pickup' || st === 'assigned') {
-          console.log(`📡 [Real-Time Socket] Emitting order_ready_pickup for Multi-Vendor Order #${parentId}`);
+          console.log(`📡 [Real-Time Socket & FCM Push] Emitting order_ready_pickup for Multi-Vendor Order #${parentId}`);
           await socketService.emitOrderReadyForPickup({
             ...updated,
             orderId: parentId,
             status: 'READY'
           });
           await socketService.emitOrderAssigned({ ...updated, orderId: parentId });
+
+          void notificationService.notifyDeliveryPartnersPickupAvailable({
+            orderId: parentId,
+            restaurantId: String(updated.shopId || updated.restaurantId || ''),
+            restaurantName: String(updated.shopName || updated.restaurantName || 'Restaurant')
+          });
         }
       }
     } catch (e: any) {
@@ -1881,6 +2283,10 @@ app.post('/api/user/login', async (req: Request, res: Response) => {
   }
 });
 
+// User Forgot Password API
+app.post('/api/user/forgot-password', forgotPassword);
+app.post('/api/user/reset-password', resetPassword);
+
 
 // -----------------
 // Restaurant Portal API Routes
@@ -2255,9 +2661,52 @@ app.put('/api/admin/orders/:orderId/assign-rider', async (req: Request, res: Res
       return res.status(404).json({ success: false, error: 'Order not found.' });
     }
 
+    // Look up delivery partner user details in users table
+    let riderUser: any = null;
+    if (assignedRider) {
+      try {
+        const uScan = await dynamoDocClient.send(
+          new ScanCommand({
+            TableName: usersTableName,
+            FilterExpression: 'email = :r OR id = :r OR userId = :r OR phone = :r',
+            ExpressionAttributeValues: { ':r': assignedRider }
+          })
+        );
+        if (uScan.Items && uScan.Items.length > 0) {
+          riderUser = uScan.Items[0];
+          const isOffDuty = riderUser.dutyStatus === 'OFF_DUTY' || riderUser.dutyStatus === 'OFFLINE' || riderUser.isOnDuty === false;
+          if (isOffDuty) {
+            return res.status(400).json({
+              success: false,
+              error: `Cannot assign order: Delivery partner "${riderUser.name || assignedRider}" is currently OFF DUTY and unavailable for delivery.`
+            });
+          }
+        }
+      } catch (uErr) {}
+    }
+
+    const riderName = riderUser?.name || riderUser?.email || assignedRider || 'Delivery Partner';
+    const riderPhone = riderUser?.phone || riderUser?.mobile || riderUser?.phoneNumber || 'N/A';
+    const riderEmail = riderUser?.email || (String(assignedRider).includes('@') ? assignedRider : '');
+    const riderId = riderUser?.id || riderUser?.userId || assignedRider;
+
+    const nextStatus = (existing.status === 'PENDING' || existing.orderStatus === 'PENDING') ? 'ASSIGNED' : (existing.status || existing.orderStatus || 'ASSIGNED');
+
     const updated = {
       ...existing,
-      assignedRider,
+      assignedRider: riderName,
+      deliveryUserId: riderId,
+      deliveryPartnerName: riderName,
+      deliveryPartnerPhone: riderPhone,
+      deliveryPartnerEmail: riderEmail,
+      deliveryPartner: {
+        id: riderId,
+        name: riderName,
+        email: riderEmail,
+        phone: riderPhone
+      },
+      status: nextStatus,
+      orderStatus: nextStatus,
       updatedAt: new Date().toISOString()
     };
 
@@ -2268,11 +2717,36 @@ app.put('/api/admin/orders/:orderId/assign-rider', async (req: Request, res: Res
 
     await dynamoDocClient.send(putCmd);
 
+    // Real-Time Socket & FCM Push Emissions to Vendor, Customer, Admin, and Delivery Partner
+    try {
+      await socketService.emitOrderAssigned(updated);
+      await socketService.emitOrderStatusUpdated(updated);
+      await socketService.emitRiderStatusUpdated(updated);
+      await socketService.emitOrderReadyForPickup(updated);
+
+      const updatedPayload: any = updated;
+      void notificationService.notifyCustomerOrderStatus({
+        orderId,
+        customerId: updatedPayload.customerId || (existing as any)?.customerId,
+        customerEmail: updatedPayload.customerEmail || (existing as any)?.customerEmail,
+        status: 'ASSIGNED'
+      });
+      void notificationService.notifyRiderOrderAssigned({
+        orderId,
+        riderId,
+        riderEmail,
+        restaurantName: updatedPayload.restaurantName || updatedPayload.shopName
+      });
+    } catch (sErr) {
+      console.warn('Socket/FCM emission warning on assign-rider:', sErr);
+    }
+
     res.json({
       success: true,
-      message: `Assigned delivery partner ${assignedRider} to order ${orderId}.`,
+      message: `Assigned delivery partner ${riderName} to order ${orderId}.`,
       orderId,
-      assignedRider
+      assignedRider: riderName,
+      order: updated
     });
   } catch (error: any) {
     console.error('Error assigning rider to order:', error);
@@ -2431,21 +2905,105 @@ app.put('/api/delivery-partner/duty-status', async (req: Request, res: Response)
   }
 });
 
+// Fetch Delivery Partner Duty Status
+app.get('/api/delivery-partner/duty-status/:partnerIdentifier', async (req: Request, res: Response) => {
+  try {
+    const { partnerIdentifier } = req.params;
+    const cleanId = decodeURIComponent(partnerIdentifier).toLowerCase().trim();
+
+    if (usersTableName) {
+      try {
+        const scanCmd = new ScanCommand({ TableName: usersTableName });
+        const scanResp = await dynamoDocClient.send(scanCmd);
+        const items = scanResp.Items || [];
+        const targetUser = items.find((u: any) =>
+          (u.id && String(u.id).toLowerCase() === cleanId) ||
+          (u.userId && String(u.userId).toLowerCase() === cleanId) ||
+          (u.email && String(u.email).toLowerCase() === cleanId) ||
+          (u.name && String(u.name).toLowerCase() === cleanId)
+        );
+
+        if (targetUser) {
+          const dutyStatus = targetUser.dutyStatus || 'ON_DUTY';
+          const isOnDuty = dutyStatus === 'ON_DUTY';
+          return res.json({ success: true, dutyStatus, isOnDuty });
+        }
+      } catch (e) {
+        console.warn('⚠️ Error fetching user duty status from DynamoDB:', e);
+      }
+    }
+    return res.json({ success: true, dutyStatus: 'ON_DUTY', isOnDuty: true });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: 'Failed to fetch duty status.' });
+  }
+});
+
 // Delete Delivery Partner
 app.delete('/api/admin/delivery-partners/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const cleanId = decodeURIComponent(id || '').trim().toLowerCase();
+
     if (usersTableName) {
-      await dynamoDocClient.send(
-        new DeleteCommand({
-          TableName: usersTableName,
-          Key: { userId: id }
-        })
+      const scanCmd = new ScanCommand({ TableName: usersTableName });
+      const scanResp = await dynamoDocClient.send(scanCmd);
+      const items = scanResp.Items || [];
+
+      const targetUser = items.find((u: any) =>
+        (u.userId && String(u.userId).trim().toLowerCase() === cleanId) ||
+        (u.id && String(u.id).trim().toLowerCase() === cleanId) ||
+        (u.email && String(u.email).trim().toLowerCase() === cleanId) ||
+        (u.phone && String(u.phone).trim().toLowerCase() === cleanId)
       );
+
+      if (targetUser) {
+        if (targetUser.email) {
+          try {
+            await dynamoDocClient.send(
+              new DeleteCommand({
+                TableName: usersTableName,
+                Key: { email: targetUser.email }
+              })
+            );
+          } catch (e1) {}
+        }
+        if (targetUser.userId) {
+          try {
+            await dynamoDocClient.send(
+              new DeleteCommand({
+                TableName: usersTableName,
+                Key: { userId: targetUser.userId }
+              })
+            );
+          } catch (e2) {}
+        }
+        if (targetUser.id) {
+          try {
+            await dynamoDocClient.send(
+              new DeleteCommand({
+                TableName: usersTableName,
+                Key: { id: targetUser.id }
+              })
+            );
+          } catch (e3) {}
+        }
+      } else {
+        // Fallback delete attempts if direct key match exists
+        try {
+          await dynamoDocClient.send(new DeleteCommand({ TableName: usersTableName, Key: { email: id } }));
+        } catch (e1) {}
+        try {
+          await dynamoDocClient.send(new DeleteCommand({ TableName: usersTableName, Key: { userId: id } }));
+        } catch (e2) {}
+        try {
+          await dynamoDocClient.send(new DeleteCommand({ TableName: usersTableName, Key: { id } }));
+        } catch (e3) {}
+      }
     }
-    res.json({ success: true, message: 'Delivery partner removed.' });
+    return res.json({ success: true, message: 'Delivery partner removed.' });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: 'Failed to delete delivery partner.' });
+    console.error('Error deleting delivery partner:', error);
+    return res.status(500).json({ success: false, error: 'Failed to delete delivery partner.', details: error.message });
   }
 });
 
@@ -2453,7 +3011,7 @@ app.delete('/api/admin/delivery-partners/:id', async (req: Request, res: Respons
 app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, res: Response) => {
   try {
     const { partnerIdentifier } = req.params;
-    const cleanId = decodeURIComponent(partnerIdentifier).toLowerCase();
+    const cleanId = decodeURIComponent(partnerIdentifier).toLowerCase().trim();
 
     if (!ordersTableName) {
       return res.status(400).json({ success: false, error: 'Orders table not configured.' });
@@ -2463,10 +3021,29 @@ app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, 
     const scanResp = await dynamoDocClient.send(scanCmd);
     const allOrders = scanResp.Items || [];
 
-    const assignedOrders = allOrders.filter((o: any) => {
-      const rider = (o.assignedRider || '').toLowerCase();
-      return rider.includes(cleanId) || cleanId.includes(rider);
-    });
+    const assignedOrders = allOrders
+      .filter((o: any) => {
+        const rider = (o.assignedRider || '').toLowerCase().trim();
+        const delUser = (o.deliveryUserId || o.riderId || '').toLowerCase().trim();
+        const delName = (o.deliveryPartnerName || '').toLowerCase().trim();
+        const delEmail = (o.deliveryPartnerEmail || '').toLowerCase().trim();
+
+        // Must have at least one non-empty assignment field
+        if (!rider && !delUser && !delName && !delEmail) {
+          return false;
+        }
+
+        return (
+          (rider && (rider === cleanId || cleanId.includes(rider) || rider.includes(cleanId))) ||
+          (delUser && (delUser === cleanId || cleanId.includes(delUser) || delUser.includes(cleanId))) ||
+          (delName && (delName === cleanId || cleanId.includes(delName) || delName.includes(cleanId))) ||
+          (delEmail && (delEmail === cleanId || cleanId.includes(delEmail) || delEmail.includes(cleanId)))
+        );
+      })
+      .map((o: any) => {
+        const pin = (o.deliveryPin || o.deliveryOtp || String((o.id || o.orderId || '').replace(/\D/g, '').slice(-4) || '4829'));
+        return { ...o, deliveryPin: pin, deliveryOtp: pin };
+      });
 
     res.json({ success: true, orders: assignedOrders });
   } catch (error: any) {
@@ -2474,6 +3051,21 @@ app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, 
     res.status(500).json({ success: false, error: 'Failed to fetch assigned orders.' });
   }
 });
+
+// Helper to ensure every order has a 4-digit Delivery PIN
+const ensureDeliveryPin = (order: any) => {
+  if (order.deliveryPin || order.deliveryOtp) {
+    return String(order.deliveryPin || order.deliveryOtp);
+  }
+  const digits = (order.id || order.orderId || '').replace(/\D/g, '');
+  let pin = digits.length >= 4 ? digits.slice(-4) : '';
+  if (!pin || pin.length < 4 || pin === '0000') {
+    pin = String(Math.floor(1000 + Math.random() * 9000));
+  }
+  order.deliveryPin = pin;
+  order.deliveryOtp = pin;
+  return pin;
+};
 
 // Update Order Status by Delivery Partner
 app.put('/api/delivery-partner/orders/:orderId/status', async (req: Request, res: Response) => {
@@ -2492,10 +3084,56 @@ app.put('/api/delivery-partner/orders/:orderId/status', async (req: Request, res
       return res.status(404).json({ success: false, error: 'Order not found.' });
     }
 
+    ensureDeliveryPin(updated);
     res.json({ success: true, message: `Order status updated to ${upperStatus}.`, order: updated });
   } catch (error: any) {
     console.error('Error updating order status by delivery partner:', error);
     res.status(500).json({ success: false, error: 'Failed to update order status.' });
+  }
+});
+
+// Verify 4-Digit Delivery PIN by Delivery Partner
+app.post('/api/delivery-partner/orders/:orderId/verify-pin', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const { pin } = req.body;
+
+    if (!pin) {
+      return res.status(400).json({ success: false, error: '4-digit Delivery PIN is required.' });
+    }
+
+    if (!ordersTableName) {
+      return res.status(400).json({ success: false, error: 'Orders table not configured.' });
+    }
+
+    const scanCmd = new ScanCommand({ TableName: ordersTableName });
+    const scanResp = await dynamoDocClient.send(scanCmd);
+    const existing = (scanResp.Items || []).find((o: any) => o.id === orderId || o.orderId === orderId);
+
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Order not found.' });
+    }
+
+    const expectedPin = ensureDeliveryPin(existing);
+
+    if (String(pin).trim() !== String(expectedPin).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: `Incorrect PIN (${pin}). Please ask the customer for the correct 4-digit delivery PIN.`
+      });
+    }
+
+    // PIN is correct! Transition order status to DELIVERED
+    const updated = await orderService.updateOrderStatus(orderId, 'DELIVERED' as any, 'DELIVERY');
+
+    res.json({
+      success: true,
+      message: '✅ 4-Digit Delivery PIN Verified! Order completed successfully.',
+      order: updated || { ...existing, status: 'DELIVERED', orderStatus: 'DELIVERED' }
+    });
+  } catch (error: any) {
+    console.error('Error verifying delivery PIN:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify delivery PIN.' });
   }
 });
 

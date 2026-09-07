@@ -16,8 +16,6 @@ const messaging = firebase.messaging();
 
 // Handle Background Push Notifications
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background push message:', payload);
-
   const title = payload.notification?.title || payload.data?.title || '🔔 Foodway Update';
   const options = {
     body: payload.notification?.body || payload.data?.body || 'You have a new order update!',
@@ -36,7 +34,6 @@ messaging.onBackgroundMessage((payload) => {
 
 // Handle Notification Click (Deep Linking)
 self.addEventListener('notificationclick', (event) => {
-  console.log('[firebase-messaging-sw.js] Notification click received.', event);
   event.notification.close();
 
   const targetUrl = event.notification.data?.url || '/restaurant/dashboard';
