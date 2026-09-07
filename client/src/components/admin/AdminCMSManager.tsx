@@ -190,6 +190,29 @@ export const AdminCMSManager: React.FC = () => {
         </div>
       )}
 
+      {/* Dynamic Store & Homepage Categories Shortcut */}
+      <div className="glass-panel border border-primary/30 bg-gradient-to-r from-primary/10 via-bg-card to-bg-card rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-luxury">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center text-primary shrink-0">
+            <Layers size={22} />
+          </div>
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-primary block">Dynamic Delivery Catalog</span>
+            <h3 className="text-base font-black font-display text-text-primary">Homepage & Platform Categories Manager</h3>
+            <p className="text-xs text-text-muted font-medium mt-0.5">
+              Add, edit, reorder, or customize food, grocery, pooja essentials, and all delivery categories in DynamoDB.
+            </p>
+          </div>
+        </div>
+        <a
+          href="/admin/dashboard?tab=categories"
+          className="btn-primary py-2.5 px-4 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center space-x-2 shrink-0 shadow-md cursor-pointer"
+        >
+          <span>Open Categories Console</span>
+          <Globe size={14} />
+        </a>
+      </div>
+
       {/* 1. HERO STATS CARD COUNTS */}
       <div className="glass-panel border border-glass rounded-2xl p-6 space-y-4">
         <div className="flex items-center space-x-3 border-b border-glass pb-3">

@@ -25,7 +25,7 @@ export interface AddressDetails {
  */
 export const getFastAndAccurateLocation = (
   onLocationFound: (result: FastLocationResult) => void,
-  onError?: (errorMessage: string) => void
+  onError?: (errorMessage?: string) => void
 ) => {
   if (!navigator.geolocation) {
     // Fallback to IP Geolocation if browser doesn't support Geolocation API
@@ -83,7 +83,7 @@ export const getFastAndAccurateLocation = (
 // IP Geolocation Fallback Helper
 const fetchIpLocation = async (
   onLocationFound: (result: FastLocationResult) => void,
-  onError?: () => void
+  onError?: (errorMessage?: string) => void
 ) => {
   try {
     const res = await fetch('https://ipapi.co/json/');

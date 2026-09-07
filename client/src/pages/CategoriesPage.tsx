@@ -31,6 +31,7 @@ import { getMergedCategories, DEFAULT_CULINARY_CATEGORIES, getTranslatedCategory
 import { MobileShopCardSkeleton, MobileGridSkeleton, DishCardSkeleton } from '../components/common/MobileSkeletonLoader';
 import { ItemDetailsModal } from '../components/common/ItemDetailsModal';
 import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
+import { socketService } from '../services/socket.service';
 
 export const CategoriesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -88,16 +89,23 @@ export const CategoriesPage: React.FC = () => {
     const loadCategoriesData = async () => {
       setLoading(true);
       try {
-        const [catResp, resList, dishResp] = await Promise.allSettled([
+        const [catResp, homeCatResp, resList, dishResp] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/public/categories`),
+          axios.get(`${API_BASE_URL}/public/homepage-categories`),
           shopService.getPublicRestaurants(),
           axios.get(`${API_BASE_URL}/public/dishes`)
         ]);
 
-        if (catResp.status === 'fulfilled' && catResp.value.data?.categories) {
-          setCulinaryCategories(getMergedCategories(catResp.value.data.categories));
+        const vendorCats = catResp.status === 'fulfilled' && catResp.value.data?.categories ? catResp.value.data.categories : [];
+        const homeCats = homeCatResp.status === 'fulfilled' && homeCatResp.value.data?.categories ? homeCatResp.value.data.categories : [];
+
+        if (homeCats.length > 0) {
+          const activeOnly = homeCats
+            .filter((c: any) => c.isActive !== false)
+            .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+          setCulinaryCategories(activeOnly);
         } else {
-          setCulinaryCategories(getMergedCategories([]));
+          setCulinaryCategories(DEFAULT_CULINARY_CATEGORIES);
         }
 
         if (resList.status === 'fulfilled') {
@@ -119,15 +127,20 @@ export const CategoriesPage: React.FC = () => {
 
     loadCategoriesData();
 
+    // Real-time category synchronization
+    const unsubscribe = socketService.onCategoryUpdated(() => {
+      loadCategoriesData();
+    });
+
     const handleRealtimeUpdate = () => {
       loadCategoriesData();
     };
 
-    window.addEventListener('foodway_category_updated', handleRealtimeUpdate);
     window.addEventListener('foodway_menu_updated', handleRealtimeUpdate);
     window.addEventListener('foodway_restaurant_status_updated', handleRealtimeUpdate);
 
     return () => {
+      unsubscribe();
       window.removeEventListener('foodway_category_updated', handleRealtimeUpdate);
       window.removeEventListener('foodway_menu_updated', handleRealtimeUpdate);
       window.removeEventListener('foodway_restaurant_status_updated', handleRealtimeUpdate);
@@ -165,13 +178,6 @@ export const CategoriesPage: React.FC = () => {
     const shopName = (dish.restaurantName || '').toLowerCase();
     const isVeg = dish.isVeg !== false;
 
-    const catKeywords = currentCategoryObj?.keywords || [catLower];
-
-    const matchesCategory = dishCat === catLower ||
-      dishCat.includes(catLower) ||
-      catLower.includes(dishCat) ||
-      catKeywords.some(k => dishCat.includes(k) || dishName.includes(k) || dishDesc.includes(k));
-
     const matchesSearch = !searchTerm ||
       dishName.includes(searchTerm.toLowerCase()) ||
       dishDesc.includes(searchTerm.toLowerCase()) ||
@@ -180,7 +186,40 @@ export const CategoriesPage: React.FC = () => {
     const matchesDietary = dietaryFilter === 'all' ||
       (dietaryFilter === 'veg' ? isVeg : !isVeg);
 
-    return matchesCategory && matchesSearch && matchesDietary;
+    if (!matchesSearch || !matchesDietary) return false;
+
+    // Direct match on category field
+    if (dishCat === catLower || dishCat.includes(catLower) || catLower.includes(dishCat)) {
+      return true;
+    }
+
+    const catKeywords = currentCategoryObj?.keywords || [catLower];
+
+    // Special isolation rule for Pooja Essentials & Flowers
+    if (catLower.includes('pooja') || catLower.includes('flower')) {
+      return dishCat.includes('pooja') || dishCat.includes('flower') || dishCat.includes('temple') ||
+        catKeywords.some(k => {
+          const regex = new RegExp(`\\b${k}\\b`, 'i');
+          return regex.test(dishName) || regex.test(dishCat);
+        });
+    }
+
+    // Special isolation rule for Groceries & Supermarket
+    if (catLower.includes('groceries') || catLower.includes('supermarket')) {
+      return dishCat.includes('grocery') || dishCat.includes('supermarket') || dishCat.includes('staple') ||
+        catKeywords.some(k => {
+          const regex = new RegExp(`\\b${k}\\b`, 'i');
+          return regex.test(dishName) || regex.test(dishCat);
+        });
+    }
+
+    // General keyword match against dish category or dish name (avoiding arbitrary description ingredient false-positives)
+    const matchesCategory = catKeywords.some(k => {
+      const regex = new RegExp(`\\b${k}\\b`, 'i');
+      return regex.test(dishCat) || regex.test(dishName);
+    });
+
+    return matchesCategory;
   });
 
   return (

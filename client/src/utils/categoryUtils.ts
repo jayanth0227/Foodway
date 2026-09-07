@@ -11,51 +11,11 @@ export interface CategoryItem {
 
 export const DEFAULT_CULINARY_CATEGORIES: CategoryItem[] = [
   {
-    id: 'cat_groceries',
-    name: 'Groceries & Supermarket',
-    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
-    description: 'Rice, Atta, Cooking Oils, Spices, Staples & Daily Packaged Foods.',
-    keywords: ['grocery', 'groceries', 'supermarket', 'rice', 'atta', 'oil', 'spices', 'staples', 'mart'],
-    badge: 'DAILY ESSENTIALS'
-  },
-  {
-    id: 'cat_pooja',
-    name: 'Pooja Essentials & Flowers',
-    image: 'https://images.unsplash.com/photo-1609840114035-3c981b782dfe?auto=format&fit=crop&q=80&w=600',
-    description: 'Fresh Garland Flowers, Agarbatti, Camphor, Diya Oils & Ritual Packs.',
-    keywords: ['pooja', 'flower', 'flowers', 'agarbatti', 'camphor', 'diya', 'oil', 'ritual', 'temple', 'garland', 'samagri'],
-    badge: 'TEMPLE SPECIAL'
-  },
-  {
-    id: 'cat_freshfood',
-    name: 'Fresh Food & Restaurants',
-    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=600',
-    description: 'Authentic Biryani, Tandoori Kebabs, Meals & Fast Food.',
-    keywords: ['food', 'biryani', 'restaurant', 'meal', 'tandoori', 'curry', 'starter', 'fast food'],
-    badge: 'HOT & FRESH'
-  },
-  {
-    id: 'cat_fruits_veg',
-    name: 'Fruits & Fresh Vegetables',
-    image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=600',
-    description: 'Farm Fresh Produce, Organic Vegetables & Seasonal Fruits.',
-    keywords: ['fruit', 'vegetable', 'veg', 'veggie', 'fresh', 'apple', 'banana', 'tomato', 'potato', 'onion'],
-    badge: 'FARM FRESH'
-  },
-  {
-    id: 'cat_dairy',
-    name: 'Dairy, Milk & Eggs',
-    image: 'https://images.unsplash.com/photo-1528751014936-863e6e7a319c?auto=format&fit=crop&q=80&w=600',
-    description: 'Fresh Milk, Curd, Butter, Paneer, Cheese & Eggs.',
-    keywords: ['dairy', 'milk', 'curd', 'paneer', 'butter', 'ghee', 'cheese', 'egg'],
-    badge: 'QUICK DELIVERY'
-  },
-  {
     id: 'cat_bakery',
     name: 'Bakery & Cakes',
     image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=600',
     description: 'Fresh Breads, Custom Cakes, Pastries & Confectionery.',
-    keywords: ['bakery', 'cake', 'pastry', 'bread', 'puff', 'cookie', 'dessert'],
+    keywords: ['bakery', 'cake', 'cakes', 'pastry', 'pastries', 'bread', 'puff', 'puffs', 'cookie', 'cookies', 'dessert', 'sweet', 'sweets'],
     badge: 'SWEET DELIGHTS'
   },
   {
@@ -63,16 +23,56 @@ export const DEFAULT_CULINARY_CATEGORIES: CategoryItem[] = [
     name: 'Beverages & Coolers',
     image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=600',
     description: 'Soft Drinks, Packaged Juices, Milkshakes & Water.',
-    keywords: ['beverage', 'drink', 'shake', 'juice', 'soda', 'tea', 'coffee', 'coolers'],
+    keywords: ['beverage', 'beverages', 'drink', 'drinks', 'shake', 'shakes', 'juice', 'juices', 'soda', 'tea', 'coffee', 'coolers', 'cooler'],
     badge: 'ICE COLD'
+  },
+  {
+    id: 'cat_dairy',
+    name: 'Dairy, Milk & Eggs',
+    image: 'https://images.unsplash.com/photo-1528751014936-863e6e7a319c?auto=format&fit=crop&q=80&w=600',
+    description: 'Fresh Milk, Curd, Butter, Paneer, Cheese & Eggs.',
+    keywords: ['dairy', 'milk', 'curd', 'paneer', 'butter', 'ghee', 'cheese', 'egg', 'eggs', 'cream'],
+    badge: 'QUICK DELIVERY'
+  },
+  {
+    id: 'cat_freshfood',
+    name: 'Fresh Food & Restaurants',
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=600',
+    description: 'Authentic Biryani, Tandoori Kebabs, Meals & Fast Food.',
+    keywords: ['food', 'biryani', 'restaurant', 'meal', 'meals', 'tandoori', 'curry', 'starter', 'fast food', 'kitchen', 'tiffins', 'chicken', 'mutton', 'paneer', 'dosa', 'roti', 'rice bowl'],
+    badge: 'HOT & FRESH'
+  },
+  {
+    id: 'cat_fruits_veg',
+    name: 'Fruits & Fresh Vegetables',
+    image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=600',
+    description: 'Farm Fresh Produce, Organic Vegetables & Seasonal Fruits.',
+    keywords: ['fruit', 'fruits', 'vegetable', 'vegetables', 'fresh produce', 'veggie', 'veggies'],
+    badge: 'FARM FRESH'
+  },
+  {
+    id: 'cat_groceries',
+    name: 'Groceries & Supermarket',
+    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
+    description: 'Rice, Atta, Cooking Oils, Spices, Staples & Daily Packaged Foods.',
+    keywords: ['grocery', 'groceries', 'supermarket', 'staples', 'mart', 'provision', 'provisions'],
+    badge: 'DAILY ESSENTIALS'
   },
   {
     id: 'cat_household',
     name: 'Household & Personal Care',
     image: 'https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=600',
     description: 'Soaps, Shampoos, Detergents, Hygiene & Home Cleaning.',
-    keywords: ['household', 'personal care', 'soap', 'shampoo', 'detergent', 'cleaning', 'hygiene'],
+    keywords: ['household', 'personal care', 'soap', 'shampoo', 'detergent', 'cleaning', 'hygiene', 'toiletries'],
     badge: 'HOME CARE'
+  },
+  {
+    id: 'cat_pooja',
+    name: 'Pooja Essentials & Flowers',
+    image: 'https://images.unsplash.com/photo-1608744882201-52a7f7f3da60?auto=format&fit=crop&q=80&w=600',
+    description: 'Fresh Garland Flowers, Agarbatti, Camphor, Diya Oils & Ritual Packs.',
+    keywords: ['pooja', 'puja', 'flower', 'flowers', 'agarbatti', 'camphor', 'diya', 'dhoop', 'ritual', 'temple', 'garland', 'samagri', 'moola', 'kumkum', 'turmeric'],
+    badge: 'TEMPLE SPECIAL'
   }
 ];
 
@@ -80,14 +80,21 @@ export const cleanCategoryName = (name: string = ''): string => {
   return name.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
 };
 
-export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] => {
+export const getMergedCategories = (dbCategories: any[] = [], dynamicCategories?: CategoryItem[]): CategoryItem[] => {
   const merged: CategoryItem[] = [];
   const seen = new Set<string>();
 
-  // Always include default curated categories first
-  DEFAULT_CULINARY_CATEGORIES.forEach(cat => {
-    seen.add(cat.name.toLowerCase());
-    merged.push({ ...cat });
+  // Base list: use dynamicCategories if provided and non-empty, otherwise default curated
+  const baseList: CategoryItem[] = Array.isArray(dynamicCategories) && dynamicCategories.length > 0
+    ? dynamicCategories
+    : DEFAULT_CULINARY_CATEGORIES;
+
+  baseList.forEach(cat => {
+    const lower = (cat.name || '').toLowerCase().trim();
+    if (lower) {
+      seen.add(lower);
+      merged.push({ ...cat });
+    }
   });
 
   // Merge any additional vendor DB categories
@@ -101,8 +108,8 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
       if (!seen.has(lowerName)) {
         seen.add(lowerName);
 
-        const defaultMatch = DEFAULT_CULINARY_CATEGORIES.find(
-          d => d.name.toLowerCase() === lowerName || d.keywords.some(k => lowerName.includes(k) || k.includes(lowerName))
+        const defaultMatch = baseList.find(
+          d => d.name.toLowerCase() === lowerName || (d.keywords && d.keywords.some(k => lowerName.includes(k) || k.includes(lowerName)))
         );
 
         const image = (cat.image && !cat.image.includes('category-placeholder'))
@@ -118,7 +125,10 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
           name: name,
           image: image,
           description: description,
-          keywords: defaultMatch ? defaultMatch.keywords : [lowerName],
+          badge: cat.badge || (defaultMatch ? defaultMatch.badge : undefined),
+          keywords: (cat.keywords && Array.isArray(cat.keywords) && cat.keywords.length > 0)
+            ? cat.keywords
+            : (defaultMatch ? defaultMatch.keywords : [lowerName]),
           restaurantCount: cat.restaurantCount,
           itemCount: cat.itemCount
         });
@@ -126,8 +136,10 @@ export const getMergedCategories = (dbCategories: any[] = []): CategoryItem[] =>
     });
   }
 
-  // Keep limited categories (8 curated categories)
-  return merged.slice(0, 8);
+  // Sort categories alphabetically by category name
+  merged.sort((a, b) => a.name.localeCompare(b.name));
+
+  return merged;
 };
 
 export const getTranslatedCategoryName = (name: string = '', t: (key: string) => string): string => {

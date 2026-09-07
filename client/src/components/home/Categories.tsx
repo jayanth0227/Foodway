@@ -6,30 +6,54 @@ import { API_BASE_URL } from '../../utils/api';
 import { CategoryCardSkeleton } from './HomePageSkeleton';
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from '../../context/LanguageContext';
-import { getMergedCategories, getTranslatedCategoryName } from '../../utils/categoryUtils';
+import { getMergedCategories, getTranslatedCategoryName, DEFAULT_CULINARY_CATEGORIES, type CategoryItem } from '../../utils/categoryUtils';
+import { socketService } from '../../services/socket.service';
 
 export const Categories: React.FC = () => {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get(`${API_BASE_URL}/public/categories`);
-        const dbCats = response.data.success && Array.isArray(response.data.categories) ? response.data.categories : [];
-        setCategories(getMergedCategories(dbCats));
-      } catch (err) {
-        console.warn('Error fetching categories from DB:', err);
-        setCategories(getMergedCategories([]));
-      } finally {
-        setLoading(false);
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/public/homepage-categories`);
+      if (response.data?.success && Array.isArray(response.data.categories) && response.data.categories.length > 0) {
+        // ONLY display active categories configured in the Admin Dashboard!
+        const activeCats = response.data.categories
+          .filter((c: any) => c.isActive !== false)
+          .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setCategories(activeCats);
+      } else {
+        setCategories(DEFAULT_CULINARY_CATEGORIES);
       }
-    };
+    } catch (err) {
+      console.warn('Error fetching homepage categories from DB:', err);
+      setCategories(DEFAULT_CULINARY_CATEGORIES);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    setLoading(true);
     fetchCategories();
+
+    // Subscribe to real-time category updates from admin
+    const unsubscribe = socketService.onCategoryUpdated((updatedCats: any) => {
+      if (Array.isArray(updatedCats) && updatedCats.length > 0) {
+        const activeOnly = updatedCats
+          .filter((c: any) => c.isActive !== false)
+          .sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        setCategories(activeOnly);
+      } else {
+        fetchCategories();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const containerVariants = {
@@ -92,7 +116,7 @@ export const Categories: React.FC = () => {
             viewport={{ once: true, margin: '-60px' }}
             className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6"
           >
-            {categories.slice(0, 8).map((category) => {
+            {categories.map((category) => {
               const cleanName = (category.name || '').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
               const cleanDesc = (category.description || '').replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '').trim();
 

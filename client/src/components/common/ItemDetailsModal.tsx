@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Heart, Star, Plus, Minus, ShoppingBag, Check, Info } from 'lucide-react';
+import { X, Heart, Star, Plus, Minus, ShoppingBag, Check, Info, Store } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
 import ItemImageOrIcon from './ItemImageOrIcon';

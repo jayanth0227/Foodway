@@ -60,6 +60,7 @@ import { socketService } from '../services/socket.service';
 import { AdminDeliveryLocations } from '../components/admin/AdminDeliveryLocations';
 import { AdminCMSManager } from '../components/admin/AdminCMSManager';
 import { AdminInvitationsManager } from '../components/admin/AdminInvitationsManager';
+import { AdminCategoriesManager } from '../components/admin/AdminCategoriesManager';
 
 interface DBItem {
   id: string;
@@ -82,7 +83,7 @@ interface AWSStatus {
   dynamoTableConfigured: boolean;
 }
 
-type AdminTab = 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings' | 'cms' | 'invitations';
+type AdminTab = 'dashboard' | 'restaurants' | 'categories' | 'orders' | 'delivery' | 'locations' | 'settings' | 'cms' | 'invitations';
 
 interface AdminDashboardProps {
   initialTab?: AdminTab;
@@ -99,7 +100,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const getInitialTab = (): AdminTab => {
     const searchParams = new URLSearchParams(location.search);
     const queryTab = searchParams.get('tab');
-    const validTabs = ['dashboard', 'restaurants', 'orders', 'delivery', 'locations', 'settings', 'cms', 'invitations'];
+    const validTabs = ['dashboard', 'restaurants', 'categories', 'orders', 'delivery', 'locations', 'settings', 'cms', 'invitations'];
     if (queryTab && validTabs.includes(queryTab)) {
       return queryTab as any;
     }
@@ -1236,6 +1237,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
           >
             <Store size={16} className="shrink-0" />
             <span className="truncate text-left font-bold">Shops & Stores</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('categories'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${activeTab === 'categories'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+              }`}
+          >
+            <LayoutGrid size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Store Categories</span>
           </button>
 
           <button
@@ -2960,6 +2972,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
           )}
 
           {/* ==================================================== */}
+          {/* STORE CATEGORIES TAB */}
+          {/* ==================================================== */}
+          {activeTab === 'categories' && (
+            <AdminCategoriesManager />
+          )}
+
+          {/* ==================================================== */}
           {/* DELIVERY LOCATIONS TAB */}
           {/* ==================================================== */}
           {activeTab === 'locations' && (
@@ -3635,6 +3654,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 >
                   <MapPin size={20} className="text-amber-600 dark:text-primary" />
                   <span>Delivery Locations</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('categories'); setIsMoreMenuOpen(false); }}
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${activeTab === 'categories'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
+                      : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
+                    }`}
+                >
+                  <LayoutGrid size={20} className="text-amber-600 dark:text-primary" />
+                  <span>Store Categories</span>
                 </button>
 
                 <button

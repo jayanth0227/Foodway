@@ -13,7 +13,7 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName, menuItemsTableName, ordersTableName, settingsTableName, reviewsTableName } from './config/aws';
+import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName, menuItemsTableName, ordersTableName, settingsTableName, reviewsTableName, categoriesTableName } from './config/aws';
 import { uploadAndSeedVideos } from './utils/videoUploader';
 import { ensureAllTablesExist } from './utils/setupTables';
 import restaurantRouter from './routes/restaurant.routes';
@@ -559,6 +559,443 @@ app.put('/api/admin/cms/homepage', async (req: Request, res: Response) => {
     res.json({ success: true, message: 'Homepage CMS updated successfully', cms: updatedCMS });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to update CMS' });
+  }
+});
+
+// --- HOMEPAGE DYNAMIC CATEGORIES CONFIGURATION & DYNAMODB PERSISTENCE ---
+export interface IHomepageCategoryItem {
+  id: string;
+  name: string;
+  image: string;
+  description: string;
+  keywords: string[];
+  badge?: string;
+  isActive: boolean;
+  order: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+const defaultHomepageCategories: IHomepageCategoryItem[] = [
+  {
+    id: 'cat_bakery',
+    name: 'Bakery & Cakes',
+    image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=600',
+    description: 'Fresh Breads, Custom Cakes, Pastries & Confectionery.',
+    keywords: ['bakery', 'cake', 'cakes', 'pastry', 'pastries', 'bread', 'puff', 'puffs', 'cookie', 'cookies', 'dessert', 'sweet', 'sweets'],
+    badge: 'SWEET DELIGHTS',
+    isActive: true,
+    order: 1
+  },
+  {
+    id: 'cat_beverages',
+    name: 'Beverages & Coolers',
+    image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=600',
+    description: 'Soft Drinks, Packaged Juices, Milkshakes & Water.',
+    keywords: ['beverage', 'beverages', 'drink', 'drinks', 'shake', 'shakes', 'juice', 'juices', 'soda', 'tea', 'coffee', 'coolers', 'cooler'],
+    badge: 'ICE COLD',
+    isActive: true,
+    order: 2
+  },
+  {
+    id: 'cat_dairy',
+    name: 'Dairy, Milk & Eggs',
+    image: 'https://images.unsplash.com/photo-1528751014936-863e6e7a319c?auto=format&fit=crop&q=80&w=600',
+    description: 'Fresh Milk, Curd, Butter, Paneer, Cheese & Eggs.',
+    keywords: ['dairy', 'milk', 'curd', 'paneer', 'butter', 'ghee', 'cheese', 'egg', 'eggs', 'cream'],
+    badge: 'QUICK DELIVERY',
+    isActive: true,
+    order: 3
+  },
+  {
+    id: 'cat_freshfood',
+    name: 'Fresh Food & Restaurants',
+    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=600',
+    description: 'Authentic Biryani, Tandoori Kebabs, Meals & Fast Food.',
+    keywords: ['food', 'biryani', 'restaurant', 'meal', 'meals', 'tandoori', 'curry', 'starter', 'fast food', 'kitchen', 'tiffins', 'chicken', 'mutton', 'paneer', 'dosa', 'roti', 'rice bowl'],
+    badge: 'HOT & FRESH',
+    isActive: true,
+    order: 4
+  },
+  {
+    id: 'cat_fruits_veg',
+    name: 'Fruits & Fresh Vegetables',
+    image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=600',
+    description: 'Farm Fresh Produce, Organic Vegetables & Seasonal Fruits.',
+    keywords: ['fruit', 'fruits', 'vegetable', 'vegetables', 'fresh produce', 'veggie', 'veggies'],
+    badge: 'FARM FRESH',
+    isActive: true,
+    order: 5
+  },
+  {
+    id: 'cat_groceries',
+    name: 'Groceries & Supermarket',
+    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600',
+    description: 'Rice, Atta, Cooking Oils, Spices, Staples & Daily Packaged Foods.',
+    keywords: ['grocery', 'groceries', 'supermarket', 'staples', 'mart', 'provision', 'provisions'],
+    badge: 'DAILY ESSENTIALS',
+    isActive: true,
+    order: 6
+  },
+  {
+    id: 'cat_household',
+    name: 'Household & Personal Care',
+    image: 'https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=600',
+    description: 'Soaps, Shampoos, Detergents, Hygiene & Home Cleaning.',
+    keywords: ['household', 'personal care', 'soap', 'shampoo', 'detergent', 'cleaning', 'hygiene', 'toiletries'],
+    badge: 'HOME CARE',
+    isActive: true,
+    order: 7
+  },
+  {
+    id: 'cat_pooja',
+    name: 'Pooja Essentials & Flowers',
+    image: 'https://images.unsplash.com/photo-1608744882201-52a7f7f3da60?auto=format&fit=crop&q=80&w=600',
+    description: 'Fresh Garland Flowers, Agarbatti, Camphor, Diya Oils & Ritual Packs.',
+    keywords: ['pooja', 'puja', 'flower', 'flowers', 'agarbatti', 'camphor', 'diya', 'dhoop', 'ritual', 'temple', 'garland', 'samagri', 'moola', 'kumkum', 'turmeric'],
+    badge: 'TEMPLE SPECIAL',
+    isActive: true,
+    order: 8
+  }
+];
+
+const categoriesFilePath = path.resolve(__dirname, '../data/homepage_categories.json');
+let _categoriesCache: IHomepageCategoryItem[] | null = null;
+
+function saveHomepageCategoriesToFile(categories: IHomepageCategoryItem[]) {
+  try {
+    const dir = path.dirname(categoriesFilePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(categoriesFilePath, JSON.stringify(categories, null, 2), 'utf-8');
+  } catch (e) {}
+}
+
+async function getHomepageCategories(forceRefresh = false): Promise<IHomepageCategoryItem[]> {
+  if (_categoriesCache && !forceRefresh) return _categoriesCache;
+
+  // 1. Try reading from dedicated settingsTableName ('foodway-settings')
+  try {
+    const resSettings = await dynamoDocClient.send(new GetCommand({
+      TableName: settingsTableName,
+      Key: { settingId: 'homepage_categories' }
+    }));
+    if (resSettings.Item && Array.isArray(resSettings.Item.categories) && resSettings.Item.categories.length > 0) {
+      _categoriesCache = resSettings.Item.categories;
+      saveHomepageCategoriesToFile(_categoriesCache!);
+      return _categoriesCache!;
+    }
+  } catch (e) {}
+
+  // 2. Try reading from usersTableName
+  try {
+    const resUsers = await dynamoDocClient.send(new GetCommand({
+      TableName: usersTableName,
+      Key: { userId: 'homepage_categories' }
+    }));
+    if (resUsers.Item && Array.isArray(resUsers.Item.categories) && resUsers.Item.categories.length > 0) {
+      _categoriesCache = resUsers.Item.categories;
+      saveHomepageCategoriesToFile(_categoriesCache!);
+      return _categoriesCache!;
+    }
+  } catch (e) {}
+
+  // 3. Try reading from tableName
+  try {
+    const resTable = await dynamoDocClient.send(new GetCommand({
+      TableName: tableName,
+      Key: { id: 'homepage_categories' }
+    }));
+    if (resTable.Item && Array.isArray(resTable.Item.categories) && resTable.Item.categories.length > 0) {
+      _categoriesCache = resTable.Item.categories;
+      saveHomepageCategoriesToFile(_categoriesCache!);
+      return _categoriesCache!;
+    }
+  } catch (e) {}
+
+  // 4. Try reading from local file
+  try {
+    if (fs.existsSync(categoriesFilePath)) {
+      const fileData = JSON.parse(fs.readFileSync(categoriesFilePath, 'utf-8'));
+      if (Array.isArray(fileData) && fileData.length > 0) {
+        _categoriesCache = fileData;
+        return _categoriesCache!;
+      }
+    }
+  } catch (e) {}
+
+  // 5. Fallback to default categories
+  _categoriesCache = [...defaultHomepageCategories];
+  saveHomepageCategoriesToFile(_categoriesCache);
+  return _categoriesCache;
+}
+
+// GET Public Homepage Categories (only active ones, sorted by order)
+app.get('/api/public/homepage-categories', async (req: Request, res: Response) => {
+  try {
+    const allCategories = await getHomepageCategories(false);
+    const activeCategories = allCategories
+      .filter(c => c.isActive !== false)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    res.json({ success: true, categories: activeCategories });
+  } catch (err: any) {
+    res.json({ success: true, categories: defaultHomepageCategories });
+  }
+});
+
+// GET Admin Homepage Categories (all categories, including inactive)
+app.get('/api/admin/homepage-categories', async (req: Request, res: Response) => {
+  try {
+    const categories = await getHomepageCategories(true);
+    res.json({ success: true, categories });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to fetch categories' });
+  }
+});
+
+// PUT Admin Update Full Homepage Categories List (for reordering, mass edits, etc.)
+app.put('/api/admin/homepage-categories', async (req: Request, res: Response) => {
+  try {
+    const { categories } = req.body;
+    if (!Array.isArray(categories)) {
+      return res.status(400).json({ success: false, error: 'Categories array is required' });
+    }
+
+    const cleanedCategories: IHomepageCategoryItem[] = categories.map((cat, idx) => ({
+      id: cat.id || `cat_${Date.now()}_${idx}`,
+      name: String(cat.name || '').trim(),
+      image: String(cat.image || '').trim(),
+      description: String(cat.description || '').trim(),
+      keywords: Array.isArray(cat.keywords) ? cat.keywords.map((k: any) => String(k).trim()).filter(Boolean) : [],
+      badge: cat.badge ? String(cat.badge).trim() : undefined,
+      isActive: cat.isActive !== false,
+      order: typeof cat.order === 'number' ? cat.order : idx + 1,
+      updatedAt: new Date().toISOString()
+    })).filter(c => Boolean(c.name));
+
+    _categoriesCache = cleanedCategories;
+    saveHomepageCategoriesToFile(cleanedCategories);
+
+    // Persist to DynamoDB tables
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: cleanedCategories, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: { userId: 'homepage_categories', id: 'homepage_categories', settingId: 'homepage_categories', categories: cleanedCategories, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: tableName,
+        Item: { id: 'homepage_categories', settingId: 'homepage_categories', categories: cleanedCategories, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      if (categoriesTableName) {
+        for (const cat of cleanedCategories) {
+          await dynamoDocClient.send(new PutCommand({
+            TableName: categoriesTableName,
+            Item: {
+              categoryId: cat.id,
+              id: cat.id,
+              name: cat.name,
+              image: cat.image,
+              description: cat.description,
+              badge: cat.badge,
+              keywords: cat.keywords,
+              order: cat.order,
+              isActive: cat.isActive,
+              type: 'homepage_category',
+              restaurantId: 'admin',
+              shopId: 'admin',
+              updatedAt: new Date().toISOString()
+            }
+          }));
+        }
+      }
+    } catch (e) {}
+
+    if (socketService) {
+      await socketService.emitCategoryUpdated(cleanedCategories);
+    }
+
+    res.json({ success: true, message: 'Homepage categories saved successfully', categories: cleanedCategories });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update categories' });
+  }
+});
+
+// POST Admin Add/Update Single Category
+app.post('/api/admin/homepage-categories', async (req: Request, res: Response) => {
+  try {
+    const currentList = await getHomepageCategories(true);
+    const categoryData = req.body;
+
+    if (!categoryData.name || !String(categoryData.name).trim()) {
+      return res.status(400).json({ success: false, error: 'Category name is required' });
+    }
+
+    const catId = categoryData.id || `cat_${Date.now()}`;
+    const existingIndex = currentList.findIndex(c => c.id === catId);
+
+    const formattedItem: IHomepageCategoryItem = {
+      id: catId,
+      name: String(categoryData.name).trim(),
+      image: String(categoryData.image || '').trim(),
+      description: String(categoryData.description || '').trim(),
+      keywords: Array.isArray(categoryData.keywords)
+        ? categoryData.keywords.map((k: any) => String(k).trim()).filter(Boolean)
+        : typeof categoryData.keywords === 'string'
+          ? categoryData.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
+          : [],
+      badge: categoryData.badge ? String(categoryData.badge).trim() : undefined,
+      isActive: categoryData.isActive !== false,
+      order: typeof categoryData.order === 'number' ? categoryData.order : currentList.length + 1,
+      updatedAt: new Date().toISOString()
+    };
+
+    let updatedList: IHomepageCategoryItem[];
+    if (existingIndex >= 0) {
+      updatedList = [...currentList];
+      updatedList[existingIndex] = { ...updatedList[existingIndex], ...formattedItem };
+    } else {
+      updatedList = [...currentList, formattedItem];
+    }
+
+    _categoriesCache = updatedList;
+    saveHomepageCategoriesToFile(updatedList);
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: { userId: 'homepage_categories', id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: tableName,
+        Item: { id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      if (categoriesTableName) {
+        await dynamoDocClient.send(new PutCommand({
+          TableName: categoriesTableName,
+          Item: {
+            categoryId: formattedItem.id,
+            id: formattedItem.id,
+            name: formattedItem.name,
+            image: formattedItem.image,
+            description: formattedItem.description,
+            badge: formattedItem.badge,
+            keywords: formattedItem.keywords,
+            order: formattedItem.order,
+            isActive: formattedItem.isActive,
+            type: 'homepage_category',
+            restaurantId: 'admin',
+            shopId: 'admin',
+            updatedAt: new Date().toISOString()
+          }
+        }));
+      }
+    } catch (e) {}
+
+    if (socketService) {
+      await socketService.emitCategoryUpdated(updatedList);
+    }
+
+    res.json({ success: true, message: 'Category saved successfully', category: formattedItem, categories: updatedList });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to save category' });
+  }
+});
+
+// DELETE Admin Delete Category by ID
+app.delete('/api/admin/homepage-categories/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const currentList = await getHomepageCategories(true);
+    const updatedList = currentList.filter(c => c.id !== id);
+
+    _categoriesCache = updatedList;
+    saveHomepageCategoriesToFile(updatedList);
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: usersTableName,
+        Item: { userId: 'homepage_categories', id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: tableName,
+        Item: { id: 'homepage_categories', settingId: 'homepage_categories', categories: updatedList, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    try {
+      if (categoriesTableName) {
+        await dynamoDocClient.send(new DeleteCommand({
+          TableName: categoriesTableName,
+          Key: { categoryId: id }
+        }));
+      }
+    } catch (e) {}
+
+    if (socketService) {
+      await socketService.emitCategoryUpdated(updatedList);
+    }
+
+    res.json({ success: true, message: 'Category removed successfully', categories: updatedList });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to delete category' });
+  }
+});
+
+// POST Admin Reset Categories to Default
+app.post('/api/admin/homepage-categories/reset', async (req: Request, res: Response) => {
+  try {
+    _categoriesCache = [...defaultHomepageCategories];
+    saveHomepageCategoriesToFile(_categoriesCache);
+
+    try {
+      await dynamoDocClient.send(new PutCommand({
+        TableName: settingsTableName,
+        Item: { settingId: 'homepage_categories', id: 'homepage_categories', categories: _categoriesCache, updatedAt: new Date().toISOString() }
+      }));
+    } catch (e) {}
+
+    if (socketService) {
+      await socketService.emitCategoryUpdated(_categoriesCache);
+    }
+
+    res.json({ success: true, message: 'Categories restored to defaults', categories: _categoriesCache });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to reset categories' });
   }
 });
 
@@ -1124,7 +1561,26 @@ app.get('/api/public/dishes/:id', async (req: Request, res: Response) => {
 // Public Endpoint: Fetch All Unique Categories dynamically from DynamoDB
 app.get('/api/public/categories', async (req: Request, res: Response) => {
   try {
-    const categoryMap: Record<string, { id: string; name: string; description: string; itemCount: number; restaurants: Set<string>; image: string }> = {};
+    const categoryMap: Record<string, { id: string; name: string; description: string; itemCount: number; restaurants: Set<string>; image: string; badge?: string; keywords?: string[] }> = {};
+
+    // 0. Include dynamic homepage & platform categories configured by admin
+    try {
+      const dynamicCats = await getHomepageCategories(false);
+      dynamicCats.filter(c => c.isActive !== false).forEach(c => {
+        const catName = (c.name || '').trim();
+        if (!catName) return;
+        categoryMap[catName] = {
+          id: c.id || `cat_${catName.toLowerCase().replace(/\s+/g, '_')}`,
+          name: catName,
+          description: c.description || `Signature selection of ${catName} items from top stores.`,
+          itemCount: 0,
+          restaurants: new Set<string>(),
+          image: c.image || '',
+          badge: c.badge,
+          keywords: c.keywords
+        };
+      });
+    } catch (e) {}
 
     // 1. Read categories saved in foodway-categories table
     try {
@@ -1209,7 +1665,9 @@ app.get('/api/public/categories', async (req: Request, res: Response) => {
       description: c.description,
       itemCount: c.itemCount,
       restaurantCount: c.restaurants.size || 1,
-      image: c.image
+      image: c.image,
+      badge: c.badge,
+      keywords: c.keywords
     }));
 
     res.json({ success: true, categories });

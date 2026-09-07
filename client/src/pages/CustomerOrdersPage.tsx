@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Utensils, Store, Search, Calendar, ArrowUpDown, X, ChevronDown, ChevronUp, Star, MessageSquare, Lock, XCircle, Info, Eye } from 'lucide-react';
+import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Utensils, Store, Search, Calendar, ArrowUpDown, X, ChevronDown, ChevronUp, Star, MessageSquare, Lock, XCircle, Info, Eye, Bike } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
@@ -553,7 +553,7 @@ export const CustomerOrdersPage: React.FC = () => {
           <div className="flex items-center gap-2.5 sm:gap-3 w-full">
             {/* Refresh Orders Button (Left) */}
             <button
-              onClick={fetchCustomerOrders}
+              onClick={() => fetchCustomerOrders()}
               className="h-11 px-3.5 sm:px-4 rounded-2xl bg-white dark:bg-white/10 border border-slate-200/90 dark:border-white/15 hover:border-primary/50 text-text-primary font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 shrink-0 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
             >
               <RefreshCw size={14} className={`text-primary ${loading ? 'animate-spin' : ''}`} />

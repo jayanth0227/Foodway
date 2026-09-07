@@ -217,7 +217,7 @@ export const AddressFormPage: React.FC = () => {
       },
       (errMessage) => {
         setIsGeocoding(false);
-        setStatus({ type: 'error', message: errMessage });
+        setStatus({ type: 'error', message: errMessage || 'Failed to detect location' });
       }
     );
   };

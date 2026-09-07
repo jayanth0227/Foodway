@@ -19,6 +19,7 @@ import { Login } from './pages/Login';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminOrderDetailsPage } from './pages/AdminOrderDetailsPage';
 import { AdminCreateDeliveryPartnerPage } from './pages/AdminCreateDeliveryPartnerPage';
+import { AdminCategoryFormPage } from './pages/AdminCategoryFormPage';
 import { ShopDashboard } from './pages/ShopDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { CategoriesPage } from './pages/CategoriesPage';
@@ -202,6 +203,22 @@ const AppContent: React.FC = () => {
             element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <AdminCreateDeliveryPartnerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/categories/new"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminCategoryFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/categories/edit/:categoryId"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminCategoryFormPage />
               </ProtectedRoute>
             }
           />
