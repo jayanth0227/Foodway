@@ -1,5 +1,5 @@
 {
-  "deliveryFeePerKm": 15,
-  "baseDeliveryFee": 15,
+  "deliveryFeePerKm": 22,
+  "baseDeliveryFee": 32,
   "freeDeliveryThreshold": 0
 }

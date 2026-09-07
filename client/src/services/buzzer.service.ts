@@ -293,7 +293,7 @@ class BuzzerService {
       try {
         const notif = new Notification(title, {
           body: message,
-          icon: '/logo.jpeg',
+          icon: '/logo.png',
           tag: orderId ? `order-${orderId}` : `foodway-${Date.now()}`,
           requireInteraction: true,
           vibrate: [400, 200, 400, 200, 400]

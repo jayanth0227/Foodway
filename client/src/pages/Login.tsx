@@ -22,6 +22,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { PolicyModal } from '../components/common/PolicyModal';
+import mkLogo from '@/assets/logo.png';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -230,9 +231,13 @@ export const Login: React.FC = () => {
       <header className="w-full max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between z-20">
         <Link to="/" className="flex items-center space-x-2.5 group">
           <img
-            src="/logo.jpeg"
+            src={mkLogo}
+            onError={(e) => {
+              const target = e.currentTarget;
+              if (target.src !== '/logo.png') target.src = '/logo.png';
+            }}
             alt="MK Delivery Logo"
-            className="w-10 h-10 rounded-full object-cover border border-[#C59363]/40 shadow-sm group-hover:scale-105 transition-all"
+            className="w-10 h-10 rounded-full object-cover bg-black border border-[#C59363]/60 shadow-sm group-hover:scale-105 transition-all"
           />
           <div className="flex flex-col leading-none">
             <span className="text-base font-extrabold tracking-wider font-display text-[#1A1A1A] dark:text-white uppercase group-hover:text-[#C59363] transition-colors">

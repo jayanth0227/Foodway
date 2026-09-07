@@ -61,6 +61,7 @@ import { AdminDeliveryLocations } from '../components/admin/AdminDeliveryLocatio
 import { AdminCMSManager } from '../components/admin/AdminCMSManager';
 import { AdminInvitationsManager } from '../components/admin/AdminInvitationsManager';
 import { AdminCategoriesManager } from '../components/admin/AdminCategoriesManager';
+import mkLogo from '@/assets/logo.png';
 
 interface DBItem {
   id: string;
@@ -1128,7 +1129,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       {/* Hamburger header for mobile */}
       <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200 dark:border-glass backdrop-blur-xl flex items-center justify-between px-4 z-40 shadow-md">
         <div className="flex items-center gap-2.5">
-          <img src="/logo.jpeg" alt="Logo" className="w-8 h-8 rounded-xl object-cover border border-primary/40 shadow-2xs" />
+          <img
+            src={mkLogo}
+            onError={(e) => {
+              const target = e.currentTarget;
+              if (target.src !== '/logo.png') target.src = '/logo.png';
+            }}
+            alt="Logo"
+            className="w-8 h-8 rounded-xl object-cover bg-black border border-primary/40 shadow-2xs"
+          />
           <div>
             <span className="text-[9px] font-black uppercase tracking-widest text-primary block">PLATFORM ADMIN</span>
             <span className="font-display font-black text-xs tracking-tight text-slate-900 dark:text-text-primary block">MK CONSOLE</span>
@@ -1199,7 +1208,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         {/* Sidebar Header */}
         <div className="p-6 border-b border-glass flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.jpeg" alt="MK Delivery" className="w-10 h-10 rounded-xl border border-primary/20 object-cover shadow-sm" />
+            <img
+              src={mkLogo}
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (target.src !== '/logo.png') target.src = '/logo.png';
+              }}
+              alt="MK Delivery"
+              className="w-10 h-10 rounded-xl bg-black border border-primary/40 object-cover shadow-sm"
+            />
             <div>
               <span className="text-[10px] font-black uppercase tracking-widest text-primary block">MK DELIVERY</span>
               <h2 className="text-sm font-black font-display tracking-tight text-text-primary truncate w-36">

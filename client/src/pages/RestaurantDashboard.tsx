@@ -648,7 +648,7 @@ export const RestaurantDashboard: React.FC = () => {
       const showNotif = () => {
         new Notification(`🔔 NEW ORDER RECEIVED! #${orderId}`, {
           body: `Customer ${customerName} placed an order worth ₹${total.toFixed(2)}. Tap to view order!`,
-          icon: '/logo.jpeg',
+          icon: '/logo.png',
           tag: `order-${orderId}`,
           requireInteraction: true
         });

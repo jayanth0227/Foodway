@@ -169,6 +169,8 @@ export const CategoriesPage: React.FC = () => {
   };
 
   // Filter dishes matching selected category & search & dietary filter
+  const isPoojaCategory = (selectedCategory || '').toLowerCase().includes('pooja') || (selectedCategory || '').toLowerCase().includes('flower');
+
   const matchingDishes = dishes.filter(dish => {
     if (!selectedCategory) return true;
     const catLower = selectedCategory.toLowerCase();
@@ -415,22 +417,31 @@ export const CategoriesPage: React.FC = () => {
                 ) : matchingDishes.length === 0 ? (
                   <div className="py-12 text-center glass-panel border border-glass rounded-3xl p-6 max-w-md mx-auto space-y-4 shadow-sm">
                     <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
-                      <UtensilsCrossed size={26} />
+                      {isPoojaCategory ? <Store size={26} /> : <UtensilsCrossed size={26} />}
                     </div>
                     <div className="space-y-1">
                       <h3 className="text-lg font-bold text-text-primary">
-                        No Dishes Found in {selectedCategory}
+                        {isPoojaCategory ? 'Stores Onboarding Soon' : `No Items Found in ${selectedCategory}`}
                       </h3>
                       <p className="text-xs text-text-muted">
-                        No items match your search or filter selection right now. Try clearing filters.
+                        {isPoojaCategory
+                          ? 'Local pooja stores & flower merchants across Konaseema are currently setting up their storefronts. Please check back shortly!'
+                          : 'No items match your search or filter selection right now. Try clearing filters.'}
                       </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => { setDietaryFilter('all'); setSearchTerm(''); }}
+                      onClick={() => {
+                        if (isPoojaCategory) {
+                          handleClearCategory();
+                        } else {
+                          setDietaryFilter('all');
+                          setSearchTerm('');
+                        }
+                      }}
                       className="px-4 py-2 rounded-xl bg-primary text-black font-extrabold text-xs shadow-md hover:scale-105 transition-all cursor-pointer"
                     >
-                      Clear Search & Filters
+                      {isPoojaCategory ? 'Browse Other Categories' : 'Clear Search & Filters'}
                     </button>
                   </div>
                 ) : (

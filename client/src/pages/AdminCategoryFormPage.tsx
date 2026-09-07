@@ -37,7 +37,7 @@ const CATEGORY_PRESETS = [
   {
     name: 'Pooja Essentials & Flowers',
     badge: 'TEMPLE SPECIAL',
-    image: 'https://images.unsplash.com/photo-1608744882201-52a7f7f3da60?auto=format&fit=crop&q=80&w=600',
+    image: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=600',
     description: 'Fresh Garland Flowers, Agarbatti, Camphor, Diya Oils & Ritual Packs.',
     keywords: 'pooja, puja, flower, flowers, agarbatti, camphor, diya, temple, garland'
   },

@@ -8,6 +8,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../hooks/useAuth';
 import { MobileProfileOverlay } from './MobileProfileOverlay';
 import { NotificationCenterModal } from './NotificationCenterModal';
+import mkLogo from '@/assets/logo.png';
 
 interface NavbarProps {
   onOpenAuth: (type: 'login' | 'register') => void;
@@ -190,9 +191,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             className="flex items-center space-x-3 group relative z-10"
           >
             <img
-              src="/logo.jpeg"
+              src={mkLogo}
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (target.src !== '/logo.png') target.src = '/logo.png';
+              }}
               alt="MK Delivery Logo"
-              className="w-10 h-10 md:w-11 md:h-11 rounded-full object-cover border border-primary/20 group-hover:border-primary/60 group-hover:scale-105 transition-all duration-500 shadow-md"
+              className="w-10 h-10 md:w-11 md:h-11 rounded-full object-cover bg-black border border-primary/40 group-hover:border-primary/80 group-hover:scale-105 transition-all duration-500 shadow-md"
             />
             <div className="flex flex-col leading-none">
               <span className="text-sm font-bold tracking-[0.2em] font-display text-text-primary uppercase group-hover:text-primary transition-colors duration-300">

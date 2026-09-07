@@ -5,6 +5,7 @@ import { PolicyModal } from './PolicyModal';
 
 import { useEffect } from 'react';
 import { API_BASE_URL } from '../../utils/api';
+import mkLogo from '@/assets/logo.png';
 
 export const Footer: React.FC = () => {
   const [activeModal, setActiveModal] = useState<'terms' | 'privacy' | 'cancellation' | null>(null);
@@ -44,9 +45,13 @@ export const Footer: React.FC = () => {
           <div className="space-y-3 max-w-md">
             <Link to="/" onClick={handleScrollToTop} className="inline-flex items-center space-x-3 group">
               <img
-                src="/logo.jpeg"
+                src={mkLogo}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src !== '/logo.png') target.src = '/logo.png';
+                }}
                 alt="MK Delivery Logo"
-                className="w-10 h-10 rounded-full object-cover border border-primary/20 group-hover:border-primary/50 transition-colors"
+                className="w-10 h-10 rounded-full object-cover bg-black border border-primary/40 group-hover:border-primary/80 transition-colors"
               />
               <div className="flex flex-col leading-none">
                 <span className="text-sm font-extrabold tracking-[0.15em] font-display text-text-primary uppercase group-hover:text-primary transition-colors">

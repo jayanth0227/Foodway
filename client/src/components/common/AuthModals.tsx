@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { PolicyModal } from './PolicyModal';
+import mkLogo from '@/assets/logo.png';
 
 interface AuthModalsProps {
   isOpen: boolean;
@@ -122,9 +123,13 @@ export const AuthModals: React.FC<AuthModalsProps> = ({ isOpen, onClose, type, s
               {/* Top Brand Logo Header */}
               <div className="flex items-center space-x-3 mb-5 pr-8">
                 <img
-                  src="/logo.jpeg"
-                  alt="Foodway Logo"
-                  className="w-10 h-10 rounded-xl object-cover border-2 border-[#A67C52]/30 shadow-sm"
+                  src={mkLogo}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (target.src !== '/logo.png') target.src = '/logo.png';
+                  }}
+                  alt="MK Delivery Logo"
+                  className="w-10 h-10 rounded-xl object-cover bg-black border-2 border-[#A67C52]/50 shadow-sm"
                 />
                 <div className="flex flex-col leading-tight">
                   <span className="text-lg font-extrabold text-stone-900 dark:text-white font-display">
