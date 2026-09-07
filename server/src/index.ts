@@ -45,38 +45,20 @@ const app = express();
 // Disable technology disclosure header
 app.disable('x-powered-by');
 
-// Enable top-level cors middleware for standard CORS handling
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Access-Control-Request-Method', 'Access-Control-Request-Headers', 'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'token', 'userid'],
-  exposedHeaders: ['Authorization', 'Set-Cookie']
-}));
-
-// Strip AWS API Gateway Stage Prefixes if present in req.url (/production, /prod, /stage)
-app.use((req: Request, res: Response, next: NextFunction) => {
-  if (req.url.startsWith('/production/')) {
-    req.url = req.url.substring('/production'.length);
-  } else if (req.url.startsWith('/prod/')) {
-    req.url = req.url.substring('/prod'.length);
-  } else if (req.url.startsWith('/stage/')) {
-    req.url = req.url.substring('/stage'.length);
-  }
-  next();
-});
-
-// Enable security headers & cookie parser middleware
-app.use(securityHeaders);
-app.use(cookieParser());
-
 // Universal Production CORS Middleware for Web & Mobile Clients (Amplify, Custom Domains, Localhost)
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const origin = req.headers.origin;
+const allowedOrigins = [
+  'https://www.mkdeliveryservices.com',
+  'https://mkdeliveryservices.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:5173'
+];
 
-  // Dynamically reflect requesting origin to satisfy Access-Control-Allow-Credentials
-  if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const requestOrigin = req.headers.origin as string;
+
+  if (requestOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin);
   } else {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
@@ -97,24 +79,21 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Request-Method',
-    'Access-Control-Request-Headers',
-    'token',
-    'userid'
-  ]
-}));
+// Strip AWS API Gateway Stage Prefixes if present in req.url (/production, /prod, /stage)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.url.startsWith('/production/')) {
+    req.url = req.url.substring('/production'.length);
+  } else if (req.url.startsWith('/prod/')) {
+    req.url = req.url.substring('/prod'.length);
+  } else if (req.url.startsWith('/stage/')) {
+    req.url = req.url.substring('/stage'.length);
+  }
+  next();
+});
 
-app.options('*', cors({ origin: true, credentials: true }));
+// Enable security headers & cookie parser middleware
+app.use(securityHeaders);
+app.use(cookieParser());
 
 // Body parsing middleware with limit for base64 file uploads
 app.use(express.json({ limit: '10mb' }));
