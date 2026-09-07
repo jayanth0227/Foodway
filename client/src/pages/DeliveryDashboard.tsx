@@ -377,7 +377,7 @@ export const DeliveryDashboard: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => { logout(); navigate('/login'); }}
+            onClick={() => logout()}
             className="px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <LogOut size={14} />
@@ -949,7 +949,7 @@ export const DeliveryDashboard: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => { logout(); navigate('/login'); }}
+                  onClick={() => logout()}
                   className="w-full p-3.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-500 text-center uppercase tracking-wider font-extrabold flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <LogOut size={16} />

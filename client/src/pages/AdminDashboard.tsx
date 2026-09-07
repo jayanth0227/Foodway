@@ -57,6 +57,8 @@ import { getCurrentUser, clearSession } from '../utils/auth.utils';
 import { useAuth } from '../hooks/useAuth';
 import { socketService } from '../services/socket.service';
 import { AdminDeliveryLocations } from '../components/admin/AdminDeliveryLocations';
+import { AdminCMSManager } from '../components/admin/AdminCMSManager';
+import { AdminInvitationsManager } from '../components/admin/AdminInvitationsManager';
 
 interface DBItem {
   id: string;
@@ -79,8 +81,10 @@ interface AWSStatus {
   dynamoTableConfigured: boolean;
 }
 
+type AdminTab = 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings' | 'cms' | 'invitations';
+
 interface AdminDashboardProps {
-  initialTab?: 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings';
+  initialTab?: AdminTab;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) => {
@@ -91,10 +95,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
   const { theme, toggleTheme } = useTheme();
 
   // Helper to extract tab from URL query params or localStorage
-  const getInitialTab = (): 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings' => {
+  const getInitialTab = (): AdminTab => {
     const searchParams = new URLSearchParams(location.search);
     const queryTab = searchParams.get('tab');
-    const validTabs = ['dashboard', 'restaurants', 'orders', 'delivery', 'locations', 'settings'];
+    const validTabs = ['dashboard', 'restaurants', 'orders', 'delivery', 'locations', 'settings', 'cms', 'invitations'];
     if (queryTab && validTabs.includes(queryTab)) {
       return queryTab as any;
     }
@@ -112,9 +116,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     return 'dashboard';
   };
 
-  const [activeTab, setActiveTabState] = useState<'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings'>(getInitialTab);
+  const [activeTab, setActiveTabState] = useState<AdminTab>(getInitialTab);
 
-  const setActiveTab = (tab: 'dashboard' | 'restaurants' | 'orders' | 'delivery' | 'locations' | 'settings') => {
+  const setActiveTab = (tab: AdminTab) => {
     setActiveTabState(tab);
     localStorage.setItem('admin_active_tab', tab);
     try {
@@ -1149,108 +1153,152 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       <aside 
         data-lenis-prevent
         className={`
-          fixed inset-y-0 left-0 w-64 bg-bg-card border-r border-glass z-40 transition-transform duration-300 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col justify-between shrink-0 lg:overflow-y-auto shadow-2xl
+          fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-40 transition-transform duration-300 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex flex-col justify-between shrink-0 shadow-2xl
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         `}
       >
-        <div className="p-6 space-y-8 flex-grow">
-          {/* Logo / Brand Header */}
-          <div className="flex items-center justify-between border-b border-glass pb-6">
-            <div className="flex items-center gap-3">
-              <img src="/logo.jpeg" alt="Logo" className="w-10 h-10 rounded-full object-cover border border-primary/40 shadow-lg" />
-              <div>
-                <h2 className="font-display font-black text-base tracking-widest text-primary leading-none">MK DELIVERY</h2>
-                <span className="text-[9px] text-text-muted font-bold tracking-widest uppercase mt-1 block">ADMIN CONSOLE</span>
-              </div>
+        {/* Sidebar Header */}
+        <div className="p-6 border-b border-glass flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/logo.jpeg" alt="MK Delivery" className="w-10 h-10 rounded-xl border border-primary/20 object-cover shadow-sm" />
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-primary block">MK DELIVERY</span>
+              <h2 className="text-sm font-black font-display tracking-tight text-text-primary truncate w-36">
+                Admin Console
+              </h2>
             </div>
-            <button 
-              onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden text-text-muted hover:text-primary transition-colors p-1"
-            >
-              <X size={18} />
-            </button>
           </div>
-
-          {/* Nav links */}
-          <nav className="space-y-1">
-            <button
-              onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                activeTab === 'dashboard' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
-              }`}
-            >
-              <LayoutDashboard size={16} />
-              <span>Dashboard</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('restaurants'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                activeTab === 'restaurants' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
-              }`}
-            >
-              <Store size={16} />
-              <span>Shops & Stores</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                activeTab === 'orders' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
-              }`}
-            >
-              <ClipboardList size={16} />
-              <span>Orders</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('delivery'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                activeTab === 'delivery' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
-              }`}
-            >
-              <Bike size={16} />
-              <span>Delivery</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('locations'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                activeTab === 'locations' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
-              }`}
-            >
-              <MapPin size={16} />
-              <span>Delivery Locations</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
-                activeTab === 'settings' ? 'bg-primary text-black shadow-md shadow-primary/20' : 'text-text-muted hover:text-text-primary hover:bg-glass-subtle'
-              }`}
-            >
-              <Settings size={16} />
-              <span>Settings</span>
-            </button>
-
-          </nav>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="lg:hidden text-text-muted hover:text-primary transition-colors p-1"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Admin info & exit */}
-        <div className="p-6 border-t border-glass space-y-4 bg-bg-dark/40">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-glass border border-glass text-primary">
-              <User size={16} />
+        {/* Nav links */}
+        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
+          <button
+            onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'dashboard'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <LayoutDashboard size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Dashboard</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('restaurants'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'restaurants'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <Store size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Shops & Stores</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('orders'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'orders'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <ClipboardList size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Orders</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('delivery'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'delivery'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <Bike size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Delivery</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('locations'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'locations'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <MapPin size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Delivery Locations</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('cms'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'cms'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <Layers size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Website CMS</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('invitations'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'invitations'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <Mail size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Invitations Requests</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-xs transition-all duration-200 ${
+              activeTab === 'settings'
+                ? 'bg-primary text-bg-dark shadow-luxury font-black'
+                : 'text-text-secondary hover:bg-glass hover:text-primary'
+            }`}
+          >
+            <Settings size={16} className="shrink-0" />
+            <span className="truncate text-left font-bold">Settings</span>
+          </button>
+        </nav>
+
+        {/* Sidebar Footer */}
+        <div className="p-4 border-t border-glass space-y-3">
+          <div className="p-3 rounded-xl bg-glass-subtle/50 border border-glass flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-full bg-primary/20 text-primary font-bold text-xs flex items-center justify-center shrink-0">
+                A
+              </div>
+              <div className="truncate">
+                <span className="text-[11px] font-bold block text-text-primary truncate">Admin User</span>
+                <span className="text-[9px] text-text-muted block truncate font-mono">{adminEmail}</span>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-text-primary truncate">Admin User</p>
-              <p className="text-[10px] text-text-muted truncate">{adminEmail}</p>
-            </div>
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-glass hover:bg-glass-subtle text-text-muted hover:text-primary transition-all shrink-0"
+              title="Toggle Theme"
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </button>
           </div>
 
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-glass bg-glass-subtle hover:bg-error/15 hover:border-error/30 hover:text-error text-xs font-bold transition-all duration-300"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-glass hover:border-error/40 bg-glass hover:bg-error/10 text-error text-xs font-bold transition-all uppercase tracking-wider"
           >
             <LogOut size={14} />
             <span>Logout</span>
@@ -2905,6 +2953,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
         )}
 
         {/* ==================================================== */}
+        {/* WEBSITE CMS TAB */}
+        {/* ==================================================== */}
+        {activeTab === 'cms' && (
+          <AdminCMSManager />
+        )}
+
+        {/* ==================================================== */}
+        {/* INVITATIONS REQUESTS TAB */}
+        {/* ==================================================== */}
+        {activeTab === 'invitations' && (
+          <AdminInvitationsManager />
+        )}
+
+        {/* ==================================================== */}
         {/* SETTINGS TAB */}
         {/* ==================================================== */}
         {activeTab === 'settings' && (
@@ -3555,6 +3617,45 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                 >
                   <Bike size={20} className="text-amber-600 dark:text-primary" />
                   <span>Delivery Assignments</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('locations'); setIsMoreMenuOpen(false); }}
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
+                    activeTab === 'locations'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
+                      : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <MapPin size={20} className="text-amber-600 dark:text-primary" />
+                  <span>Delivery Locations</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('cms'); setIsMoreMenuOpen(false); }}
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
+                    activeTab === 'cms'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
+                      : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <Layers size={20} className="text-amber-600 dark:text-primary" />
+                  <span>Website CMS</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('invitations'); setIsMoreMenuOpen(false); }}
+                  className={`p-4 rounded-2xl border text-left flex flex-col gap-2 transition-all cursor-pointer ${
+                    activeTab === 'invitations'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-700 dark:text-primary font-black'
+                      : 'bg-slate-50 dark:bg-bg-dark/60 border-slate-200 dark:border-glass text-slate-800 dark:text-white'
+                  }`}
+                >
+                  <Mail size={20} className="text-amber-600 dark:text-primary" />
+                  <span>Invitations Requests</span>
                 </button>
 
                 <button

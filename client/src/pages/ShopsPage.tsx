@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { Search, MapPin, Star, Clock, Store, Plus, Heart, ArrowLeft } from 'lucide-react';
@@ -11,10 +11,12 @@ import { formatShopAddress } from '../utils/categoryUtils';
 
 export const ShopsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialQuery = searchParams.get('search') || searchParams.get('q') || '';
   const { t } = useLanguage();
   const [shops, setShops] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>(initialQuery);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -22,6 +24,13 @@ export const ShopsPage: React.FC = () => {
     list.forEach(i => { favMap[i.id] = true; });
     return favMap;
   });
+
+  useEffect(() => {
+    const q = searchParams.get('search') || searchParams.get('q') || '';
+    if (q) {
+      setSearchQuery(q);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;

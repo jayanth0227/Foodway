@@ -59,10 +59,13 @@ export class ApiGatewayWebSocketService {
       );
       return true;
     } catch (err: any) {
-      console.warn(`⚠️ API Gateway PostToConnection error for connectionId [${connectionId}]:`, err?.message);
       if (err.name === 'GoneException' || err.$metadata?.httpStatusCode === 410) {
         // Stale connection ID, clear from foodway-users
         this.clearStaleConnection(connectionId).catch(() => {});
+      } else if (err.name === 'AccessDeniedException' || err.$metadata?.httpStatusCode === 403 || err?.message?.includes('not authorized')) {
+        console.warn(`⚠️ [AWS IAM Authorization Warning] IAM identity lacks 'execute-api:ManageConnections' permission on API Gateway. Note: On AWS Lambda production, the execution role has permission. For local dev, attach policy: execute-api:ManageConnections.`);
+      } else {
+        console.warn(`⚠️ API Gateway PostToConnection error for connectionId [${connectionId}]:`, err?.message);
       }
       return false;
     }
@@ -79,19 +82,23 @@ export class ApiGatewayWebSocketService {
         })
       );
       for (const item of scanRes.Items || []) {
-        const key: any = {};
-        if (item.userId) key.userId = item.userId;
-        else if (item.email) key.email = item.email;
-        else if (item.id) key.id = item.id;
+        const keyCandidates: any[] = [];
+        if (item.email) keyCandidates.push({ email: item.email });
+        if (item.userId) keyCandidates.push({ userId: item.userId });
+        if (item.id) keyCandidates.push({ id: item.id });
 
-        if (Object.keys(key).length > 0) {
-          await dynamoDocClient.send(
-            new UpdateCommand({
-              TableName: usersTableName,
-              Key: key,
-              UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
-            })
-          );
+        for (const key of keyCandidates) {
+          try {
+            await dynamoDocClient.send(
+              new UpdateCommand({
+                TableName: usersTableName,
+                Key: key,
+                UpdateExpression: 'REMOVE socketConnectionId, lastSocketConnectedAt'
+              })
+            );
+            console.log(`[WS STALE CLEANUP] connectionId=${connectionId} userId=${item.userId || item.email}`);
+            break;
+          } catch (e) {}
         }
       }
     } catch (e) {}

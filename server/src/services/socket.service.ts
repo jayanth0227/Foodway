@@ -169,23 +169,37 @@ export class SocketService {
         return;
       }
 
-      const key: any = {};
-      if ((user as any).userId) key.userId = (user as any).userId;
-      else if (user.email) key.email = user.email;
-      else key.id = (user as any).id || userId;
+      const keyCandidates: any[] = [];
+      if (user.email) keyCandidates.push({ email: user.email });
+      if ((user as any).userId) keyCandidates.push({ userId: (user as any).userId });
+      if ((user as any).id) keyCandidates.push({ id: (user as any).id });
+      if (keyCandidates.length === 0) keyCandidates.push({ email: userId }, { userId: userId });
 
-      await dynamoDocClient.send(
-        new UpdateCommand({
-          TableName: usersTableName,
-          Key: key,
-          UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
-          ExpressionAttributeValues: {
-            ':cid': connectionId,
-            ':now': new Date().toISOString()
-          }
-        })
-      );
-      console.log(`[WS REGISTER SUCCESS] userId=${(user as any).userId || user.email || userId} connectionId=${connectionId}`);
+      let updateSuccess = false;
+      for (const key of keyCandidates) {
+        try {
+          await dynamoDocClient.send(
+            new UpdateCommand({
+              TableName: usersTableName,
+              Key: key,
+              UpdateExpression: 'SET socketConnectionId = :cid, lastSocketConnectedAt = :now',
+              ExpressionAttributeValues: {
+                ':cid': connectionId,
+                ':now': new Date().toISOString()
+              }
+            })
+          );
+          updateSuccess = true;
+          console.log(`[WS REGISTER SUCCESS] userId=${(user as any).userId || user.email || userId} connectionId=${connectionId}`);
+          break;
+        } catch (updateErr) {
+          // Continue to next key candidate if partition key schema differs
+        }
+      }
+
+      if (!updateSuccess) {
+        console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} userId=${userId} reason=KEY_MATCH_FAILED`);
+      }
 
       if (orderId) {
         try {

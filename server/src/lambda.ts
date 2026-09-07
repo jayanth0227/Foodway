@@ -27,7 +27,7 @@ async function handleWebSocketEvent(event: any, context: any) {
     const token = qsp.token || headers.Authorization?.replace('Bearer ', '') || headers.authorization?.replace('Bearer ', '') || headers['sec-websocket-protocol'];
     const clientUserId = qsp.userId;
 
-    let authenticatedUserId = clientUserId;
+    let authenticatedUserId: string | undefined = undefined;
 
     if (token) {
       try {
@@ -39,6 +39,11 @@ async function handleWebSocketEvent(event: any, context: any) {
       } catch (err: any) {
         console.warn(`[WS AUTH FAILED] connectionId=${connectionId} reason=INVALID_TOKEN error=${err?.message}`);
       }
+    }
+
+    // Fallback: If no token provided but clientUserId present in dev environments
+    if (!authenticatedUserId && clientUserId && !token) {
+      authenticatedUserId = clientUserId;
     }
 
     if (authenticatedUserId) {
@@ -93,23 +98,26 @@ async function handleWebSocketEvent(event: any, context: any) {
 
       const action = payload.action || payload.event || payload.type || '';
       const token = payload.token || payload.data?.token || '';
-      let userId = payload.userId || payload.data?.userId;
+      const clientUserId = payload.userId || payload.data?.userId || payload.customerId || payload.data?.customerId;
       const orderId = payload.orderId || payload.data?.orderId;
+      let authenticatedUserId: string | undefined = undefined;
 
       if (token) {
         try {
           const decoded = verifyToken(token);
           if (decoded && (decoded.id || decoded.email)) {
-            userId = decoded.id;
+            authenticatedUserId = decoded.id;
           }
         } catch (err: any) {
           console.warn(`[WS AUTH FAILED] connectionId=${connectionId} reason=INVALID_TOKEN_IN_MESSAGE error=${err?.message}`);
         }
       }
 
-      if (action === 'register_connection' || action === 'join_user' || action === 'join_room') {
-        if (userId) {
-          await socketService.registerUserSocketId(userId, connectionId, orderId);
+      const targetUserId = authenticatedUserId || clientUserId;
+
+      if (action === 'register_connection' || action === 'join_user' || action === 'join_customer' || action === 'join_room' || action === 'join_restaurant' || action === 'join_admin' || action === 'join_delivery') {
+        if (targetUserId) {
+          await socketService.registerUserSocketId(targetUserId, connectionId, orderId);
         } else {
           console.warn(`[WS REGISTER FAILED] connectionId=${connectionId} action=${action} reason=NO_USER_ID`);
         }
@@ -144,5 +152,25 @@ export const handler = async (event: any, context: any) => {
   }
 
   // Otherwise, handle standard HTTP API request via serverless-express
-  return await expressHandler(event, context);
+  const response = await expressHandler(event, context);
+
+  // Guarantee CORS headers on all AWS API Gateway HTTP responses (including preflight OPTIONS)
+  if (response) {
+    const origin = event.headers?.origin || event.headers?.Origin || '*';
+    if (!response.headers) {
+      response.headers = {};
+    }
+    response.headers['Access-Control-Allow-Origin'] = origin;
+    response.headers['Access-Control-Allow-Credentials'] = 'true';
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, PATCH, OPTIONS';
+    response.headers['Access-Control-Allow-Headers'] =
+      'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, token, userid';
+
+    const httpMethod = event.httpMethod || event.requestContext?.http?.method || event.requestContext?.httpMethod;
+    if (httpMethod === 'OPTIONS') {
+      response.statusCode = 200;
+    }
+  }
+
+  return response;
 };

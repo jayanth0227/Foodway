@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -46,31 +46,51 @@ app.disable('x-powered-by');
 app.use(securityHeaders);
 app.use(cookieParser());
 
-// Enable CORS (supports localhost, 127.0.0.1, local IP addresses like 192.168.x.x, and production domain)
-const clientUrl = process.env.CLIENT_URL;
+// Universal Production CORS Middleware for Web & Mobile Clients (Amplify, Custom Domains, Localhost)
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+
+  // Dynamically reflect requesting origin to satisfy Access-Control-Allow-Credentials
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Requested-With, Accept, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, sec-ch-ua, sec-ch-ua-mobile, sec-ch-ua-platform, token, userid'
+  );
+  res.setHeader('Access-Control-Expose-Headers', 'Authorization, Set-Cookie');
+
+  // Fast-respond to HTTP OPTIONS preflight checks with 204 No Content
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  next();
+});
+
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow non-browser requests (mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
-
-    // In development mode, dynamically reflect any requesting origin (localhost, 192.168.x.x, 10.x.x.x)
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, origin);
-    }
-
-    // In production mode, check against configured CLIENT_URL list
-    if (clientUrl) {
-      const allowedOrigins = clientUrl.split(',').map(url => url.trim());
-      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-        return callback(null, origin);
-      }
-    }
-
-    // Default fallback
-    return callback(null, origin);
-  },
-  credentials: true
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
+    'token',
+    'userid'
+  ]
 }));
+
+app.options('*', cors({ origin: true, credentials: true }));
 
 // Body parsing middleware with limit for base64 file uploads
 app.use(express.json({ limit: '10mb' }));
@@ -266,6 +286,294 @@ app.put('/api/admin/settings', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'Failed to update settings.' });
+  }
+});
+
+// --- WEBSITE HOMEPAGE CMS CONFIGURATION & DYNAMODB PERSISTENCE ---
+const defaultHomepageCMS = {
+  heroStats: {
+    customers: '20K+',
+    restaurants: '500+',
+    deliveryTime: '30 min'
+  },
+  flavoursOfKonaseema: {
+    title: 'Flavours of Konaseema',
+    subtitle: 'Experience traditional recipes, local ingredients, and unforgettable gourmet tastes directly from the kitchens that define Konaseema.',
+    featuredItemIds: [] as string[]
+  },
+  whyChooseUs: {
+    title: 'Why Choose MK Delivery..!',
+    subtitle: 'From hygienic kitchen preparation to temperature-sealed express transport, discover how we deliver happiness to your doorstep.',
+    features: [
+      {
+        id: 'feat-1',
+        title: 'Fresh & Quality Food',
+        badge: 'FRESH',
+        description: 'We partner with trusted local restaurants to ensure every meal is prepared fresh and delivered with care.'
+      },
+      {
+        id: 'feat-2',
+        title: 'Fast Delivery',
+        badge: '20-30 MINS',
+        description: 'Get your favorite food, groceries, and daily essentials delivered quickly to your doorstep without unnecessary waiting.'
+      },
+      {
+        id: 'feat-3',
+        title: 'Live Order Tracking',
+        badge: 'LIVE',
+        description: 'Track your order in real time from restaurant confirmation until it arrives at your home.'
+      }
+    ]
+  },
+  faqs: [
+    {
+      id: 'faq-1',
+      question: 'How do I place an order?',
+      answer: 'Browse restaurants, select your favorite dishes, add them to your cart, and proceed to checkout with live order tracking.'
+    },
+    {
+      id: 'faq-2',
+      question: 'How long does delivery take?',
+      answer: 'Most orders across Konaseema are delivered within 20 to 30 minutes depending on your location.'
+    },
+    {
+      id: 'faq-3',
+      question: 'Can I track my order?',
+      answer: 'Yes! Real-time GPS order tracking and status updates are visible directly on your active order screen.'
+    },
+    {
+      id: 'faq-4',
+      question: 'Which areas do you currently serve?',
+      answer: 'We deliver fast and fresh across Ravulapalem and surrounding towns in Konaseema.'
+    }
+  ],
+  contactDetails: {
+    email: 'mkdeliveryservices12@gmail.com',
+    phone: '+91 9573041191',
+    address: 'Ravulapalem-533238',
+    whatsapp: '+919573041191',
+    instagram: 'https://instagram.com/mkdeliveryservices',
+    copyrightText: '© 2026 MK DELIVERY SERVICES. ALL RIGHTS RESERVED.'
+  }
+};
+
+const cmsFilePath = path.resolve(__dirname, '../data/homepage_cms.json');
+let _cmsCache: typeof defaultHomepageCMS | null = null;
+
+function saveCMSToFile(cms: any) {
+  try {
+    const dir = path.dirname(cmsFilePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(cmsFilePath, JSON.stringify(cms, null, 2), 'utf-8');
+  } catch (e) {}
+}
+
+async function getHomepageCMS(forceRefresh = false): Promise<typeof defaultHomepageCMS> {
+  if (_cmsCache && !forceRefresh) return _cmsCache;
+
+  // 1. Try reading from DynamoDB
+  const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+  for (const tName of tablesToTry) {
+    try {
+      const result = await dynamoDocClient.send(new GetCommand({ TableName: tName, Key: { id: 'homepage_cms', email: 'homepage_cms' } }));
+      if (result.Item && (result.Item.heroStats || result.Item.faqs || result.Item.contactDetails)) {
+        _cmsCache = {
+          heroStats: { ...defaultHomepageCMS.heroStats, ...(result.Item.heroStats || {}) },
+          flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(result.Item.flavoursOfKonaseema || {}) },
+          whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(result.Item.whyChooseUs || {}) },
+          faqs: Array.isArray(result.Item.faqs) && result.Item.faqs.length > 0 ? result.Item.faqs : defaultHomepageCMS.faqs,
+          contactDetails: { ...defaultHomepageCMS.contactDetails, ...(result.Item.contactDetails || {}) }
+        };
+        saveCMSToFile(_cmsCache);
+        return _cmsCache;
+      }
+    } catch (e) { }
+  }
+
+  // 2. Try reading from local file
+  try {
+    if (fs.existsSync(cmsFilePath)) {
+      const fileData = JSON.parse(fs.readFileSync(cmsFilePath, 'utf-8'));
+      _cmsCache = {
+        heroStats: { ...defaultHomepageCMS.heroStats, ...(fileData.heroStats || {}) },
+        flavoursOfKonaseema: { ...defaultHomepageCMS.flavoursOfKonaseema, ...(fileData.flavoursOfKonaseema || {}) },
+        whyChooseUs: { ...defaultHomepageCMS.whyChooseUs, ...(fileData.whyChooseUs || {}) },
+        faqs: Array.isArray(fileData.faqs) && fileData.faqs.length > 0 ? fileData.faqs : defaultHomepageCMS.faqs,
+        contactDetails: { ...defaultHomepageCMS.contactDetails, ...(fileData.contactDetails || {}) }
+      };
+      return _cmsCache;
+    }
+  } catch (e) { }
+
+  _cmsCache = { ...defaultHomepageCMS };
+  return _cmsCache;
+}
+
+// GET Public Homepage CMS
+app.get('/api/cms/homepage', async (req: Request, res: Response) => {
+  const cms = await getHomepageCMS();
+  res.json({ success: true, cms });
+});
+
+// UPDATE Admin Homepage CMS (Saves to DynamoDB and local storage)
+app.put('/api/admin/cms/homepage', async (req: Request, res: Response) => {
+  try {
+    const currentCMS = await getHomepageCMS();
+    const { heroStats, flavoursOfKonaseema, whyChooseUs, faqs, contactDetails } = req.body;
+
+    const updatedCMS = {
+      heroStats: heroStats ? { ...currentCMS.heroStats, ...heroStats } : currentCMS.heroStats,
+      flavoursOfKonaseema: flavoursOfKonaseema ? { ...currentCMS.flavoursOfKonaseema, ...flavoursOfKonaseema } : currentCMS.flavoursOfKonaseema,
+      whyChooseUs: whyChooseUs ? { ...currentCMS.whyChooseUs, ...whyChooseUs } : currentCMS.whyChooseUs,
+      faqs: Array.isArray(faqs) ? faqs : currentCMS.faqs,
+      contactDetails: contactDetails ? { ...currentCMS.contactDetails, ...contactDetails } : currentCMS.contactDetails
+    };
+
+    _cmsCache = updatedCMS;
+    saveCMSToFile(updatedCMS);
+
+    const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+    for (const tName of tablesToTry) {
+      try {
+        await dynamoDocClient.send(
+          new PutCommand({
+            TableName: tName,
+            Item: {
+              id: 'homepage_cms',
+              userId: 'homepage_cms',
+              email: 'homepage_cms',
+              pk: 'homepage_cms',
+              ...updatedCMS,
+              updatedAt: new Date().toISOString()
+            }
+          })
+        );
+      } catch (e) { }
+    }
+
+    res.json({ success: true, message: 'Homepage CMS updated successfully', cms: updatedCMS });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update CMS' });
+  }
+});
+
+// --- REQUEST INVITATIONS SUBSCRIPTION MANAGEMENT & DYNAMODB PERSISTENCE ---
+const invitationsFilePath = path.resolve(__dirname, '../data/invitations.json');
+function readInvitationsFromFile(): any[] {
+  try {
+    if (fs.existsSync(invitationsFilePath)) {
+      return JSON.parse(fs.readFileSync(invitationsFilePath, 'utf-8'));
+    }
+  } catch (e) {}
+  return [];
+}
+function saveInvitationsToFile(list: any[]) {
+  try {
+    const dir = path.dirname(invitationsFilePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(invitationsFilePath, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {}
+}
+
+// POST Public Request Invitation (Name, Email, Phone Number)
+app.post('/api/invitations', async (req: Request, res: Response) => {
+  try {
+    const { name, email, phone } = req.body;
+    if (!email || !email.trim()) {
+      return res.status(400).json({ success: false, error: 'Email address is required' });
+    }
+
+    const newInvitation = {
+      id: `INV-${Date.now()}`,
+      name: (name || '').trim() || 'Guest',
+      email: email.trim().toLowerCase(),
+      phone: (phone || '').trim() || 'N/A',
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    };
+
+    const currentList = readInvitationsFromFile();
+    const existingIdx = currentList.findIndex(i => i.email === newInvitation.email);
+    if (existingIdx >= 0) {
+      currentList[existingIdx] = { ...currentList[existingIdx], ...newInvitation };
+    } else {
+      currentList.unshift(newInvitation);
+    }
+    saveInvitationsToFile(currentList);
+
+    const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+    for (const tName of tablesToTry) {
+      try {
+        await dynamoDocClient.send(
+          new PutCommand({
+            TableName: tName,
+            Item: {
+              userId: `invitation_${newInvitation.id}`,
+              pk: 'invitation',
+              sk: newInvitation.id,
+              type: 'INVITATION_REQUEST',
+              ...newInvitation
+            }
+          })
+        );
+      } catch (e) {}
+    }
+
+    res.json({ success: true, message: 'Invitation request submitted successfully', invitation: newInvitation });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to submit invitation request' });
+  }
+});
+
+// GET Admin Invitations List
+app.get('/api/admin/invitations', async (req: Request, res: Response) => {
+  try {
+    const fileList = readInvitationsFromFile();
+    const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+    let dbItems: any[] = [];
+    for (const tName of tablesToTry) {
+      try {
+        const result = await dynamoDocClient.send(new ScanCommand({
+          TableName: tName,
+          FilterExpression: 'begins_with(id, :prefix) OR #t = :invType',
+          ExpressionAttributeNames: { '#t': 'type' },
+          ExpressionAttributeValues: { ':prefix': 'INV-', ':invType': 'INVITATION_REQUEST' }
+        }));
+        if (result.Items && result.Items.length > 0) {
+          dbItems = result.Items;
+          break;
+        }
+      } catch (e) {}
+    }
+
+    const mergedMap = new Map<string, any>();
+    fileList.forEach(item => mergedMap.set(item.id || item.email, item));
+    dbItems.forEach(item => mergedMap.set(item.id || item.email, item));
+
+    const invitations = Array.from(mergedMap.values()).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    res.json({ success: true, invitations });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to fetch invitations' });
+  }
+});
+
+// DELETE Admin Invitation Request
+app.delete('/api/admin/invitations/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    let list = readInvitationsFromFile().filter(i => i.id !== id && i.email !== id);
+    saveInvitationsToFile(list);
+
+    const tablesToTry = Array.from(new Set([tableName, usersTableName, 'foodway-users', 'mk-delivery-services'].filter(Boolean)));
+    for (const tName of tablesToTry) {
+      try {
+        await dynamoDocClient.send(new DeleteCommand({ TableName: tName, Key: { id, email: id } }));
+      } catch (e) {}
+    }
+
+    res.json({ success: true, message: 'Invitation request deleted' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to delete invitation' });
   }
 });
 
