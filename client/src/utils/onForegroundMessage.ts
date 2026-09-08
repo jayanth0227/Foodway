@@ -150,7 +150,7 @@ export const setupForegroundMessageListener = (
                 payload.notification?.icon ||
                 "/favicon.ico",
               badge:
-                payload.notification?.badge ||
+                (payload.notification as any)?.badge ||
                 "/favicon.ico",
               data: payload.data,
             });
