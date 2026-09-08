@@ -5,17 +5,36 @@ import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const s3Region = process.env.AWS_S3_REGION || 'ap-south-2';
 const dynamoRegion = process.env.AWS_DYNAMODB_REGION || 'ap-south-2';
 
 // Check for explicit AWS credentials in environment variables or .env
-const hasStaticKeys = !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
-const credentials = hasStaticKeys ? {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
-} : undefined;
+// In AWS Lambda, AWS injects temporary credentials into AWS_ACCESS_KEY_ID (starting with ASIA)
+// which require AWS_SESSION_TOKEN. We prioritize explicit permanent IAM user keys (AKIA*),
+// or pass the complete session token if running under Lambda's temporary STS role.
+const staticAccessKey = process.env.FOODWAY_AWS_ACCESS_KEY_ID || 
+  (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_ACCESS_KEY_ID.startsWith('AKIA') ? process.env.AWS_ACCESS_KEY_ID : undefined);
+const staticSecretKey = process.env.FOODWAY_AWS_SECRET_ACCESS_KEY || 
+  (staticAccessKey ? process.env.AWS_SECRET_ACCESS_KEY : undefined);
+
+let credentials: any = undefined;
+
+if (staticAccessKey && staticSecretKey) {
+  credentials = {
+    accessKeyId: staticAccessKey,
+    secretAccessKey: staticSecretKey,
+  };
+} else if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_SESSION_TOKEN) {
+  credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    sessionToken: process.env.AWS_SESSION_TOKEN,
+  };
+}
 
 // Initialize S3 client (uses static keys if provided, else falls back to default SDK credential chain / IAM role)
 export const s3Client = new S3Client({

@@ -12,6 +12,8 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 import { s3Client, dynamoDocClient, bucketName, tableName, usersTableName, menuItemsTableName, ordersTableName, settingsTableName, reviewsTableName, categoriesTableName } from './config/aws';
 import { uploadAndSeedVideos } from './utils/videoUploader';
@@ -1585,7 +1587,8 @@ app.get('/api/public/dishes', async (req: Request, res: Response) => {
 
     res.json({ success: true, dishes: mapped });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: 'Failed to fetch public dishes.' });
+    console.error('❌ [/api/public/dishes] Error fetching public dishes:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch public dishes.', details: error?.message });
   }
 });
 
