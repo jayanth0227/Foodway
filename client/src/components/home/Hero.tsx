@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useSpring, useScroll, useTransform } from 'framer-motion';
-import { Search, ChevronRight, User, Store, Clock } from 'lucide-react';
+import { Search, ChevronRight, User, Store, Clock, Compass } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { API_BASE_URL } from '../../utils/api';
 import DeliveryLocations from './DeliveryLocations';
@@ -439,8 +439,9 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               onFocus={() => setIsSecondaryFocused(true)}
               onBlur={() => setIsSecondaryFocused(false)}
               disabled={isExploring}
-              className={`flex-1 sm:flex-none btn-secondary font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-9 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center ${isSecondaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
-                } ${isExploring ? 'opacity-85 cursor-not-allowed' : ''}`}
+              className={`flex-1 sm:flex-none group font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center gap-2 transition-all duration-300 ease-out bg-white/95 dark:bg-bg-card/95 backdrop-blur-xl border-2 border-primary/60 dark:border-primary/50 text-slate-900 dark:text-white shadow-luxury hover:bg-primary hover:text-black hover:border-primary hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:scale-95 ${
+                isSecondaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
+              } ${isExploring ? 'opacity-85 cursor-not-allowed' : ''}`}
             >
               {isExploring ? (
                 <div className="flex items-center space-x-1.5">
@@ -451,7 +452,10 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
                   <span>Exploring...</span>
                 </div>
               ) : (
-                <span>Explore</span>
+                <>
+                  <Compass size={16} className="text-primary group-hover:text-black transition-colors duration-300 shrink-0" />
+                  <span>Explore</span>
+                </>
               )}
             </button>
           </motion.div>
