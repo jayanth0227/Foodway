@@ -80,11 +80,51 @@ const AppContent: React.FC = () => {
     navigate(type === 'register' ? '/register' : '/login', { state: { authType: type } });
   };
 
-  useEffect(() => {
-    requestNotificationPermission();
-    setupForegroundMessageListener();
-  }, []);
+  // useEffect(() => {
+  //   requestNotificationPermission();
+  //   setupForegroundMessageListener();
+  // }, []);
 
+  useEffect(() => {
+  let unsubscribe: (() => void) | undefined;
+ 
+  const initializeNotifications = async () => {
+    try {
+      console.log("🔔 Initializing Foodway FCM...");
+ 
+      unsubscribe = setupForegroundMessageListener((payload) => {
+        console.log(
+          "📩 APP RECEIVED FOREGROUND FCM:",
+          payload
+        );
+      });
+ 
+      console.log(
+        "✅ Foreground FCM listener initialized"
+      );
+ 
+      const token = await requestNotificationPermission();
+ 
+      console.log("🎯 FCM TOKEN RESULT:", {
+        hasToken: !!token,
+        tokenPreview: token
+          ? `${token.substring(0, 15)}...`
+          : null,
+      });
+    } catch (error) {
+      console.error(
+        "❌ FCM initialization failed:",
+        error
+      );
+    }
+  };
+ 
+  initializeNotifications();
+ 
+  return () => {
+    unsubscribe?.();
+  };
+}, []);
   // Scroll window to top (Start to End) on every page/route transition
   useEffect(() => {
     if (lenisRef.current) {

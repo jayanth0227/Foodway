@@ -1,6 +1,66 @@
+// // Firebase Messaging Service Worker for Foodway Web Push Notifications
+// importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js");
+// importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js");
+
+// const firebaseConfig = {
+//   apiKey: "AIzaSyAdjXZtm3SIyhkFd5LCgJyuDrsarljfvzY",
+//   authDomain: "foodway-dfaf3.firebaseapp.com",
+//   projectId: "foodway-dfaf3",
+//   storageBucket: "foodway-dfaf3.firebasestorage.app",
+//   messagingSenderId: "159263902318",
+//   appId: "1:159263902318:web:53a2260c8d1a93caaaf47f",
+// };
+
+// firebase.initializeApp(firebaseConfig);
+// const messaging = firebase.messaging();
+
+// // Handle Background Push Notifications
+// messaging.onBackgroundMessage((payload) => {
+//   const title = payload.notification?.title || payload.data?.title || '🔔 Foodway Update';
+//   const options = {
+//     body: payload.notification?.body || payload.data?.body || 'You have a new order update!',
+//     icon: payload.notification?.icon || '/favicon.ico',
+//     badge: payload.notification?.badge || '/favicon.ico',
+//     vibrate: [200, 100, 200, 100, 200],
+//     requireInteraction: true,
+//     data: {
+//       url: payload.data?.click_action || payload.data?.url || '/restaurant/dashboard',
+//       orderId: payload.data?.orderId,
+//     },
+//   };
+
+//   self.registration.showNotification(title, options);
+// });
+
+// // Handle Notification Click (Deep Linking)
+// self.addEventListener('notificationclick', (event) => {
+//   event.notification.close();
+
+//   const targetUrl = event.notification.data?.url || '/restaurant/dashboard';
+
+//   event.waitUntil(
+//     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+//       for (const client of windowClients) {
+//         if (client.url.includes(targetUrl) && 'focus' in client) {
+//           return client.focus();
+//         }
+//       }
+//       if (clients.openWindow) {
+//         return clients.openWindow(targetUrl);
+//       }
+//     })
+//   );
+// });
+
+
 // Firebase Messaging Service Worker for Foodway Web Push Notifications
-importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js");
+
+importScripts(
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"
+);
+importScripts(
+  "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"
+);
 
 const firebaseConfig = {
   apiKey: "AIzaSyAdjXZtm3SIyhkFd5LCgJyuDrsarljfvzY",
@@ -12,42 +72,193 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
+
 const messaging = firebase.messaging();
 
-// Handle Background Push Notifications
+
+// ============================================================
+// BACKGROUND / MINIMIZED / CLOSED BROWSER NOTIFICATION
+// ============================================================
+
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || payload.data?.title || '🔔 Foodway Update';
+  console.log(
+    "[firebase-messaging-sw.js] Background push received:",
+    payload
+  );
+
+  const data = payload.data || {};
+  const notification = payload.notification || {};
+
+  const title =
+    notification.title ||
+    data.title ||
+    "🔔 Foodway Update";
+
+  const body =
+    notification.body ||
+    data.body ||
+    "You have a new order update!";
+
+  const type = data.type || "";
+
+  const role = data.role || "";
+
+  const orderId = data.orderId || "";
+
+  // ----------------------------------------------------------
+  // Notification URL based on role
+  // ----------------------------------------------------------
+
+  let defaultUrl = "/";
+
+  if (role === "RESTAURANT") {
+    defaultUrl = "/restaurant/dashboard";
+  } else if (
+    role === "DELIVERY_PARTNER" ||
+    role === "DELIVERY" ||
+    role === "RIDER"
+  ) {
+    defaultUrl = "/delivery/dashboard";
+  } else {
+    defaultUrl = "/";
+  }
+
+  const targetUrl =
+    data.click_action ||
+    data.url ||
+    defaultUrl;
+
+
+  // ----------------------------------------------------------
+  // Notification options
+  // ----------------------------------------------------------
+
   const options = {
-    body: payload.notification?.body || payload.data?.body || 'You have a new order update!',
-    icon: payload.notification?.icon || '/favicon.ico',
-    badge: payload.notification?.badge || '/favicon.ico',
-    vibrate: [200, 100, 200, 100, 200],
+    body,
+
+    icon:
+      notification.icon ||
+      data.icon ||
+      "/favicon.ico",
+
+    badge:
+      notification.badge ||
+      data.badge ||
+      "/favicon.ico",
+
+    vibrate: [
+      200,
+      100,
+      200,
+      100,
+      200,
+    ],
+
     requireInteraction: true,
+
+    tag: orderId
+      ? `foodway-order-${orderId}`
+      : `foodway-${type || "notification"}`,
+
+    renotify: true,
+
     data: {
-      url: payload.data?.click_action || payload.data?.url || '/restaurant/dashboard',
-      orderId: payload.data?.orderId,
+      url: targetUrl,
+      orderId,
+      type,
+      role,
     },
   };
 
-  self.registration.showNotification(title, options);
-});
 
-// Handle Notification Click (Deep Linking)
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
+  // ----------------------------------------------------------
+  // Show notification
+  // ----------------------------------------------------------
 
-  const targetUrl = event.notification.data?.url || '/restaurant/dashboard';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      for (const client of windowClients) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
+  self.registration.showNotification(
+    title,
+    options
   );
 });
+
+
+// ============================================================
+// NOTIFICATION CLICK
+// ============================================================
+
+self.addEventListener(
+  "notificationclick",
+  (event) => {
+    console.log(
+      "[firebase-messaging-sw.js] Notification clicked"
+    );
+
+    event.notification.close();
+
+    const notificationData =
+      event.notification.data || {};
+
+    const targetUrl =
+      notificationData.url ||
+      "/";
+
+
+    event.waitUntil(
+      clients
+        .matchAll({
+          type: "window",
+          includeUncontrolled: true,
+        })
+        .then((windowClients) => {
+
+          // ----------------------------------------------------
+          // If Foodway tab already exists, focus it
+          // ----------------------------------------------------
+
+          for (const client of windowClients) {
+
+            if (
+              client.url.includes(
+                targetUrl
+              ) &&
+              "focus" in client
+            ) {
+              return client.focus();
+            }
+          }
+
+
+          // ----------------------------------------------------
+          // Otherwise focus any Foodway tab
+          // ----------------------------------------------------
+
+          for (const client of windowClients) {
+
+            if (
+              client.url.includes(
+                self.location.origin
+              ) &&
+              "focus" in client
+            ) {
+              return client.focus();
+            }
+          }
+
+
+          // ----------------------------------------------------
+          // No existing tab → open new one
+          // ----------------------------------------------------
+
+          if (clients.openWindow) {
+            return clients.openWindow(
+              new URL(
+                targetUrl,
+                self.location.origin
+              ).href
+            );
+          }
+
+        })
+    );
+  }
+);
