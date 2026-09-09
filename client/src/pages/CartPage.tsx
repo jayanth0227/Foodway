@@ -26,7 +26,11 @@ import {
   Package,
   X,
   Ban,
-  MapPinOff
+  MapPinOff,
+  Zap,
+  ArrowUp,
+  ArrowDown,
+  Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -627,7 +631,7 @@ export const CartPage: React.FC = () => {
 
                   {/* COMPACT TICKET RECEIPT CONTAINER */}
                   <div className="bg-slate-50/80 dark:bg-bg-cardSec/80 border border-slate-200/80 dark:border-white/10 rounded-xl p-3 sm:p-3.5 text-left text-xs space-y-2.5 relative shadow-inner">
-                    
+
                     {/* Left & Right Scalloped Ticket Cutout Notches */}
                     <div className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-bg-dark border-r border-emerald-500/20" />
                     <div className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-bg-dark border-l border-emerald-500/20" />
@@ -710,7 +714,7 @@ export const CartPage: React.FC = () => {
                   </div>
                 </motion.div>
               </div>
-          </>
+            </>
           ) : isLoading ? (
             <CartPageSkeleton />
           ) : cartItems.length === 0 ? (
@@ -979,8 +983,8 @@ export const CartPage: React.FC = () => {
                                   key={addr.id}
                                   onClick={() => handleSelectAddressCard(addr)}
                                   className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${isSelected
-                                      ? 'bg-primary/10 border-primary ring-2 ring-primary/20 text-text-primary'
-                                      : 'bg-bg-cardSec border-glass text-text-secondary hover:border-primary/40'
+                                    ? 'bg-primary/10 border-primary ring-2 ring-primary/20 text-text-primary'
+                                    : 'bg-bg-cardSec border-glass text-text-secondary hover:border-primary/40'
                                     }`}
                                 >
                                   <div className="space-y-1 text-xs min-w-0 flex-1">
@@ -1184,12 +1188,12 @@ export const CartPage: React.FC = () => {
                             type="submit"
                             disabled={isPlacingOrder || isStoreClosed || unavailableCartItems.length > 0}
                             className={`w-full py-4 rounded-2xl font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-md ${isStoreClosed
-                                ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 cursor-not-allowed'
-                                : unavailableCartItems.length > 0
-                                  ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 cursor-not-allowed'
-                                  : isDistanceTooFar
-                                    ? 'bg-rose-500 hover:bg-rose-600 text-white cursor-pointer active:scale-98'
-                                    : 'bg-primary hover:bg-primary-dark text-white active:scale-98 cursor-pointer'
+                              ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 cursor-not-allowed'
+                              : unavailableCartItems.length > 0
+                                ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 cursor-not-allowed'
+                                : isDistanceTooFar
+                                  ? 'bg-rose-500 hover:bg-rose-600 text-white cursor-pointer active:scale-98'
+                                  : 'bg-primary hover:bg-primary-dark text-white active:scale-98 cursor-pointer'
                               }`}
                           >
                             {isPlacingOrder ? (

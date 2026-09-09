@@ -376,11 +376,10 @@ export const DishesPage: React.FC = () => {
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer shrink-0 border ${
-                      isActive
+                    className={`px-4 py-2 rounded-full text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer shrink-0 border ${isActive
                         ? 'bg-[#F4E6D8] dark:bg-[#B87B4B]/25 border-[#B87B4B] text-[#B87B4B] dark:text-[#D4986A] shadow-xs scale-105 font-black'
                         : 'bg-white dark:bg-[#151921] border-slate-200/90 dark:border-white/15 text-slate-700 dark:text-stone-300 hover:border-[#B87B4B]/50 hover:text-[#B87B4B]'
-                    }`}
+                      }`}
                   >
                     {cat.label}
                   </button>
@@ -427,21 +426,19 @@ export const DishesPage: React.FC = () => {
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     onClick={() => navigate(`/item/${dish.id || dish.menuItemId}`, { state: { dish } })}
-                    className={`group bg-white dark:bg-[#151921] border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-4 flex flex-col justify-between shadow-lg hover:shadow-2xl hover:border-[#B87B4B]/40 transition-all duration-300 cursor-pointer relative overflow-hidden ${
-                      isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
-                    }`}
+                    className={`group bg-white dark:bg-[#151921] border border-slate-200/80 dark:border-white/10 rounded-2xl sm:rounded-3xl p-3 sm:p-4 flex flex-col justify-between shadow-lg hover:shadow-2xl hover:border-[#B87B4B]/40 transition-all duration-300 cursor-pointer relative overflow-hidden ${isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
+                      }`}
                   >
                     <div>
                       {/* Image Thumbnail Container */}
-                      <div className="relative h-36 sm:h-40 rounded-xl sm:rounded-2xl overflow-hidden border border-slate-200/80 dark:border-white/10 mb-3 bg-stone-100 dark:bg-black/30">
+                      <div className="relative h-36 sm:h-40 rounded-xl sm:rounded-2xl overflow-hidden border border-slate-200/50 dark:border-white/10 mb-3 bg-stone-100 dark:bg-black/30 shadow-xs">
                         <ItemImageOrIcon
                           image={dish.image}
                           name={dish.name}
                           category={dish.category}
                           isVeg={dish.isVeg || dish.type === 'veg'}
-                          className={`w-full h-full object-cover transition-transform duration-700 ease-out ${
-                            isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
-                          }`}
+                          className={`w-full h-full object-cover transition-transform duration-700 ease-out ${isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
+                            }`}
                           containerClassName="w-full h-full"
                           iconSize={32}
                         />
@@ -449,11 +446,10 @@ export const DishesPage: React.FC = () => {
                         {/* Top Badges */}
                         <div className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md backdrop-blur-md ${
-                              dish.type === 'veg' || dish.isVeg
+                            className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-md backdrop-blur-md ${dish.type === 'veg' || dish.isVeg
                                 ? 'bg-emerald-500 text-white'
                                 : 'bg-rose-600 text-white'
-                            }`}
+                              }`}
                           >
                             {dish.type === 'veg' || dish.isVeg ? 'VEG' : 'NON-VEG'}
                           </span>

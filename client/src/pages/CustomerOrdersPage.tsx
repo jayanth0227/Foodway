@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
-import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Utensils, Store, Search, Calendar, ArrowUpDown, X, ChevronDown, ChevronUp, Star, MessageSquare, Lock, XCircle, Info, Eye,Bike, } from 'lucide-react';
+import { ShoppingBag, Clock, CheckCircle2, Package, MapPin, ArrowLeft, RefreshCw, AlertCircle, AlertTriangle, Utensils, Store, Search, Calendar, ArrowUpDown, X, ChevronDown, ChevronUp, Star, MessageSquare, Lock, XCircle, Info, Eye, Bike, } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
@@ -106,7 +106,7 @@ export const CustomerOrdersPage: React.FC = () => {
           if (d.foodName) dMap[d.foodName.toLowerCase().trim()] = d;
         });
         setLiveDishesMap(dMap);
-      } catch (e) {}
+      } catch (e) { }
     } catch (err) {
       console.warn('Error fetching customer orders from DB:', err);
       if (!isSilent) setOrders([]);
@@ -130,8 +130,8 @@ export const CustomerOrdersPage: React.FC = () => {
       case 'PLACED':
       case 'ORDER_PLACED':
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-sky-50/90 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-700/80 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
-            <Clock size={16} className="text-sky-600 dark:text-sky-400 stroke-[2.2]" />
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-sky-50/90 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-700/80 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
+            <Clock size={13} className="text-sky-600 dark:text-sky-400 stroke-[2.2]" />
             <span>ORDER PLACED</span>
           </span>
         );
@@ -140,7 +140,7 @@ export const CustomerOrdersPage: React.FC = () => {
       case 'DRIVER_ASSIGNED':
       case 'PARTNER_ASSIGNED':
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-slate-50/90 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-300/90 dark:border-white/20 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-slate-50/90 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-300/90 dark:border-white/20 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
             <span>ASSIGNED</span>
           </span>
         );
@@ -148,8 +148,8 @@ export const CustomerOrdersPage: React.FC = () => {
       case 'CONFIRMED':
       case 'PREPARING':
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-amber-50/90 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
-            <Utensils size={16} className="text-amber-600 dark:text-amber-400 stroke-[2.2]" />
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-amber-50/90 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/80 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
+            <Utensils size={13} className="text-amber-600 dark:text-amber-400 stroke-[2.2]" />
             <span>PREPARING</span>
           </span>
         );
@@ -157,8 +157,8 @@ export const CustomerOrdersPage: React.FC = () => {
       case 'OUT_FOR_DELIVERY':
       case 'IN_TRANSIT':
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-purple-50/90 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700/80 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
-            <Bike size={16} className="text-purple-600 dark:text-purple-400 stroke-[2.2]" />
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-purple-50/90 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700/80 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
+            <Bike size={13} className="text-purple-600 dark:text-purple-400 stroke-[2.2]" />
             <span>OUT FOR DELIVERY</span>
           </span>
         );
@@ -166,25 +166,81 @@ export const CustomerOrdersPage: React.FC = () => {
       case 'REJECT':
       case 'CANCELLED':
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-rose-50/90 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700/80 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
-            <AlertCircle size={16} className="text-rose-600 dark:text-rose-400 stroke-[2.2]" />
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-rose-50/90 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700/80 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
+            <AlertCircle size={13} className="text-rose-600 dark:text-rose-400 stroke-[2.2]" />
             <span>CANCELLED</span>
           </span>
         );
       case 'DELIVERED':
       case 'COMPLETED':
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-emerald-50/90 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/80 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
-            <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 stroke-[2.2]" />
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-emerald-50/90 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700/80 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
+            <CheckCircle2 size={13} className="text-emerald-600 dark:text-emerald-400 stroke-[2.2]" />
             <span>DELIVERED</span>
           </span>
         );
       default:
         return (
-          <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-slate-50/90 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-300/90 dark:border-white/20 inline-flex items-center gap-2 shrink-0 shadow-2xs uppercase tracking-wider">
+          <span className="px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-black bg-slate-50/90 dark:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-300/90 dark:border-white/20 inline-flex items-center gap-1.5 shrink-0 shadow-2xs uppercase tracking-wider">
             <span>{s.replace(/_/g, ' ')}</span>
           </span>
         );
+    }
+  };
+
+  const getOrderStatusTheme = (status: string) => {
+    const s = (status || 'PENDING').toUpperCase();
+    switch (s) {
+      case 'PENDING':
+      case 'PLACED':
+      case 'ORDER_PLACED':
+      case 'UNACCEPTED':
+        return {
+          cardBorder: 'border-2 border-sky-500/40 dark:border-sky-500/50 ring-1 ring-sky-500/20',
+          storeIcon: 'bg-sky-500/10 border-sky-500/30 text-sky-600 dark:text-sky-400',
+          mapIcon: 'text-sky-500',
+          foodHeaderIcon: 'bg-sky-500/15 border-sky-500/30 text-sky-600 dark:text-sky-400',
+        };
+      case 'ACCEPTED':
+      case 'CONFIRMED':
+      case 'PREPARING':
+        return {
+          cardBorder: 'border-2 border-amber-500/40 dark:border-amber-500/50 ring-1 ring-amber-500/20',
+          storeIcon: 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400',
+          mapIcon: 'text-amber-500',
+          foodHeaderIcon: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400',
+        };
+      case 'READY':
+      case 'OUT_FOR_DELIVERY':
+      case 'IN_TRANSIT':
+      case 'ASSIGNED':
+      case 'DRIVER_ASSIGNED':
+      case 'RIDER_ASSIGNED':
+      case 'PARTNER_ASSIGNED':
+        return {
+          cardBorder: 'border-2 border-purple-500/40 dark:border-purple-500/50 ring-1 ring-purple-500/20',
+          storeIcon: 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400',
+          mapIcon: 'text-purple-500',
+          foodHeaderIcon: 'bg-purple-500/15 border-purple-500/30 text-purple-600 dark:text-purple-400',
+        };
+      case 'REJECTED':
+      case 'REJECT':
+      case 'CANCELLED':
+        return {
+          cardBorder: 'border-2 border-rose-500/40 dark:border-rose-500/50 ring-1 ring-rose-500/20',
+          storeIcon: 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400',
+          mapIcon: 'text-rose-500',
+          foodHeaderIcon: 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400',
+        };
+      case 'DELIVERED':
+      case 'COMPLETED':
+      default:
+        return {
+          cardBorder: 'border-2 border-emerald-500/40 dark:border-emerald-500/50 ring-1 ring-emerald-500/20',
+          storeIcon: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
+          mapIcon: 'text-emerald-500',
+          foodHeaderIcon: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
+        };
     }
   };
 
@@ -323,7 +379,7 @@ export const CustomerOrdersPage: React.FC = () => {
               liveMenu = fetchedAll;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const unavailableItemNames: string[] = [];
@@ -663,13 +719,14 @@ export const CustomerOrdersPage: React.FC = () => {
                 const orderTotal = Number(order.totalAmount || order.total || 0);
                 const statusUpper = (order.status || order.orderStatus || '').toUpperCase();
                 const isCompleted = statusUpper === 'DELIVERED' || statusUpper === 'COMPLETED' || activeTab === 'HISTORY';
+                const theme = getOrderStatusTheme(order.status || (order as any).orderStatus);
 
                 return (
                   <motion.div
                     key={orderId}
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white dark:bg-bg-card border border-slate-200/90 dark:border-white/10 hover:border-emerald-500/40 rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-md hover:shadow-xl transition-all duration-300 relative overflow-hidden"
+                    className={`bg-white dark:bg-bg-card rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-md relative overflow-hidden ${theme.cardBorder}`}
                   >
                     {/* ACCORDION CLICKABLE HEADER */}
                     <div
@@ -678,15 +735,15 @@ export const CustomerOrdersPage: React.FC = () => {
                     >
                       {/* ROW 1: Store Name & Icon + Status Badge */}
                       <div className="flex items-center justify-between gap-2.5">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${theme.storeIcon}`}>
                             <Store size={18} />
                           </div>
-                          <div className="min-w-0">
-                            <h3 className="text-sm sm:text-base font-black text-text-primary truncate leading-snug">
+                          <div className="min-w-0 flex-1">
+                            <h3 className="text-sm sm:text-base font-black text-text-primary font-display leading-snug whitespace-nowrap overflow-hidden text-ellipsis">
                               {restaurantDisplayName}
                             </h3>
-                            <span className="text-[11px] font-bold text-text-muted block mt-0.5">
+                            <span className="text-[11px] font-bold text-text-muted block mt-0.5 whitespace-nowrap">
                               {formattedDate}
                             </span>
                           </div>
@@ -711,11 +768,10 @@ export const CustomerOrdersPage: React.FC = () => {
                           )}
                         </div>
 
-                        <div className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all duration-200 flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer active:scale-95 ${
-                          isExpanded
-                            ? 'bg-slate-800 text-white dark:bg-slate-700 border border-slate-700 dark:border-slate-600 shadow-sm'
-                            : 'bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 border border-slate-200 dark:border-white/15 text-text-primary'
-                        }`}>
+                        <div className={`px-3 py-1.5 rounded-xl font-black text-xs transition-all duration-200 flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer active:scale-95 ${isExpanded
+                          ? 'bg-slate-800 text-white dark:bg-slate-700 border border-slate-700 dark:border-slate-600 shadow-sm'
+                          : 'bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 border border-slate-200 dark:border-white/15 text-text-primary'
+                          }`}>
                           <Eye size={13} className={isExpanded ? 'text-slate-300' : 'text-text-muted'} />
                           <span>{isExpanded ? 'Hide Details' : 'View Details'}</span>
                           <ChevronDown size={14} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180 text-slate-300' : 'text-text-muted'}`} />
@@ -745,7 +801,7 @@ export const CustomerOrdersPage: React.FC = () => {
 
                       {order.deliveryAddress && !isExpanded && (
                         <p className="text-xs text-text-secondary truncate font-medium pt-0.5 flex items-center gap-1.5 min-w-0">
-                          <MapPin size={13} className="text-emerald-500 shrink-0" />
+                          <MapPin size={13} className={`${theme.mapIcon} shrink-0`} />
                           <span className="truncate">{order.deliveryAddress}</span>
                         </p>
                       )}
@@ -772,7 +828,7 @@ export const CustomerOrdersPage: React.FC = () => {
                           {/* Delivery Address */}
                           {order.deliveryAddress && (
                             <p className="text-xs text-text-secondary flex items-start gap-1.5 pt-0.5">
-                              <MapPin size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                              <MapPin size={13} className={`${theme.mapIcon} shrink-0 mt-0.5`} />
                               <span className="font-medium">{order.deliveryAddress}</span>
                             </p>
                           )}
@@ -780,7 +836,7 @@ export const CustomerOrdersPage: React.FC = () => {
                           {/* Ordered Items Full Breakdown */}
                           <div className="space-y-3 pt-1">
                             <div className="flex items-center gap-2 pb-0.5">
-                              <div className="w-7 h-7 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-xs">
+                              <div className={`w-7 h-7 rounded-xl border flex items-center justify-center shrink-0 shadow-xs ${theme.foodHeaderIcon}`}>
                                 <Utensils size={14} />
                               </div>
                               <h4 className="text-xs sm:text-sm font-black text-text-primary uppercase tracking-wider">
@@ -910,11 +966,10 @@ export const CustomerOrdersPage: React.FC = () => {
                                       setSelectedRating(order.rating || 0);
                                       setFeedbackText(order.feedback || order.reviewText || '');
                                     }}
-                                    className={`flex-1 h-11 px-2 sm:px-4 rounded-xl font-black text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap min-w-0 ${
-                                      order.rating
-                                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
-                                        : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25'
-                                    }`}
+                                    className={`flex-1 h-11 px-2 sm:px-4 rounded-xl font-black text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap min-w-0 ${order.rating
+                                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                      : 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 hover:bg-blue-500/25'
+                                      }`}
                                   >
                                     <Star size={15} className={`shrink-0 ${order.rating ? 'fill-emerald-500 text-emerald-500' : 'fill-blue-500 text-blue-500'}`} />
                                     <span className="whitespace-nowrap">{order.rating ? `RATED ${order.rating}★` : 'RATE ORDER'}</span>
@@ -922,13 +977,13 @@ export const CustomerOrdersPage: React.FC = () => {
                                 )}
 
                                 <button
-                                   disabled={reorderLoadingId === (order.id || order.orderId)}
-                                   onClick={() => handleReorder(order)}
-                                   className="flex-1 h-11 px-2 sm:px-4 rounded-xl bg-[#B87B4B]/15 text-[#B87B4B] dark:text-[#D4986A] border border-[#B87B4B]/30 hover:bg-[#B87B4B]/25 font-black text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 whitespace-nowrap min-w-0"
-                                 >
-                                   <RefreshCw size={15} className={`shrink-0 text-[#B87B4B] dark:text-[#D4986A] ${reorderLoadingId === (order.id || order.orderId) ? 'animate-spin' : ''}`} />
-                                   <span className="whitespace-nowrap">{reorderLoadingId === (order.id || order.orderId) ? 'Checking...' : 'REORDER'}</span>
-                                 </button>
+                                  disabled={reorderLoadingId === (order.id || order.orderId)}
+                                  onClick={() => handleReorder(order)}
+                                  className="flex-1 h-11 px-2 sm:px-4 rounded-xl bg-[#B87B4B]/15 text-[#B87B4B] dark:text-[#D4986A] border border-[#B87B4B]/30 hover:bg-[#B87B4B]/25 font-black text-[11px] sm:text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95 disabled:opacity-50 whitespace-nowrap min-w-0"
+                                >
+                                  <RefreshCw size={15} className={`shrink-0 text-[#B87B4B] dark:text-[#D4986A] ${reorderLoadingId === (order.id || order.orderId) ? 'animate-spin' : ''}`} />
+                                  <span className="whitespace-nowrap">{reorderLoadingId === (order.id || order.orderId) ? 'Checking...' : 'REORDER'}</span>
+                                </button>
                               </div>
                             </div>
                           </div>

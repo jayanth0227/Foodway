@@ -134,21 +134,19 @@ export const PopularDishes: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={() => navigate(`/item/${dish.id || dish.menuItemId}`, { state: { dish } })}
-        className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 cursor-pointer ${
-          isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
-        }`}
+        className={`group glass-panel border border-glass rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between shadow-luxury bg-bg-cardSec/90 hover:border-primary/50 transition-all duration-300 cursor-pointer ${isOutOfStock ? 'opacity-75 border-rose-500/20' : ''
+          }`}
       >
         <div>
           {/* Dish Image Container */}
-          <div className="relative h-32 sm:h-36 rounded-xl sm:rounded-2xl overflow-hidden border border-glass mb-3 bg-black/40">
+          <div className="relative h-32 sm:h-36 rounded-xl sm:rounded-2xl overflow-hidden border border-white/10 mb-3 bg-black/40 shadow-xs">
             <ItemImageOrIcon
               image={dish.image}
               name={dish.name}
               category={dish.category}
               isVeg={dish.isVeg || dish.type === 'veg'}
-              className={`w-full h-full object-cover transition-transform duration-700 ease-out ${
-                isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
-              }`}
+              className={`w-full h-full object-cover transition-transform duration-700 ease-out ${isOutOfStock ? 'grayscale' : 'group-hover:scale-105'
+                }`}
               containerClassName="w-full h-full"
               iconSize={30}
             />
@@ -156,11 +154,10 @@ export const PopularDishes: React.FC = () => {
             {/* Top Overlay Badges */}
             <div className="absolute top-2 left-2 z-20 flex items-center gap-1 flex-wrap">
               <span
-                className={`text-[8px] sm:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md backdrop-blur-md shadow-md ${
-                  dish.type === 'veg' || dish.isVeg
+                className={`text-[8px] sm:text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md backdrop-blur-md shadow-md ${dish.type === 'veg' || dish.isVeg
                     ? 'bg-emerald-500/80 text-white border border-emerald-400/40'
                     : 'bg-rose-600/80 text-white border border-rose-400/40'
-                }`}
+                  }`}
               >
                 {dish.type === 'veg' || dish.isVeg ? 'Veg' : 'Non-Veg'}
               </span>
@@ -337,5 +334,6 @@ export const PopularDishes: React.FC = () => {
 };
 
 export default PopularDishes;
+
 
 

@@ -96,8 +96,8 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({ item, isOpen
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className="w-full max-w-lg bg-bg-cardSec border border-white/10 rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col relative max-h-[90vh] sm:max-h-[85vh] shrink-0"
         >
-          {/* Header Image Section - Compact Height */}
-          <div className="relative h-44 sm:h-52 w-full bg-bg-dark shrink-0 overflow-hidden">
+          {/* Hero Header Image Section with Clean Subtle Border */}
+          <div className="relative h-56 sm:h-64 w-full bg-slate-100 dark:bg-slate-800 shrink-0 overflow-hidden border-b border-slate-200/60 dark:border-white/10">
             <ItemImageOrIcon
               image={itemImage}
               name={itemName}
@@ -105,32 +105,31 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({ item, isOpen
               isVeg={isVeg}
               className="w-full h-full object-cover"
               containerClassName="w-full h-full"
-              iconSize={60}
+              iconSize={70}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-bg-cardSec via-black/20 to-black/60 pointer-events-none" />
 
-            {/* Close Button X - High contrast pill */}
+            {/* Swiggy White Floating Close Button (Top Right) */}
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-3 right-3 z-30 w-9 h-9 rounded-full bg-black/60 hover:bg-black text-white border border-white/20 flex items-center justify-center active:scale-90 transition-all shadow-xl cursor-pointer backdrop-blur-md"
-              title="Close details"
+              className="absolute top-3.5 right-3.5 z-30 w-9 h-9 rounded-full bg-white text-slate-800 flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer border border-slate-100"
+              title="Close"
             >
               <X size={18} className="stroke-[2.5]" />
             </button>
 
-            {/* Wishlist Heart Button - Top Left */}
+            {/* Floating Wishlist Heart Button (Top Left) */}
             <button
               type="button"
               onClick={toggleFav}
-              className={`absolute top-3 left-3 z-30 w-9 h-9 rounded-full backdrop-blur-md border flex items-center justify-center active:scale-90 transition-all shadow-md cursor-pointer ${
+              className={`absolute top-3.5 left-3.5 z-30 w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-all shadow-md cursor-pointer border ${
                 isFav
-                  ? 'bg-rose-500/40 border-rose-500/70 text-rose-400'
-                  : 'bg-black/60 hover:bg-black/90 border-white/20 text-white'
+                  ? 'bg-rose-500 border-rose-500 text-white'
+                  : 'bg-white/90 border-slate-100 text-slate-800 hover:bg-white'
               }`}
               title={isFav ? "Remove from Wishlist" : "Add to Wishlist"}
             >
-              <Heart size={16} className={isFav ? "fill-rose-500 text-rose-500 scale-110" : "text-white"} />
+              <Heart size={16} className={isFav ? "fill-white text-white" : "text-slate-800"} />
             </button>
           </div>
 
@@ -143,11 +142,10 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({ item, isOpen
                   {/* Veg/Non-Veg Dot Indicator + Category Badge */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-transparent ${
-                        isVeg
-                          ? 'border-emerald-500/80 text-emerald-400'
-                          : 'border-rose-500/80 text-rose-400'
-                      }`}
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-transparent ${isVeg
+                        ? 'border-emerald-500/80 text-emerald-400'
+                        : 'border-rose-500/80 text-rose-400'
+                        }`}
                     >
                       <span className={`w-3.5 h-3.5 rounded-[3px] border-2 flex items-center justify-center shrink-0 ${isVeg ? 'border-emerald-500' : 'border-rose-500'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
@@ -216,11 +214,10 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({ item, isOpen
                         key={v.id || idx}
                         type="button"
                         onClick={() => setSelectedVariantsMap(prev => ({ ...prev, [dishId]: v }))}
-                        className={`p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-primary/15 border-primary text-primary font-black shadow-md ring-1 ring-primary/40'
-                            : 'bg-bg-dark/40 border-white/10 text-text-secondary hover:border-primary/40'
-                        }`}
+                        className={`p-3 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${isSelected
+                          ? 'bg-primary/15 border-primary text-primary font-black shadow-md ring-1 ring-primary/40'
+                          : 'bg-bg-dark/40 border-white/10 text-text-secondary hover:border-primary/40'
+                          }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-primary bg-primary text-black' : 'border-text-muted'}`}>
@@ -281,11 +278,10 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({ item, isOpen
                   onClick={() => {
                     addToCart(dishPayload, activeVariant);
                   }}
-                  className={`px-6 sm:px-8 py-2.5 sm:py-3 rounded-full font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${
-                    isOutOfStock
-                      ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed'
-                      : 'bg-white text-amber-600 hover:bg-amber-50 border border-amber-300/90'
-                  }`}
+                  className={`px-6 sm:px-8 py-2.5 sm:py-3 rounded-full font-black text-xs sm:text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${isOutOfStock
+                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed'
+                    : 'bg-white text-amber-600 hover:bg-amber-50 border border-amber-300/90'
+                    }`}
                 >
                   <span>{isOutOfStock ? 'Unavailable' : 'ADD'}</span>
                   {!isOutOfStock && <Plus size={16} className="stroke-[3.5] text-amber-600" />}

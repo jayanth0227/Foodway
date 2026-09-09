@@ -159,7 +159,7 @@ export const ItemDetailsPage: React.FC = () => {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
-              className="relative aspect-[4/3] sm:aspect-[4/3] w-full rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-bg-cardSec group"
+              className="relative aspect-[4/3] w-full rounded-3xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10 border border-slate-100 dark:border-slate-800/80 shadow-2xl bg-bg-cardSec group"
             >
               <ItemImageOrIcon
                 image={itemImage}
@@ -170,7 +170,7 @@ export const ItemDetailsPage: React.FC = () => {
                 containerClassName="w-full h-full"
                 iconSize={90}
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-bg-dark via-black/20 to-black/60 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none" />
 
               {/* Floating Top Navigation Icon Bar directly inside Hero */}
               <div className="absolute top-3 left-3 right-3 z-30 flex items-center justify-between pointer-events-auto">
@@ -186,18 +186,15 @@ export const ItemDetailsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={toggleFav}
-                  className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-2xl ${
-                    isFav
-                      ? 'bg-rose-500/40 border-rose-500/70 text-rose-400 shadow-rose-500/30'
-                      : 'bg-black/70 hover:bg-black border-white/20 text-white hover:text-rose-400'
-                  }`}
+                  className={`w-10 h-10 rounded-full backdrop-blur-xl border flex items-center justify-center transition-all active:scale-90 cursor-pointer shadow-2xl ${isFav
+                    ? 'bg-rose-500/40 border-rose-500/70 text-rose-400 shadow-rose-500/30'
+                    : 'bg-black/70 hover:bg-black border-white/20 text-white hover:text-rose-400'
+                    }`}
                   title={isFav ? "Remove from Wishlist" : "Add to Wishlist"}
                 >
                   <Heart size={18} className={isFav ? "fill-rose-500 text-rose-500 scale-110" : "text-white"} />
                 </button>
               </div>
-
-              {/* Badges Overlay on Image Removed as per design preference */}
             </motion.div>
           </div>
 
@@ -207,32 +204,28 @@ export const ItemDetailsPage: React.FC = () => {
             <div className="bg-bg-cardSec/40 border border-white/10 p-4 sm:p-5 rounded-2xl space-y-2.5 backdrop-blur-sm shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1 flex-1">
-                  {/* Veg/Non-Veg Dot Indicator + Category Badge */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-transparent ${
-                        isVeg
-                          ? 'border-emerald-500/80 text-emerald-400'
-                          : 'border-rose-500/80 text-rose-400'
-                      }`}
-                    >
-                      <span className={`w-3.5 h-3.5 rounded-[3px] border-2 flex items-center justify-center shrink-0 ${isVeg ? 'border-emerald-500' : 'border-rose-500'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isVeg ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-                      </span>
-                      <span>{isVeg ? 'Veg' : 'Non-Veg'}</span>
-                    </span>
-
-                    {itemCategory && (
+                  {/* Category Badge & Veg/Non-Veg Dot Icon beside Title */}
+                  {itemCategory && (
+                    <div className="flex items-center gap-2 pb-1">
                       <span className="px-2.5 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-black uppercase tracking-wider bg-primary/10 text-primary border border-primary/25">
                         {itemCategory}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  {/* Main Product Title */}
-                  <h1 className="text-xl sm:text-2xl font-black font-display text-text-primary leading-snug tracking-tight pt-0.5">
-                    {itemName}
-                  </h1>
+                  {/* Main Product Title with Square Veg/Non-Veg Dot Icon */}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <span className={`w-4 h-4 rounded-[4px] border-[1.5px] flex items-center justify-center shrink-0 ${isVeg ? 'border-emerald-500' : 'border-rose-500'}`}>
+                      {isVeg ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      ) : (
+                        <span className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-b-[6px] border-b-rose-500" />
+                      )}
+                    </span>
+                    <h1 className="text-xl sm:text-2xl font-black font-display text-text-primary leading-snug tracking-tight">
+                      {itemName}
+                    </h1>
+                  </div>
 
                   {/* Prepared Fresh By Restaurant & Prep Time */}
                   {(dish.restaurantName || dish.shopName || dish.prepTime) && (
@@ -309,11 +302,10 @@ export const ItemDetailsPage: React.FC = () => {
                         key={v.id || idx}
                         type="button"
                         onClick={() => setSelectedVariant(v)}
-                        className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-primary/15 border-primary text-primary font-black shadow-md ring-1 ring-primary/40 scale-[1.01]'
-                            : 'bg-bg-cardSec/90 border-white/10 text-text-secondary hover:border-primary/40'
-                        }`}
+                        className={`p-3.5 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${isSelected
+                          ? 'bg-primary/15 border-primary text-primary font-black shadow-md ring-1 ring-primary/40 scale-[1.01]'
+                          : 'bg-bg-cardSec/90 border-white/10 text-text-secondary hover:border-primary/40'
+                          }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'border-primary bg-primary text-black' : 'border-text-muted'}`}>
@@ -379,11 +371,10 @@ export const ItemDetailsPage: React.FC = () => {
                 onClick={() => {
                   if (dishPayload) addToCart(dishPayload, activeVariant);
                 }}
-                className={`px-6 sm:px-9 py-2.5 sm:py-3.5 rounded-full font-black text-sm sm:text-base uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${
-                  isOutOfStock
-                    ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed'
-                    : 'bg-white text-amber-600 hover:bg-amber-50 border border-amber-300/90'
-                }`}
+                className={`px-6 sm:px-9 py-2.5 sm:py-3.5 rounded-full font-black text-sm sm:text-base uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0 ${isOutOfStock
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30 cursor-not-allowed'
+                  : 'bg-white text-amber-600 hover:bg-amber-50 border border-amber-300/90'
+                  }`}
               >
                 <span>{isOutOfStock ? 'Unavailable' : 'ADD'}</span>
                 {!isOutOfStock && <Plus size={18} className="stroke-[3.5] text-amber-600" />}
