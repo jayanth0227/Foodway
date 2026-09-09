@@ -6,9 +6,9 @@
 
 :root {
   /* Light Mode Design System */
-  --bg-dark-color: #FAF8F6;
+  --bg-dark-color: #FFFFFF;
   --bg-card: #FFFFFF;
-  --bg-card-sec: #FFF8F2;
+  --bg-card-sec: #FAFAFA;
 
   --color-primary: #C59363;
   --color-primary-dark: #D0A67F;
@@ -22,29 +22,29 @@
   --text-secondary-color: #5B5B5B;
   --text-muted-color: #7B7B7B;
 
-  --border-glass-color: #E9E1D9;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-bg-hover: rgba(255, 255, 255, 0.85);
+  --border-glass-color: #E2E8F0;
+  --glass-bg: #FFFFFF;
+  --glass-bg-hover: #F8FAFC;
 
-  --glow-gold-color: rgba(185, 121, 79, 0.08);
-  --glow-blue-color: rgba(59, 130, 246, 0.08);
+  --glow-gold-color: rgba(185, 121, 79, 0.04);
+  --glow-blue-color: rgba(59, 130, 246, 0.04);
 
   --gold-grad-start: #C59363;
   --gold-grad-mid: #D0A67F;
   --gold-grad-end: #9D6A43;
 
-  --bg-glass-subtle: rgba(197, 147, 99, 0.04);
-  --bg-glass-subtle-hover: rgba(197, 147, 99, 0.08);
+  --bg-glass-subtle: rgba(0, 0, 0, 0.02);
+  --bg-glass-subtle-hover: rgba(0, 0, 0, 0.04);
 
-  --shadow-luxury: 0 18px 60px rgba(0, 0, 0, 0.08);
-  --shadow-luxury-hover: 0 25px 70px rgba(0, 0, 0, 0.12);
+  --shadow-luxury: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow-luxury-hover: 0 8px 30px rgba(0, 0, 0, 0.07);
 
-  --badge-glass-bg: rgba(255, 255, 255, 0.65);
-  --badge-glass-border: rgba(197, 147, 99, 0.16);
+  --badge-glass-bg: #FFFFFF;
+  --badge-glass-border: #E2E8F0;
 
-  --bottom-nav-bg: rgba(255, 255, 255, 0.92);
-  --bottom-nav-border: rgba(197, 147, 99, 0.25);
-  --bottom-nav-shadow: 0 15px 45px rgba(0, 0, 0, 0.12), 0 5px 15px rgba(197, 147, 99, 0.05);
+  --bottom-nav-bg: rgba(255, 255, 255, 0.95);
+  --bottom-nav-border: #E2E8F0;
+  --bottom-nav-shadow: 0 15px 45px rgba(0, 0, 0, 0.08);
 }
 
 .dark {

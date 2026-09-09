@@ -16,7 +16,8 @@ import {
   Building2,
   Calendar,
   Layers,
-  ArrowUpDown
+  ArrowUpDown,
+  ArrowLeft
 } from 'lucide-react';
 import deliveryLocationService from '../../services/deliveryLocation.service';
 import type { DeliveryLocation, CreateLocationDTO, UpdateLocationDTO, DeliveryLocationStatus } from '../../types/deliveryLocation';
@@ -51,14 +52,14 @@ export const AdminDeliveryLocations: React.FC = () => {
     pincode: string;
     latitude: string;
     longitude: string;
-    status: DeliveryLocationStatus;
+    status: DeliveryLocationStatus | '';
   }>({
     name: '',
     region: '',
     pincode: '',
     latitude: '',
     longitude: '',
-    status: 'ACTIVE',
+    status: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -131,7 +132,7 @@ export const AdminDeliveryLocations: React.FC = () => {
       pincode: '',
       latitude: '',
       longitude: '',
-      status: 'ACTIVE',
+      status: '',
     });
     setFormError(null);
     setIsAddModalOpen(true);
@@ -161,6 +162,10 @@ export const AdminDeliveryLocations: React.FC = () => {
       setFormError('Region / Area is required.');
       return;
     }
+    if (!formData.status) {
+      setFormError('Please select Operational Status (Active or Inactive).');
+      return;
+    }
 
     setIsSubmitting(true);
     setFormError(null);
@@ -172,7 +177,7 @@ export const AdminDeliveryLocations: React.FC = () => {
         pincode: formData.pincode.trim() || undefined,
         latitude: formData.latitude.trim() ? Number(formData.latitude) : undefined,
         longitude: formData.longitude.trim() ? Number(formData.longitude) : undefined,
-        status: formData.status,
+        status: formData.status as DeliveryLocationStatus,
       };
 
       const created = await deliveryLocationService.createLocation(dto);
@@ -200,6 +205,11 @@ export const AdminDeliveryLocations: React.FC = () => {
       return;
     }
 
+    if (!formData.status) {
+      setFormError('Please select Operational Status (Active or Inactive).');
+      return;
+    }
+
     setIsSubmitting(true);
     setFormError(null);
 
@@ -210,7 +220,7 @@ export const AdminDeliveryLocations: React.FC = () => {
         pincode: formData.pincode.trim() || undefined,
         latitude: formData.latitude.trim() ? Number(formData.latitude) : undefined,
         longitude: formData.longitude.trim() ? Number(formData.longitude) : undefined,
-        status: formData.status,
+        status: formData.status as DeliveryLocationStatus,
       };
 
       const updated = await deliveryLocationService.updateLocation(editingLocation.locationId, dto);
@@ -284,6 +294,240 @@ export const AdminDeliveryLocations: React.FC = () => {
       return 'N/A';
     }
   };
+
+  if (isAddModalOpen || editingLocation) {
+    return (
+      <div className="space-y-8 animate-fadeIn max-w-5xl mx-auto pb-12">
+        {/* Toast Notification Container */}
+        <div className="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none">
+          <AnimatePresence>
+            {toasts.map((toast) => (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, x: 50, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 50, scale: 0.95 }}
+                className={`pointer-events-auto px-4 py-3 rounded-xl shadow-2xl border text-xs font-bold flex items-center gap-2.5 backdrop-blur-md ${
+                  toast.type === 'success'
+                    ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-950/90 border-rose-500/40 text-rose-300'
+                }`}
+              >
+                {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+                <span>{toast.message}</span>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* Screen Header with Back Button on Right */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-glass pb-6"
+        >
+          <div>
+            <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest mb-1">
+              <MapPin size={14} />
+              <span>Service Territory Management</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black font-display text-text-primary tracking-tight">
+              {editingLocation ? 'Edit Delivery Location' : 'Add New Delivery Location'}
+            </h1>
+            <p className="text-xs text-text-muted font-medium mt-0.5">
+              {editingLocation
+                ? `Modify details and service status for "${editingLocation.name}".`
+                : 'Register a new active service zone for food delivery across Konaseema.'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsAddModalOpen(false);
+              setEditingLocation(null);
+            }}
+            className="px-5 py-2.5 rounded-2xl bg-primary/10 border border-primary/30 text-primary font-extrabold text-xs uppercase tracking-wider flex items-center gap-2.5 shadow-md cursor-pointer shrink-0"
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Locations</span>
+          </button>
+        </motion.div>
+
+        {/* Main Form Container Screen (No heavy bg color) */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-3xl border border-glass/40 bg-transparent p-6 sm:p-8 space-y-8 relative"
+        >
+          {/* Form Error Banner */}
+          {formError && (
+            <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-semibold text-rose-300 flex items-center gap-2.5 shadow-md">
+              <AlertTriangle size={16} className="shrink-0 text-rose-400" />
+              <span>{formError}</span>
+            </div>
+          )}
+
+          <form onSubmit={editingLocation ? handleEditSubmit : handleAddSubmit} className="space-y-8">
+            {/* Section 1: Basic Location Details */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-primary border-b border-glass pb-2">
+                1. Basic Location Information
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* Location Name */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-2">
+                    Location Name <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="e.g. Eethakota"
+                    className="w-full px-4 py-3 rounded-xl bg-bg-dark border border-glass text-xs font-semibold text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted/50"
+                  />
+                </div>
+
+                {/* Region / Area */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-2">
+                    Region / Area <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.region}
+                    onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                    placeholder="e.g. Ravulapalem"
+                    className="w-full px-4 py-3 rounded-xl bg-bg-dark border border-glass text-xs font-semibold text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted/50"
+                  />
+                </div>
+
+                {/* Pincode */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-2">
+                    Pincode <span className="text-text-muted font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.pincode}
+                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                    placeholder="e.g. 533238"
+                    className="w-full px-4 py-3 rounded-xl bg-bg-dark border border-glass text-xs font-mono font-semibold text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted/50"
+                  />
+                  <p className="text-[11px] text-text-muted mt-1.5">
+                    Leave blank if no distinct pincode.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Geographic Coordinates */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-primary border-b border-glass pb-2">
+                2. Geographic Coordinates (Optional)
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2">
+                    Latitude <span className="font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                    placeholder="e.g. 16.8900"
+                    className="w-full px-4 py-3 rounded-xl bg-bg-dark border border-glass text-xs font-mono text-text-primary outline-none focus:border-primary transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-text-muted mb-2">
+                    Longitude <span className="font-normal lowercase">(optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                    placeholder="e.g. 81.8400"
+                    className="w-full px-4 py-3 rounded-xl bg-bg-dark border border-glass text-xs font-mono text-text-primary outline-none focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Operational Status */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-extrabold uppercase tracking-widest text-primary border-b border-glass pb-2">
+                3. Operational Status <span className="text-rose-400">*</span>
+              </h3>
+
+              <div className="grid grid-cols-2 gap-4 max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, status: 'ACTIVE' })}
+                  className={`py-3 px-4 rounded-xl border text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    formData.status === 'ACTIVE'
+                      ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 shadow-md ring-1 ring-emerald-500/30'
+                      : 'bg-bg-dark border-glass text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  <CheckCircle size={16} />
+                  <span>Active</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, status: 'INACTIVE' })}
+                  className={`py-3 px-4 rounded-xl border text-xs font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    formData.status === 'INACTIVE'
+                      ? 'bg-rose-500/20 border-rose-500/50 text-rose-600 dark:text-rose-400 shadow-md ring-1 ring-rose-500/30'
+                      : 'bg-bg-dark border-glass text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  <Power size={16} />
+                  <span>Inactive</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Form Footer Action Buttons */}
+            <div className="pt-6 border-t border-glass flex items-center justify-end gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setEditingLocation(null);
+                }}
+                className="px-6 py-3 rounded-xl border border-glass bg-glass-subtle hover:bg-glass text-text-secondary text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-8 py-3 rounded-xl bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-primary/20 hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Check size={16} />
+                )}
+                <span>{editingLocation ? 'Save Changes' : 'Add Location'}</span>
+              </button>
+            </div>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fadeIn max-w-7xl mx-auto pb-12">
@@ -671,205 +915,14 @@ export const AdminDeliveryLocations: React.FC = () => {
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* ADD / EDIT LOCATION MODAL */}
-      {/* ========================================================= */}
-      <AnimatePresence>
-        {(isAddModalOpen || editingLocation) && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-lg rounded-3xl border border-primary/30 bg-bg-cardSec p-6 sm:p-8 shadow-luxury space-y-6 relative overflow-hidden"
-            >
-              {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-glass pb-5">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-2xl bg-primary/15 text-primary border border-primary/30 shadow-md">
-                    <MapPin size={22} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-black font-display text-text-primary tracking-tight">
-                      {editingLocation ? 'Edit Delivery Location' : 'Add New Delivery Location'}
-                    </h2>
-                    <p className="text-xs text-text-muted font-medium mt-0.5">
-                      {editingLocation ? 'Update operational details for this location.' : 'Register a new active service zone in Konaseema.'}
-                    </p>
-                  </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAddModalOpen(false);
-                    setEditingLocation(null);
-                  }}
-                  className="p-2 rounded-xl bg-glass border border-glass text-text-muted hover:text-text-primary hover:bg-glass-subtle transition-all cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              {/* Form Error Banner */}
-              {formError && (
-                <div className="p-4 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs font-semibold text-rose-300 flex items-center gap-2.5 shadow-md">
-                  <AlertTriangle size={16} className="shrink-0 text-rose-400" />
-                  <span>{formError}</span>
-                </div>
-              )}
-
-              {/* Form Body */}
-              <form onSubmit={editingLocation ? handleEditSubmit : handleAddSubmit} className="space-y-5">
-                
-                {/* Location Name */}
-                <div>
-                  <label className="block text-[10px] font-extrabold uppercase tracking-widest text-text-muted mb-2">
-                    Location Name <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g. Eethakota"
-                    className="w-full px-4 py-3 rounded-xl bg-bg-dark/80 border border-glass text-xs font-semibold text-text-primary outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all placeholder:text-text-muted/50"
-                  />
-                </div>
-
-                {/* Region / Area */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-1.5">
-                    Region / Area <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.region}
-                    onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                    placeholder="e.g. Ravulapalem"
-                    className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass text-xs font-semibold text-text-primary outline-none focus:border-primary transition-all"
-                  />
-                </div>
-
-                {/* Pincode (Optional) */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-1.5">
-                    Pincode <span className="text-text-muted font-normal lowercase">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.pincode}
-                    onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
-                    placeholder="e.g. 533238"
-                    className="w-full px-4 py-2.5 rounded-xl bg-bg-dark border border-glass text-xs font-mono font-semibold text-text-primary outline-none focus:border-primary transition-all"
-                  />
-                  <p className="text-[10px] text-text-muted mt-1">
-                    Leave blank if this location does not have a distinct pincode.
-                  </p>
-                </div>
-
-                {/* Geo Coordinates (Optional Grid) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">
-                      Latitude <span className="font-normal lowercase">(optional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.latitude}
-                      onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                      placeholder="e.g. 16.8900"
-                      className="w-full px-3 py-2 rounded-xl bg-bg-dark border border-glass text-xs font-mono text-text-primary outline-none focus:border-primary"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-text-muted mb-1">
-                      Longitude <span className="font-normal lowercase">(optional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={formData.longitude}
-                      onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                      placeholder="e.g. 81.8400"
-                      className="w-full px-3 py-2 rounded-xl bg-bg-dark border border-glass text-xs font-mono text-text-primary outline-none focus:border-primary"
-                    />
-                  </div>
-                </div>
-
-                {/* Status Toggle */}
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-text-primary mb-1.5">
-                    Status
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, status: 'ACTIVE' })}
-                      className={`py-2.5 rounded-xl border text-xs font-extrabold uppercase transition-all ${
-                        formData.status === 'ACTIVE'
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                          : 'bg-bg-dark border-glass text-text-muted hover:text-text-primary'
-                      }`}
-                    >
-                      Active
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, status: 'INACTIVE' })}
-                      className={`py-2.5 rounded-xl border text-xs font-extrabold uppercase transition-all ${
-                        formData.status === 'INACTIVE'
-                          ? 'bg-rose-500/20 border-rose-500/50 text-rose-600 dark:text-rose-400 shadow-sm'
-                          : 'bg-bg-dark border-glass text-text-muted hover:text-text-primary'
-                      }`}
-                    >
-                      Inactive
-                    </button>
-
-                  </div>
-                </div>
-
-                {/* Modal Footer Buttons */}
-                <div className="pt-4 border-t border-glass flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAddModalOpen(false);
-                      setEditingLocation(null);
-                    }}
-                    className="px-5 py-2.5 rounded-xl border border-glass bg-glass-subtle hover:bg-glass text-text-secondary text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-6 py-2.5 rounded-xl bg-primary text-black font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-primary/20 hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSubmitting ? (
-                      <RefreshCw size={14} className="animate-spin" />
-                    ) : (
-                      <Check size={14} />
-                    )}
-                    <span>{editingLocation ? 'Save Changes' : 'Add Location'}</span>
-                  </button>
-                </div>
-
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* ========================================================= */}
       {/* ACTIVATE / DEACTIVATE CONFIRMATION MODAL */}
       {/* ========================================================= */}
       <AnimatePresence>
         {deactivatingLocation && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 lg:left-64 z-50 flex items-center justify-center p-4 bg-black/60">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -929,7 +982,7 @@ export const AdminDeliveryLocations: React.FC = () => {
       {/* ========================================================= */}
       <AnimatePresence>
         {deletingLocation && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 lg:left-64 z-50 flex items-center justify-center p-4 bg-black/60">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
