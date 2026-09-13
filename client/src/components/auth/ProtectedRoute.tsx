@@ -24,21 +24,36 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
   }
 
   if (!isAuthenticated || !role) {
-    // User is not logged in -> redirect to single login page
+    // User is not logged in -> redirect to login page
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   const userRole = (role || '').toUpperCase() as Role;
   const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole as string);
+  const isDelivery = ['DELIVERY_PARTNER', 'DELIVERY', 'RIDER'].includes(userRole as string);
+  const isAdmin = userRole === 'ADMIN';
 
-  if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(userRole) && !(isShopVendor && (allowedRoles.includes('SHOP') || allowedRoles.includes('RESTAURANT')))) {
+  // Default allowedRoles to ['USER'] if not specified
+  const effectiveAllowedRoles: string[] = (allowedRoles && allowedRoles.length > 0)
+    ? allowedRoles.map(r => (r || '').toUpperCase())
+    : ['USER'];
+
+  const isRoleAuthorized = effectiveAllowedRoles.some(r => {
+    if (r === userRole) return true;
+    if (isShopVendor && ['SHOP', 'RESTAURANT', 'VENDOR'].includes(r)) return true;
+    if (isDelivery && ['DELIVERY_PARTNER', 'DELIVERY', 'RIDER'].includes(r)) return true;
+    if ((userRole === 'USER' || (userRole as string) === 'CUSTOMER') && (r === 'USER' || r === 'CUSTOMER')) return true;
+    return false;
+  });
+
+  if (!isRoleAuthorized) {
     // Authenticated user attempting to access unauthorized role route
-    // Redirect based on user's actual role:
-    if (userRole === 'ADMIN') {
+    // Redirect strictly based on user's actual role:
+    if (isAdmin) {
       return <Navigate to="/admin/dashboard" replace />;
     } else if (isShopVendor) {
       return <Navigate to="/shop/dashboard" replace />;
-    } else if (userRole === 'DELIVERY_PARTNER' || (userRole as string) === 'DELIVERY' || (userRole as string) === 'RIDER') {
+    } else if (isDelivery) {
       return <Navigate to="/delivery/dashboard" replace />;
     } else {
       return <Navigate to="/" replace />;
@@ -49,3 +64,4 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 };
 
 export default ProtectedRoute;
+

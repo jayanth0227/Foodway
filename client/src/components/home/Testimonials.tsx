@@ -34,9 +34,11 @@ export const Testimonials: React.FC = () => {
   if (loading) return <TestimonialsSkeleton />;
 
   return (
-    <section id="testimonials" className="py-12 sm:py-20 lg:py-28 bg-bg-dark border-t border-glass relative overflow-hidden">
-      {/* Decorative ambient background orb */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 sm:w-[500px] h-80 sm:h-[500px] rounded-full bg-primary/5 blur-[140px] pointer-events-none" />
+    <section id="testimonials" className="py-12 sm:py-20 lg:py-28 bg-bg-dark relative overflow-hidden">
+      {/* Subtle decorative edge glows — no center blob */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[1px] bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
+      <div className="absolute -bottom-20 right-0 w-60 sm:w-80 h-60 sm:h-80 rounded-full bg-primary/[0.03] blur-[100px] pointer-events-none" />
+      <div className="absolute -top-20 left-0 w-60 sm:w-80 h-60 sm:h-80 rounded-full bg-accent/[0.03] blur-[100px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 relative z-10">
 
@@ -64,7 +66,7 @@ export const Testimonials: React.FC = () => {
             {/* Custom Navigation Buttons (Desktop & Tablet) */}
             <button
               id="testimonial-prev-btn"
-              className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-bg-card border border-glass text-primary items-center justify-center shadow-luxury hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer"
+              className="hidden sm:flex absolute left-0 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-white dark:bg-[#181C25] border border-slate-200/70 dark:border-white/10 text-primary items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer"
               aria-label="Previous Review"
             >
               <ChevronLeft size={18} />
@@ -72,7 +74,7 @@ export const Testimonials: React.FC = () => {
 
             <button
               id="testimonial-next-btn"
-              className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-bg-card border border-glass text-primary items-center justify-center shadow-luxury hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer"
+              className="hidden sm:flex absolute right-0 top-1/2 -translate-y-1/2 z-30 w-9 h-9 rounded-full bg-white dark:bg-[#181C25] border border-slate-200/70 dark:border-white/10 text-primary items-center justify-center shadow-md hover:bg-primary hover:text-white transition-all duration-300 cursor-pointer"
               aria-label="Next Review"
             >
               <ChevronRight size={18} />
@@ -116,7 +118,7 @@ export const Testimonials: React.FC = () => {
 
                 return (
                   <SwiperSlide key={rev.reviewId || index} className="!h-auto flex">
-                    <div className="bg-bg-card border border-glass rounded-2xl sm:rounded-3xl p-5 sm:p-7 h-full w-full flex flex-col justify-between group relative hover:border-primary/50 transition-all duration-300 shadow-luxury hover:shadow-luxury-hover">
+                    <div className="bg-white dark:bg-[#181C25] border border-slate-200/70 dark:border-white/10 rounded-2xl sm:rounded-3xl p-5 sm:p-7 h-full w-full flex flex-col justify-between group relative hover:border-primary/40 transition-all duration-300 shadow-md hover:shadow-xl">
                       <div className="relative z-10 space-y-4">
                         {/* Top Row: Quote Mark & Rating Pill */}
                         <div className="flex items-center justify-between">
@@ -141,7 +143,7 @@ export const Testimonials: React.FC = () => {
                       </div>
 
                       {/* Bottom Row: User Avatar & Info */}
-                      <div className="flex items-center space-x-3 mt-6 pt-4 border-t border-glass relative z-10">
+                      <div className="flex items-center space-x-3 mt-6 pt-4 border-t border-slate-200/70 dark:border-white/10 relative z-10">
                         <img
                           src={avatar}
                           alt={customerName}

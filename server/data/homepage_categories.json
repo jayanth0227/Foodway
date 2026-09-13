@@ -1,30 +1,5 @@
 [
   {
-    "image": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=600",
-    "badge": "SWEET DELIGHTS",
-    "keywords": [
-      "bakery",
-      "cake",
-      "cakes",
-      "pastry",
-      "pastries",
-      "bread",
-      "puff",
-      "puffs",
-      "cookie",
-      "cookies",
-      "dessert",
-      "sweet",
-      "sweets"
-    ],
-    "name": "Bakery & Cakes",
-    "description": "Fresh Breads, Custom Cakes, Pastries & Confectionery.",
-    "id": "cat_bakery",
-    "isActive": true,
-    "order": 1,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
-  },
-  {
     "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&q=80&w=600",
     "badge": "ICE COLD",
     "keywords": [
@@ -46,8 +21,33 @@
     "description": "Soft Drinks, Packaged Juices, Milkshakes & Water.",
     "id": "cat_beverages",
     "isActive": true,
+    "order": 1,
+    "updatedAt": "2026-09-09T17:47:47.298Z"
+  },
+  {
+    "image": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&q=80&w=600",
+    "badge": "SWEET DELIGHTS",
+    "keywords": [
+      "bakery",
+      "cake",
+      "cakes",
+      "pastry",
+      "pastries",
+      "bread",
+      "puff",
+      "puffs",
+      "cookie",
+      "cookies",
+      "dessert",
+      "sweet",
+      "sweets"
+    ],
+    "name": "Bakery & Cakes",
+    "description": "Fresh Breads, Custom Cakes, Pastries & Confectionery.",
+    "id": "cat_bakery",
+    "isActive": true,
     "order": 2,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
+    "updatedAt": "2026-09-09T17:47:47.298Z"
   },
   {
     "image": "https://images.unsplash.com/photo-1528751014936-863e6e7a319c?auto=format&fit=crop&q=80&w=600",
@@ -69,7 +69,26 @@
     "id": "cat_dairy",
     "isActive": true,
     "order": 3,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
+    "updatedAt": "2026-09-09T17:47:47.298Z"
+  },
+  {
+    "image": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=600",
+    "badge": "FARM FRESH",
+    "keywords": [
+      "fruit",
+      "fruits",
+      "vegetable",
+      "vegetables",
+      "fresh produce",
+      "veggie",
+      "veggies"
+    ],
+    "name": "Fruits & Fresh Vegetables",
+    "description": "Farm Fresh Produce, Organic Vegetables & Seasonal Fruits.",
+    "id": "cat_fruits_veg",
+    "isActive": true,
+    "order": 4,
+    "updatedAt": "2026-09-09T17:47:47.298Z"
   },
   {
     "image": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&q=80&w=600",
@@ -97,46 +116,19 @@
     "description": "Authentic Biryani, Tandoori Kebabs, Meals & Fast Food.",
     "id": "cat_freshfood",
     "isActive": true,
-    "order": 4,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
-  },
-  {
-    "image": "https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&q=80&w=600",
-    "badge": "FARM FRESH",
-    "keywords": [
-      "fruit",
-      "fruits",
-      "vegetable",
-      "vegetables",
-      "fresh produce",
-      "veggie",
-      "veggies"
-    ],
-    "name": "Fruits & Fresh Vegetables",
-    "description": "Farm Fresh Produce, Organic Vegetables & Seasonal Fruits.",
-    "id": "cat_fruits_veg",
-    "isActive": true,
     "order": 5,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
+    "updatedAt": "2026-09-09T17:47:47.298Z"
   },
   {
-    "image": "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600",
-    "badge": "DAILY ESSENTIALS",
-    "keywords": [
-      "grocery",
-      "groceries",
-      "supermarket",
-      "staples",
-      "mart",
-      "provision",
-      "provisions"
-    ],
-    "name": "Groceries & Supermarket",
-    "description": "Rice, Atta, Cooking Oils, Spices, Staples & Daily Packaged Foods.",
+    "image": "https://mk-delivery-services.s3.ap-south-2.amazonaws.com/uploads/1788975192605_fresh_vegetables_badge (1).png",
+    "badge": "Fresh Deal",
+    "keywords": [],
+    "name": "Vegetables",
+    "description": "Fresh, healthy, and farm-picked vegetables delivered to your doorstep.",
     "id": "cat_groceries",
     "isActive": true,
     "order": 6,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
+    "updatedAt": "2026-09-09T17:47:47.298Z"
   },
   {
     "image": "https://images.unsplash.com/photo-1583947215259-38e31be8751f?auto=format&fit=crop&q=80&w=600",
@@ -156,7 +148,7 @@
     "id": "cat_household",
     "isActive": true,
     "order": 7,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
+    "updatedAt": "2026-09-09T17:47:47.298Z"
   },
   {
     "image": "https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&q=80&w=600",
@@ -183,6 +175,6 @@
     "id": "cat_pooja",
     "isActive": true,
     "order": 8,
-    "updatedAt": "2026-09-07T16:14:24.709Z"
+    "updatedAt": "2026-09-09T17:47:47.298Z"
   }
 ]

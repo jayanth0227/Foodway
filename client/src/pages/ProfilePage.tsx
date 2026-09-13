@@ -67,22 +67,38 @@ export const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!isAuthenticated && !user) {
-      navigate('/login', { state: { from: '/profile' } });
+    if (!isAuthenticated || !user) {
+      navigate('/login', { state: { from: '/profile' }, replace: true });
       return;
     }
 
-    if (user) {
-      setName(user.name || '');
-      setEmail(user.email || '');
-      setPhone(user.phone || '');
-      setProfileImage(user.profileImage || '');
-      setAddresses(user.addresses || []);
+    const userRole = (user.role || '').toUpperCase();
+    const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole);
+    const isDelivery = ['DELIVERY_PARTNER', 'DELIVERY', 'RIDER'].includes(userRole);
+    const isAdmin = userRole === 'ADMIN';
 
-      // Also refresh user data from server to get latest
-      refreshAuth();
+    if (isAdmin) {
+      navigate('/admin/dashboard', { replace: true });
+      return;
     }
-  }, [user, isAuthenticated]);
+    if (isShopVendor) {
+      navigate('/shop/dashboard', { replace: true });
+      return;
+    }
+    if (isDelivery) {
+      navigate('/delivery/dashboard', { replace: true });
+      return;
+    }
+
+    setName(user.name || '');
+    setEmail(user.email || '');
+    setPhone(user.phone || '');
+    setProfileImage(user.profileImage || '');
+    setAddresses(user.addresses || []);
+
+    // Also refresh user data from server to get latest
+    refreshAuth();
+  }, [user, isAuthenticated, isLoading, navigate]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

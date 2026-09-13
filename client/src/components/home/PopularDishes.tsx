@@ -11,13 +11,20 @@ import { getWishlist, toggleWishlistItem } from '../../utils/wishlistUtils';
 import { ItemDetailsModal } from '../common/ItemDetailsModal';
 import ItemImageOrIcon from '../common/ItemImageOrIcon';
 
-const FALLBACK_KONASEEMA_DISHES: any[] = [];
+const CATEGORY_TABS = [
+  { id: 'All', label: 'All' },
+  { id: 'Veg', label: 'Veg' },
+  { id: 'Non-Veg', label: 'Non-Veg' },
+  { id: 'Konaseema Specials', label: 'Konaseema Specials' },
+  { id: 'Sweets', label: 'Sweets' },
+];
 
 export const PopularDishes: React.FC = () => {
   const navigate = useNavigate();
   const { addToCart, reduceQuantity, removeFromCart, getItemQuantity } = useCart();
   const [dishes, setDishes] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const list = getWishlist();
@@ -43,19 +50,22 @@ export const PopularDishes: React.FC = () => {
         }
 
         if (dishesRes.data.success && Array.isArray(dishesRes.data.dishes) && dishesRes.data.dishes.length > 0) {
-          let fetched = dishesRes.data.dishes;
+          const allDishes = dishesRes.data.dishes;
           const featuredIds = cmsRes?.data?.cms?.flavoursOfKonaseema?.featuredItemIds;
           if (Array.isArray(featuredIds) && featuredIds.length > 0) {
-            const filtered = fetched.filter((d: any) => featuredIds.includes(d.id) || featuredIds.includes(d._id));
-            if (filtered.length > 0) fetched = filtered;
+            // Only show dishes that the admin has explicitly selected
+            const filtered = allDishes.filter((d: any) => featuredIds.includes(d.id) || featuredIds.includes(d._id));
+            setDishes(filtered);
+          } else {
+            // No featured items selected by admin — show empty
+            setDishes([]);
           }
-          setDishes(fetched);
         } else {
-          setDishes(FALLBACK_KONASEEMA_DISHES);
+          setDishes([]);
         }
       } catch (err) {
-        console.warn('Using fallback Konaseema dishes:', err);
-        setDishes(FALLBACK_KONASEEMA_DISHES);
+        console.warn('Error fetching Konaseema dishes:', err);
+        setDishes([]);
       } finally {
         setLoading(false);
       }
@@ -267,7 +277,17 @@ export const PopularDishes: React.FC = () => {
     );
   };
 
-  const sortedDishes = [...dishes].sort((a, b) => Number(b.rating || 4.8) - Number(a.rating || 4.8));
+  // Apply category filter on the admin-selected dishes
+  const categoryFilteredDishes = dishes.filter((dish) => {
+    if (selectedCategory === 'All') return true;
+    if (selectedCategory === 'Veg') return dish.type === 'veg' || dish.isVeg === true;
+    if (selectedCategory === 'Non-Veg') return dish.type === 'non-veg' || dish.isVeg === false;
+    if (selectedCategory === 'Konaseema Specials') return true;
+    if (selectedCategory === 'Sweets') return (dish.category || '').toLowerCase().includes('sweets') || (dish.category || '').toLowerCase().includes('bakery') || (dish.name || '').toLowerCase().includes('kaja') || (dish.name || '').toLowerCase().includes('laddu');
+    return true;
+  });
+
+  const sortedDishes = [...categoryFilteredDishes].sort((a, b) => Number(b.rating || 4.8) - Number(a.rating || 4.8));
   const visibleDishes = sortedDishes.slice(0, 6);
 
   return (
@@ -277,7 +297,7 @@ export const PopularDishes: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-12 relative z-10 space-y-4 sm:space-y-6">
 
-        {/* Section Header - 100% identical styling with Explore Categories */}
+        {/* Section Header */}
         <div className="flex items-end justify-between mb-4 sm:mb-6 pb-3 border-b border-glass/40 gap-3">
           <div className="space-y-0.5 sm:space-y-1 text-left max-w-xl">
             <h2 className="text-lg sm:text-3xl md:text-4xl font-extrabold font-display text-gradient-gold tracking-tight">
@@ -298,6 +318,28 @@ export const PopularDishes: React.FC = () => {
           </button>
         </div>
 
+        {/* Category Filter Tabs */}
+        {!loading && dishes.length > 0 && (
+          <div className="flex items-center gap-2 sm:gap-2.5 overflow-x-auto no-scrollbar pb-1">
+            {CATEGORY_TABS.map((cat) => {
+              const isActive = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider whitespace-nowrap transition-all duration-300 cursor-pointer shrink-0 border ${
+                    isActive
+                      ? 'bg-primary/20 border-primary text-primary shadow-sm scale-105'
+                      : 'bg-bg-card border-glass text-text-secondary hover:border-primary/50 hover:text-primary'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Dishes Container */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
@@ -310,6 +352,18 @@ export const PopularDishes: React.FC = () => {
             <Utensils size={32} className="mx-auto text-text-muted opacity-50" />
             <h3 className="font-bold text-sm sm:text-base text-text-primary">No Dishes Found</h3>
             <p className="text-xs text-text-muted">No dishes available right now.</p>
+          </div>
+        ) : categoryFilteredDishes.length === 0 ? (
+          <div className="text-center py-10 sm:py-12 glass-panel border border-glass rounded-2xl p-6 sm:p-8 max-w-md mx-auto space-y-2">
+            <Utensils size={32} className="mx-auto text-text-muted opacity-50" />
+            <h3 className="font-bold text-sm sm:text-base text-text-primary">No {selectedCategory} Dishes</h3>
+            <p className="text-xs text-text-muted">No dishes match the selected filter.</p>
+            <button
+              onClick={() => setSelectedCategory('All')}
+              className="mt-2 px-4 py-1.5 rounded-full bg-primary/15 border border-primary/30 text-primary font-black text-xs uppercase tracking-wider hover:bg-primary/25 transition-all cursor-pointer"
+            >
+              Show All
+            </button>
           </div>
         ) : (
           <>
@@ -337,5 +391,3 @@ export const PopularDishes: React.FC = () => {
 };
 
 export default PopularDishes;
-
-

@@ -29,153 +29,6 @@ import { getWishlist, toggleWishlistItem } from '../utils/wishlistUtils';
 import { ItemDetailsModal } from '../components/common/ItemDetailsModal';
 import ItemImageOrIcon from '../components/common/ItemImageOrIcon';
 
-const FALLBACK_KONASEEMA_DISHES = [
-  {
-    id: 'kona-1',
-    name: 'Ghee Motichoor Laddu',
-    restaurantName: 'Vijaya Durga Sweets',
-    price: 160,
-    rating: 4.9,
-    type: 'veg',
-    category: 'Sweets',
-    description: 'Authentic melt-in-mouth golden Motichoor Laddus made with pure ghee and crushed pistachios.',
-    image: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-2',
-    name: 'Special Paneer Kathi Roll',
-    restaurantName: 'Jayanth Foods',
-    price: 180,
-    rating: 4.8,
-    type: 'veg',
-    category: 'Fast Food',
-    description: 'Soft malai paneer cubes tossed in tandoori spices wrapped in a hot crispy laccha paratha.',
-    image: 'https://images.unsplash.com/photo-1567620832903-9fc6debc209f?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-3',
-    name: 'Konaseema Royyala Veepudu',
-    restaurantName: 'Passalapudi Ruchulu',
-    price: 380,
-    rating: 4.9,
-    type: 'non-veg',
-    category: 'Konaseema Specials',
-    description: 'Juicy Godavari prawns tossed with fresh coconut, curry leaves, and traditional village spices.',
-    image: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-4',
-    name: 'Fresh Farm Organic Vegetables',
-    restaurantName: 'Konaseema Fresh Farms',
-    price: 120,
-    rating: 4.9,
-    type: 'veg',
-    category: 'Vegetables & Farm Fresh',
-    description: 'Direct farm-fresh organic carrots, crisp green capsicums, tomatoes, and village greens.',
-    image: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-5',
-    name: 'Gongura Mutton Fry',
-    restaurantName: 'Godavari Village Kitchen',
-    price: 420,
-    rating: 4.8,
-    type: 'non-veg',
-    category: 'Konaseema Specials',
-    description: 'Tender slow-cooked mutton infused with tangy Gongura leaves and authentic Andhra garam masala.',
-    image: 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-6',
-    name: 'Kakinada Gottam Kaja',
-    restaurantName: 'Vijaya Durga Sweets',
-    price: 140,
-    rating: 4.9,
-    type: 'veg',
-    category: 'Sweets',
-    description: 'Traditional juicy Gottam Kaja dripping with aromatic cardamom sugar syrup.',
-    image: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-7',
-    name: 'Godavari Chepala Pulusu',
-    restaurantName: 'Amalapuram Ruchulu',
-    price: 350,
-    rating: 4.9,
-    type: 'non-veg',
-    category: 'Konaseema Specials',
-    description: 'Authentic Godavari river fish simmered in tangy tamarind gravy with raw mangoes and garlic.',
-    image: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-8',
-    name: 'Avakaya Chicken Biryani',
-    restaurantName: 'Godavari Village Kitchen',
-    price: 320,
-    rating: 4.8,
-    type: 'non-veg',
-    category: 'Konaseema Specials',
-    description: 'Fragrant basmati rice dum cooked with juicy chicken marinated in spicy handmade Andhra mango pickle.',
-    image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-9',
-    name: 'Traditional Pootharekulu',
-    restaurantName: 'Vijaya Durga Sweets',
-    price: 220,
-    rating: 5.0,
-    type: 'veg',
-    category: 'Sweets',
-    description: 'Famous paper-thin rice starch wrappers filled with pure ghee, powdered jaggery, and dry fruits.',
-    image: 'https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-10',
-    name: 'Panasa Pattu Biryani',
-    restaurantName: 'Passalapudi Ruchulu',
-    price: 280,
-    rating: 4.7,
-    type: 'veg',
-    category: 'Konaseema Specials',
-    description: 'Unique Konaseema delicacy made with tender raw jackfruit shreds cooked in rich aromatic biryani spices.',
-    image: 'https://images.unsplash.com/photo-1633945274405-b6c8069047b0?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-11',
-    name: 'Crispy Butter Dosa Platter',
-    restaurantName: 'Jayanth Foods',
-    price: 110,
-    rating: 4.8,
-    type: 'veg',
-    category: 'Fast Food',
-    description: 'Golden crispy butter dosa served with coconut chutney, ginger chutney, and hot sambar.',
-    image: 'https://images.unsplash.com/photo-1668236543090-82eba5ee5976?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  },
-  {
-    id: 'kona-12',
-    name: 'Natukodi Kodi Kura',
-    restaurantName: 'Amalapuram Ruchulu',
-    price: 390,
-    rating: 4.9,
-    type: 'non-veg',
-    category: 'Konaseema Specials',
-    description: 'Country chicken cooked in traditional clay pot with freshly ground black pepper and roasted coconut.',
-    image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=800&q=85',
-    isAvailable: true
-  }
-];
-
 export const DishesPage: React.FC = () => {
   const navigate = useNavigate();
   const { addToCart, reduceQuantity, removeFromCart, getItemQuantity, totalItemsCount, totalAmount } = useCart();
@@ -199,15 +52,30 @@ export const DishesPage: React.FC = () => {
     const fetchDishes = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`${API_BASE_URL}/public/dishes`);
-        if (response.data.success && Array.isArray(response.data.dishes) && response.data.dishes.length > 0) {
-          setDishes(response.data.dishes);
+        // Fetch both dishes and CMS config to filter by admin-selected items
+        const [dishesRes, cmsRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/public/dishes`),
+          axios.get(`${API_BASE_URL}/cms/homepage`).catch(() => ({ data: null }))
+        ]);
+
+        if (dishesRes.data.success && Array.isArray(dishesRes.data.dishes) && dishesRes.data.dishes.length > 0) {
+          const allDishes = dishesRes.data.dishes;
+          const featuredIds = cmsRes?.data?.cms?.flavoursOfKonaseema?.featuredItemIds;
+
+          if (Array.isArray(featuredIds) && featuredIds.length > 0) {
+            // Only show dishes that the admin has explicitly selected
+            const filtered = allDishes.filter((d: any) => featuredIds.includes(d.id) || featuredIds.includes(d._id));
+            setDishes(filtered);
+          } else {
+            // No featured items selected by admin — show empty
+            setDishes([]);
+          }
         } else {
-          setDishes(FALLBACK_KONASEEMA_DISHES);
+          setDishes([]);
         }
       } catch (err) {
-        console.warn('Error fetching dishes, using fallbacks:', err);
-        setDishes(FALLBACK_KONASEEMA_DISHES);
+        console.warn('Error fetching dishes:', err);
+        setDishes([]);
       } finally {
         setLoading(false);
       }
@@ -277,11 +145,10 @@ export const DishesPage: React.FC = () => {
       } else if (selectedCategory === 'Non-Veg') {
         matchesCat = dish.type === 'non-veg' || dish.isVeg === false;
       } else if (selectedCategory === 'Konaseema Specials') {
-        matchesCat = (dish.category || '').toLowerCase().includes('konaseema') || (dish.name || '').toLowerCase().includes('konaseema');
+        // All admin-selected dishes are Konaseema specials — show all of them
+        matchesCat = true;
       } else if (selectedCategory === 'Sweets') {
-        matchesCat = (dish.category || '').toLowerCase().includes('sweets') || (dish.name || '').toLowerCase().includes('kaja') || (dish.name || '').toLowerCase().includes('laddu');
-      } else if (selectedCategory === 'Fast Food') {
-        matchesCat = (dish.category || '').toLowerCase().includes('fast') || (dish.name || '').toLowerCase().includes('roll') || (dish.name || '').toLowerCase().includes('dosa');
+        matchesCat = (dish.category || '').toLowerCase().includes('sweets') || (dish.category || '').toLowerCase().includes('bakery') || (dish.name || '').toLowerCase().includes('kaja') || (dish.name || '').toLowerCase().includes('laddu');
       }
 
       return matchesSearch && matchesCat;
@@ -368,7 +235,6 @@ export const DishesPage: React.FC = () => {
                 { id: 'Non-Veg', label: 'Non-Veg' },
                 { id: 'Konaseema Specials', label: 'Konaseema Specials' },
                 { id: 'Sweets', label: 'Sweets & Bakery' },
-                { id: 'Fast Food', label: 'Fast Food' },
               ].map((cat) => {
                 const isActive = selectedCategory === cat.id;
 
@@ -577,3 +443,4 @@ export const DishesPage: React.FC = () => {
 };
 
 export default DishesPage;
+

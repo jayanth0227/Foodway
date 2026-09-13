@@ -138,8 +138,8 @@ const AppContent: React.FC = () => {
   const normPath = (location.pathname || '').replace(/\/+$/, '').toLowerCase();
 
   const isPortalRoute = normPath.startsWith('/admin') ||
-    normPath.startsWith('/shop/dashboard') ||
-    normPath.startsWith('/restaurant/dashboard') ||
+    normPath.startsWith('/shop') ||
+    normPath.startsWith('/restaurant') ||
     normPath.startsWith('/delivery') ||
     normPath === '/login' ||
     normPath === '/register';
@@ -149,8 +149,8 @@ const AppContent: React.FC = () => {
       {/* Global Elements */}
       <OrderBuzzerBanner />
       {!isPortalRoute && <Navbar onOpenAuth={openAuthModal} />}
-      <CartSidebar />
-      <FloatingCartBar />
+      {!isPortalRoute && <CartSidebar />}
+      {!isPortalRoute && <FloatingCartBar />}
       <OfflineDetector />
 
       {/* Main Page Content */}
@@ -168,11 +168,18 @@ const AppContent: React.FC = () => {
           <Route path="/shops/:id" element={<PublicCustomerRoute><ShopDetailsPage /></PublicCustomerRoute>} />
           <Route path="/cart" element={<PublicCustomerRoute><CartPage /></PublicCustomerRoute>} />
           <Route path="/wishlist" element={<PublicCustomerRoute><WishlistPage /></PublicCustomerRoute>} />
-          <Route path="/orders" element={<CustomerOrdersPage />} />
+          <Route
+            path="/orders"
+            element={
+              <ProtectedRoute allowedRoles={['USER']}>
+                <CustomerOrdersPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/profile"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <ProfilePage />
               </ProtectedRoute>
             }
@@ -180,7 +187,7 @@ const AppContent: React.FC = () => {
           <Route
             path="/profile/address/new"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <AddressFormPage />
               </ProtectedRoute>
             }
@@ -188,7 +195,7 @@ const AppContent: React.FC = () => {
           <Route
             path="/profile/address/edit/:addressId"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['USER']}>
                 <AddressFormPage />
               </ProtectedRoute>
             }
@@ -269,7 +276,7 @@ const AppContent: React.FC = () => {
           <Route
             path="/shop/dashboard"
             element={
-              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT', 'ADMIN']}>
+              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT']}>
                 <ShopDashboard />
               </ProtectedRoute>
             }
@@ -277,7 +284,7 @@ const AppContent: React.FC = () => {
           <Route
             path="/restaurant/dashboard"
             element={
-              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT', 'ADMIN']}>
+              <ProtectedRoute allowedRoles={['SHOP', 'RESTAURANT']}>
                 <ShopDashboard />
               </ProtectedRoute>
             }
@@ -287,7 +294,7 @@ const AppContent: React.FC = () => {
           <Route
             path="/delivery/dashboard"
             element={
-              <ProtectedRoute allowedRoles={['DELIVERY_PARTNER', 'ADMIN']}>
+              <ProtectedRoute allowedRoles={['DELIVERY_PARTNER']}>
                 <DeliveryDashboard />
               </ProtectedRoute>
             }

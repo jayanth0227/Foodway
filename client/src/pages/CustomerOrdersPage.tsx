@@ -48,6 +48,30 @@ export const CustomerOrdersPage: React.FC = () => {
 
 
   useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated || !user) {
+      navigate('/login', { state: { from: '/orders' }, replace: true });
+      return;
+    }
+
+    const userRole = (user.role || '').toUpperCase();
+    const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole);
+    const isDelivery = ['DELIVERY_PARTNER', 'DELIVERY', 'RIDER'].includes(userRole);
+    const isAdmin = userRole === 'ADMIN';
+
+    if (isAdmin) {
+      navigate('/admin/dashboard', { replace: true });
+      return;
+    }
+    if (isShopVendor) {
+      navigate('/shop/dashboard', { replace: true });
+      return;
+    }
+    if (isDelivery) {
+      navigate('/delivery/dashboard', { replace: true });
+      return;
+    }
+
     if (user) {
       fetchCustomerOrders(false);
       const custId = user.id || user.email;

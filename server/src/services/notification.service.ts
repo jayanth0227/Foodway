@@ -769,16 +769,14 @@ export class NotificationService {
 
           body:
             `Order #${orderId}\n` +
-            `Customer: ${customerName}\n` +
-            `Amount: ₹${totalAmount}`,
+            `Customer: ${customerName}`,
 
           data: {
             orderId,
             restaurantId,
             type: 'NEW_ORDER',
             role: 'RESTAURANT',
-            customerName,
-            totalAmount: String(totalAmount)
+            customerName
           },
 
           link:

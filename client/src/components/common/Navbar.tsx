@@ -165,6 +165,12 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
     navigate('/login', { replace: true });
   };
 
+  const userRole = (role || '').toUpperCase();
+  const isShopVendor = ['RESTAURANT', 'SHOP', 'VENDOR'].includes(userRole);
+  const isAdmin = userRole === 'ADMIN';
+  const isDelivery = ['DELIVERY_PARTNER', 'DELIVERY', 'RIDER'].includes(userRole);
+  const isCustomer = userRole === 'USER' || (!isAdmin && !isShopVendor && !isDelivery);
+
   return (
     <>
       <header
@@ -275,13 +281,21 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             <button
               onClick={() => {
                 if (isAuthenticated) {
-                  setIsProfileModalOpen(true);
+                  if (isAdmin) {
+                    navigate('/admin/dashboard');
+                  } else if (isShopVendor) {
+                    navigate('/shop/dashboard');
+                  } else if (isDelivery) {
+                    navigate('/delivery/dashboard');
+                  } else {
+                    setIsProfileModalOpen(true);
+                  }
                 } else {
                   onOpenAuth('login');
                 }
               }}
               className="lg:hidden relative p-2 text-text-secondary hover:text-primary transition-all duration-300 rounded-full bg-glass-subtle border border-glass hover:border-primary/30 group cursor-pointer shrink-0"
-              title="Profile & Account"
+              title={isCustomer ? "Profile & Account" : "Dashboard"}
               aria-label="Profile"
             >
               {isAuthenticated && user?.name ? (
@@ -320,7 +334,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
             <div className="hidden sm:flex items-center space-x-3 pl-3 border-l border-glass">
               {isAuthenticated && user ? (
                 <>
-                  {role === 'ADMIN' && location.pathname !== '/admin/dashboard' && (
+                  {isAdmin && (
                     <Link
                       to="/admin/dashboard"
                       className="text-xs font-bold tracking-[0.12em] uppercase text-primary hover:text-primary-dark transition-colors mr-2"
@@ -328,33 +342,54 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
                       Admin Dashboard
                     </Link>
                   )}
-                  {role === 'RESTAURANT' && location.pathname !== '/restaurant/dashboard' && (
+                  {isShopVendor && (
                     <Link
-                      to="/restaurant/dashboard"
+                      to="/shop/dashboard"
                       className="text-xs font-bold tracking-[0.12em] uppercase text-primary hover:text-primary-dark transition-colors mr-2"
                     >
-                      Restaurant Portal
+                      Vendor Portal
                     </Link>
                   )}
-                  <button
-                    onClick={() => navigate('/orders')}
-                    className="inline-flex items-center space-x-1 text-xs font-bold uppercase tracking-wider text-text-secondary hover:text-primary transition-colors mr-2 cursor-pointer"
-                    title="My Orders & Status"
-                  >
-                    <Package size={14} />
-                    <span>My Orders</span>
-                  </button>
+                  {isDelivery && (
+                    <Link
+                      to="/delivery/dashboard"
+                      className="text-xs font-bold tracking-[0.12em] uppercase text-primary hover:text-primary-dark transition-colors mr-2"
+                    >
+                      Delivery Portal
+                    </Link>
+                  )}
 
-                  {/* Profile Indicator */}
+                  {isCustomer && (
+                    <>
+                      <button
+                        onClick={() => navigate('/orders')}
+                        className="inline-flex items-center space-x-1 text-xs font-bold uppercase tracking-wider text-text-secondary hover:text-primary transition-colors mr-2 cursor-pointer"
+                        title="My Orders & Status"
+                      >
+                        <Package size={14} />
+                        <span>My Orders</span>
+                      </button>
+
+                      {/* Profile Indicator */}
+                      <button
+                        onClick={() => navigate('/profile')}
+                        className="flex items-center space-x-2 bg-glass-subtle hover:bg-glass border border-glass hover:border-primary/40 rounded-xl px-3 py-1.5 transition-all cursor-pointer group"
+                        title="View & Edit Profile Details"
+                      >
+                        <UserIcon size={14} className="text-primary group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-text-secondary group-hover:text-primary transition-colors">
+                          Hi, {user.name.split(' ')[0]}
+                        </span>
+                      </button>
+                    </>
+                  )}
+
                   <button
-                    onClick={() => navigate('/profile')}
-                    className="flex items-center space-x-2 bg-glass-subtle hover:bg-glass border border-glass hover:border-primary/40 rounded-xl px-3 py-1.5 transition-all cursor-pointer group"
-                    title="View & Edit Profile Details"
+                    onClick={handleLogoutClick}
+                    className="text-xs font-bold text-red-500 hover:text-red-600 transition-colors uppercase tracking-wider ml-1 cursor-pointer"
+                    title="Sign Out"
                   >
-                    <UserIcon size={14} className="text-primary group-hover:scale-110 transition-transform" />
-                    <span className="text-xs font-bold text-text-secondary group-hover:text-primary transition-colors">
-                      Hi, {user.name.split(' ')[0]}
-                    </span>
+                    Logout
                   </button>
                 </>
               ) : (

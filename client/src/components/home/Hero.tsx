@@ -439,7 +439,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               onFocus={() => setIsSecondaryFocused(true)}
               onBlur={() => setIsSecondaryFocused(false)}
               disabled={isExploring}
-              className={`flex-1 sm:flex-none group font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center gap-2 transition-all duration-300 ease-out bg-white/95 dark:bg-bg-card/95 backdrop-blur-xl border-2 border-primary/60 dark:border-primary/50 text-slate-900 dark:text-white shadow-luxury hover:bg-primary hover:text-black hover:border-primary hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:scale-95 ${
+              className={`flex-1 sm:flex-none group font-bold text-[11px] sm:text-xs py-3 sm:py-4 px-4 sm:px-8 rounded-xl text-center uppercase tracking-wider sm:tracking-widest min-w-[130px] sm:min-w-[170px] relative flex items-center justify-center gap-2 transition-all duration-300 ease-out bg-white/95 dark:bg-white/[0.06] backdrop-blur-xl border-2 border-primary/60 dark:border-primary/70 text-slate-900 dark:text-primary shadow-luxury dark:shadow-[0_8px_32px_rgba(197,147,99,0.12)] hover:bg-primary hover:text-black hover:border-primary hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:scale-95 ${
                 isSecondaryFocused ? 'ring-2 ring-primary ring-offset-2 ring-offset-bg-dark' : ''
               } ${isExploring ? 'opacity-85 cursor-not-allowed' : ''}`}
             >
@@ -467,8 +467,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
             transition={{ duration: 1, delay: 0.6 }}
             className="grid grid-cols-3 gap-2.5 sm:gap-4 pt-4 w-full max-w-xl mx-auto lg:mx-0 lg:flex lg:flex-wrap lg:w-auto"
           >
-            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
-              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-black/50 border border-slate-200/80 dark:border-primary/25 px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 text-primary flex items-center justify-center shrink-0">
                 <User size={15} className="sm:w-4 sm:h-4" />
               </div>
               <div className="flex flex-col text-left min-w-0">
@@ -481,8 +481,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
-              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-black/50 border border-slate-200/80 dark:border-primary/25 px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 text-primary flex items-center justify-center shrink-0">
                 <Store size={15} className="sm:w-4 sm:h-4" />
               </div>
               <div className="flex flex-col text-left min-w-0">
@@ -495,8 +495,8 @@ export const Hero: React.FC<HeroProps> = ({ onOpenAuth }) => {
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-bg-card/90 border border-slate-200/80 dark:border-glass px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury backdrop-blur-xl shrink-0 min-w-0">
-              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 bg-white/80 dark:bg-black/50 border border-slate-200/80 dark:border-primary/25 px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl shadow-luxury dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] backdrop-blur-xl shrink-0 min-w-0">
+              <div className="w-7 h-7 sm:w-8 h-8 rounded-xl bg-primary/10 dark:bg-primary/20 border border-primary/20 dark:border-primary/30 text-primary flex items-center justify-center shrink-0">
                 <Clock size={15} className="sm:w-4 sm:h-4" />
               </div>
               <div className="flex flex-col text-left min-w-0">

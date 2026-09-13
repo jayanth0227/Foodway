@@ -352,6 +352,14 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response) =>
       return res.status(401).json({ success: false, error: 'Not authenticated.' });
     }
 
+    const userRole = (req.user.role || '').toUpperCase();
+    if (userRole !== 'USER' && (userRole as any) !== 'CUSTOMER') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden: Only customer accounts can manage customer profile and delivery addresses.'
+      });
+    }
+
     const userId = req.user.id;
     const { name, email, phone, profileImage, addresses } = req.body;
 
