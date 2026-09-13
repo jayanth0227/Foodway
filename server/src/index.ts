@@ -3500,6 +3500,76 @@ app.get('/api/delivery-partner/duty-status/:partnerIdentifier', async (req: Requ
   }
 });
 
+// Update Delivery Partner Details
+app.put('/api/admin/delivery-partners/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, password, vehicleType, vehicleNumber } = req.body;
+    const cleanId = decodeURIComponent(id || '').trim().toLowerCase();
+
+    if (!name || !email) {
+      return res.status(400).json({ success: false, error: 'Name and email are required.' });
+    }
+
+    if (usersTableName) {
+      const scanCmd = new ScanCommand({ TableName: usersTableName });
+      const scanResp = await dynamoDocClient.send(scanCmd);
+      const items = scanResp.Items || [];
+
+      const targetUser = items.find((u: any) =>
+        (u.userId && String(u.userId).trim().toLowerCase() === cleanId) ||
+        (u.id && String(u.id).trim().toLowerCase() === cleanId) ||
+        (u.email && String(u.email).trim().toLowerCase() === cleanId)
+      );
+
+      if (targetUser) {
+        const updatedUser: any = {
+          ...targetUser,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phone: phone !== undefined ? phone : targetUser.phone,
+          vehicleType: vehicleType || targetUser.vehicleType || 'Bike',
+          vehicleNumber: vehicleNumber !== undefined ? vehicleNumber : targetUser.vehicleNumber,
+          updatedAt: new Date().toISOString()
+        };
+
+        if (password && password.trim()) {
+          updatedUser.password = await hashPassword(password);
+        }
+
+        await dynamoDocClient.send(
+          new PutCommand({
+            TableName: usersTableName,
+            Item: updatedUser
+          })
+        );
+
+        return res.json({
+          success: true,
+          message: `Delivery partner "${updatedUser.name}" details updated successfully.`,
+          partner: {
+            id: updatedUser.userId || updatedUser.id,
+            userId: updatedUser.userId || updatedUser.id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            phone: updatedUser.phone,
+            vehicleType: updatedUser.vehicleType,
+            vehicleNumber: updatedUser.vehicleNumber,
+            status: updatedUser.status || 'ACTIVE',
+            dutyStatus: updatedUser.dutyStatus || 'ON_DUTY',
+            role: 'DELIVERY_PARTNER'
+          }
+        });
+      }
+    }
+
+    return res.status(404).json({ success: false, error: 'Delivery partner not found.' });
+  } catch (error: any) {
+    console.error('Error updating delivery partner:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update delivery partner.', details: error.message });
+  }
+});
+
 // Delete Delivery Partner
 app.delete('/api/admin/delivery-partners/:id', async (req: Request, res: Response) => {
   try {

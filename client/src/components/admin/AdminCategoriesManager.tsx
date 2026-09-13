@@ -45,6 +45,16 @@ export const AdminCategoriesManager: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<HomepageCategory | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
 
+  // Keywords expansion toggle state per category
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Record<string, boolean>>({});
+
+  const toggleCategoryKeywords = (catId: string) => {
+    setExpandedCategoryIds(prev => ({
+      ...prev,
+      [catId]: !prev[catId]
+    }));
+  };
+
   const fetchCategories = async () => {
     setLoading(true);
     try {
@@ -294,21 +304,22 @@ export const AdminCategoriesManager: React.FC = () => {
           {filteredCategories.map((cat, idx) => {
             const isFirst = idx === 0;
             const isLast = idx === filteredCategories.length - 1;
+            const catKey = cat.id || `cat_idx_${idx}`;
+            const isExpanded = Boolean(expandedCategoryIds[catKey]);
 
             return (
-              <motion.div
-                key={cat.id}
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`glass-panel border rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 relative overflow-hidden shadow-sm ${
-                  cat.isActive !== false ? 'border-glass bg-bg-card' : 'border-glass/40 bg-bg-dark/40 opacity-70'
+              <div
+                key={catKey}
+                className={`glass-panel border rounded-3xl p-5 flex flex-col justify-between relative overflow-hidden shadow-sm ${
+                  cat.isActive !== false
+                    ? 'border-slate-200 dark:border-glass bg-white dark:bg-bg-card'
+                    : 'border-slate-200/50 dark:border-glass/40 bg-slate-50/70 dark:bg-bg-dark/40 opacity-75'
                 }`}
               >
                 <div>
                   {/* Top row: thumbnail + badge + status */}
                   <div className="flex items-start justify-between gap-3 mb-3.5">
-                    <div className="w-16 h-16 rounded-xl overflow-hidden border border-glass shrink-0 bg-black/40">
+                    <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200 dark:border-glass shrink-0 bg-slate-100 dark:bg-black/40 shadow-inner relative">
                       <img
                         src={cat.image || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600'}
                         alt={cat.name}
@@ -323,19 +334,28 @@ export const AdminCategoriesManager: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => handleToggleActive(cat)}
-                        className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 transition-all cursor-pointer ${
+                        className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-xs ${
                           cat.isActive !== false
-                            ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25'
-                            : 'bg-slate-500/15 border border-slate-500/30 text-slate-400 hover:bg-slate-500/25'
+                            ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/25'
+                            : 'bg-slate-200/80 dark:bg-slate-500/15 border border-slate-300 dark:border-slate-500/30 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-500/25'
                         }`}
                         title={cat.isActive !== false ? 'Click to hide on homepage' : 'Click to show on homepage'}
                       >
-                        {cat.isActive !== false ? <Eye size={11} /> : <EyeOff size={11} />}
-                        <span>{cat.isActive !== false ? 'Active' : 'Hidden'}</span>
+                        {cat.isActive !== false ? (
+                          <>
+                            <Eye size={11} />
+                            <span>Active</span>
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff size={11} />
+                            <span>Hidden</span>
+                          </>
+                        )}
                       </button>
 
                       {cat.badge && (
-                        <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-wider bg-primary/15 border border-primary/30 text-primary">
+                        <span className="px-2.5 py-0.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider bg-[#B87C44]/10 dark:bg-primary/15 border border-[#B87C44]/30 dark:border-primary/30 text-[#B87C44] dark:text-primary">
                           {cat.badge}
                         </span>
                       )}
@@ -345,44 +365,56 @@ export const AdminCategoriesManager: React.FC = () => {
                   {/* Title & Description */}
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="w-5 h-5 rounded-md bg-primary/10 border border-primary/20 text-[10px] font-black text-primary flex items-center justify-center shrink-0">
+                      <span className="w-6 h-6 rounded-lg bg-[#B87C44]/10 dark:bg-primary/15 border border-[#B87C44]/30 dark:border-primary/30 text-[11px] font-black text-[#B87C44] dark:text-primary flex items-center justify-center shrink-0 shadow-2xs">
                         {cat.order || idx + 1}
                       </span>
-                      <h3 className="font-display font-bold text-text-primary text-sm sm:text-base truncate">
+                      <h3 className="font-display font-bold text-slate-900 dark:text-text-primary text-base truncate">
                         {cat.name}
                       </h3>
                     </div>
-                    <p className="text-xs text-text-muted line-clamp-2 leading-relaxed font-medium pl-7">
+                    <p className="text-xs text-slate-500 dark:text-text-muted line-clamp-2 leading-relaxed font-medium pl-8">
                       {cat.description || 'No description provided.'}
                     </p>
                   </div>
 
-                  {/* Keywords tags */}
+                  {/* Keywords tags with Interactive Expand/Collapse Toggle */}
                   {Array.isArray(cat.keywords) && cat.keywords.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-3 pl-7">
-                      {cat.keywords.slice(0, 4).map((kw, ki) => (
-                        <span key={ki} className="text-[9px] font-semibold text-text-muted/80 bg-glass px-1.5 py-0.5 rounded">
+                    <div className="flex flex-wrap items-center gap-1.5 mt-3 pl-8">
+                      {(isExpanded ? cat.keywords : cat.keywords.slice(0, 4)).map((kw, ki) => (
+                        <span
+                          key={ki}
+                          className="text-[10px] font-medium text-slate-600 dark:text-text-muted bg-slate-100 dark:bg-glass border border-slate-200 dark:border-glass/60 px-2 py-0.5 rounded-lg"
+                        >
                           #{kw}
                         </span>
                       ))}
                       {cat.keywords.length > 4 && (
-                        <span className="text-[9px] font-semibold text-text-muted/60">
-                          +{cat.keywords.length - 4} more
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleCategoryKeywords(catKey);
+                          }}
+                          className="text-[10px] font-extrabold text-[#B87C44] dark:text-primary bg-[#B87C44]/10 dark:bg-primary/10 hover:bg-[#B87C44]/25 dark:hover:bg-primary/25 border border-[#B87C44]/30 dark:border-primary/30 px-2 py-0.5 rounded-lg cursor-pointer flex items-center gap-0.5 shadow-xs"
+                          title={isExpanded ? 'Click to show fewer tags' : `Click to view all ${cat.keywords.length} tags`}
+                        >
+                          <span>{isExpanded ? 'Show less' : `+${cat.keywords.length - 4} more`}</span>
+                        </button>
                       )}
                     </div>
                   )}
                 </div>
 
                 {/* Card Action Footer */}
-                <div className="flex items-center justify-between border-t border-glass pt-3 mt-4">
+                <div className="flex items-center justify-between border-t border-slate-100 dark:border-glass pt-3 mt-4">
                   {/* Reorder Buttons */}
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
                       disabled={isFirst}
                       onClick={() => handleMoveOrder(idx, 'up')}
-                      className="p-1.5 rounded-lg border border-glass bg-glass hover:bg-glass-subtle text-text-muted hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="p-1.5 rounded-xl border border-slate-200 dark:border-glass bg-slate-50 dark:bg-glass hover:bg-slate-100 dark:hover:bg-glass-subtle text-slate-600 dark:text-text-muted hover:text-[#B87C44] dark:hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
                       title="Move Earlier in Homepage"
                     >
                       <ArrowUp size={13} />
@@ -391,7 +423,7 @@ export const AdminCategoriesManager: React.FC = () => {
                       type="button"
                       disabled={isLast}
                       onClick={() => handleMoveOrder(idx, 'down')}
-                      className="p-1.5 rounded-lg border border-glass bg-glass hover:bg-glass-subtle text-text-muted hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                      className="p-1.5 rounded-xl border border-slate-200 dark:border-glass bg-slate-50 dark:bg-glass hover:bg-slate-100 dark:hover:bg-glass-subtle text-slate-600 dark:text-text-muted hover:text-[#B87C44] dark:hover:text-primary transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
                       title="Move Later in Homepage"
                     >
                       <ArrowDown size={13} />
@@ -403,7 +435,7 @@ export const AdminCategoriesManager: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => navigate(`/admin/categories/edit/${cat.id}`)}
-                      className="px-2.5 py-1.5 rounded-xl border border-glass hover:border-primary/40 bg-glass hover:bg-primary/10 text-text-primary hover:text-primary font-bold text-[11px] transition-all flex items-center gap-1 cursor-pointer"
+                      className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-glass hover:border-[#B87C44]/40 bg-white dark:bg-glass hover:bg-[#B87C44]/10 text-slate-800 dark:text-text-primary hover:text-[#B87C44] dark:hover:text-primary font-bold text-[11px] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Edit2 size={12} />
                       <span>Edit</span>
@@ -412,14 +444,14 @@ export const AdminCategoriesManager: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setDeleteTarget(cat)}
-                      className="p-1.5 rounded-xl border border-rose-500/20 hover:border-rose-500/50 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-all cursor-pointer"
+                      className="p-1.5 rounded-xl border border-rose-500/20 hover:border-rose-500/50 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 transition-all cursor-pointer"
                       title="Delete Category"
                     >
                       <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             );
           })}
         </div>

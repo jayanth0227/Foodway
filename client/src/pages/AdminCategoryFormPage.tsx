@@ -14,7 +14,8 @@ import {
   EyeOff,
   Sparkles,
   Save,
-  ArrowRight
+  ArrowRight,
+  Upload
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
@@ -119,6 +120,60 @@ export const AdminCategoryFormPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // S3 Upload states
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select a valid image file (JPG, PNG, WebP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError('Image file size should be less than 5MB.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    setUploadSuccess(false);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string;
+        const res = await axios.post(`${API_BASE_URL}/admin/upload-s3`, {
+          fileName: file.name,
+          fileType: file.type,
+          fileData: base64Data
+        });
+
+        if (res.data.success && res.data.fileUrl) {
+          setForm(prev => ({ ...prev, image: res.data.fileUrl }));
+          setUploadSuccess(true);
+          setTimeout(() => setUploadSuccess(false), 3500);
+        } else {
+          setUploadError(res.data.error || 'Failed to upload image to S3 bucket.');
+        }
+      } catch (err: any) {
+        console.error('Error uploading image to S3:', err);
+        setUploadError(err.response?.data?.error || 'Server error occurred while uploading image to S3.');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    reader.onerror = () => {
+      setIsUploading(false);
+      setUploadError('Failed to read image file.');
+    };
+  };
 
   useEffect(() => {
     if (isEditing && categoryId) {
@@ -227,7 +282,7 @@ export const AdminCategoryFormPage: React.FC = () => {
             <span>Back to Store Categories</span>
           </button>
 
-          <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-primary">
+          <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-[#B87C44]/10 border border-[#B87C44]/30 text-[#B87C44] dark:text-primary">
             Admin Console
           </span>
         </div>
@@ -246,11 +301,11 @@ export const AdminCategoryFormPage: React.FC = () => {
           >
             {/* Form Section Header */}
             <div className="flex items-start gap-4 border-b border-slate-200 dark:border-glass/50 pb-6">
-              <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 dark:text-primary shrink-0 shadow-inner">
+              <div className="w-14 h-14 rounded-2xl bg-[#B87C44]/15 border border-[#B87C44]/30 flex items-center justify-center text-[#B87C44] dark:text-primary shrink-0 shadow-inner">
                 <LayoutGrid size={30} />
               </div>
               <div>
-                <span className="text-[10px] font-black uppercase text-amber-600 dark:text-primary tracking-widest block">
+                <span className="text-[10px] font-black uppercase text-[#B87C44] dark:text-primary tracking-widest block">
                   Catalog & Homepage Management
                 </span>
                 <h1 className="text-2xl sm:text-3xl font-black font-display text-slate-900 dark:text-white tracking-tight">
@@ -280,7 +335,7 @@ export const AdminCategoryFormPage: React.FC = () => {
             {/* Quick Presets & Ideas Bar */}
             <div className="p-4 rounded-2xl bg-slate-100 dark:bg-bg-dark/60 border border-slate-200 dark:border-glass space-y-2.5">
               <div className="flex items-center gap-2">
-                <Sparkles size={14} className="text-amber-500" />
+                <Sparkles size={14} className="text-[#B87C44] dark:text-primary" />
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-700 dark:text-text-secondary">
                   Quick Presets & Ideas (Click to Autofill)
                 </span>
@@ -291,7 +346,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                     key={idx}
                     type="button"
                     onClick={() => handleApplyPreset(preset)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-glass bg-white dark:bg-glass hover:border-amber-500 dark:hover:border-primary text-[11px] font-bold text-slate-800 dark:text-text-primary hover:text-amber-600 dark:hover:text-primary whitespace-nowrap transition-all shadow-sm cursor-pointer shrink-0"
+                    className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-glass bg-white dark:bg-glass hover:border-[#B87C44] dark:hover:border-primary text-[11px] font-bold text-slate-800 dark:text-text-primary hover:text-[#B87C44] dark:hover:text-primary whitespace-nowrap transition-all shadow-sm cursor-pointer shrink-0"
                   >
                     {preset.name}
                   </button>
@@ -313,7 +368,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                     value={form.name}
                     onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g. Meat, Chicken & Fish"
-                    className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-amber-500 dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-bold transition-all"
+                    className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-[#B87C44] dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-bold transition-all"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-text-muted">
                     Main heading shown on category card and in customer store search.
@@ -330,7 +385,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                     value={form.badge}
                     onChange={(e) => setForm(prev => ({ ...prev, badge: e.target.value }))}
                     placeholder="e.g. FRESH CUTS or TEMPLE SPECIAL"
-                    className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-amber-500 dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-bold transition-all"
+                    className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-[#B87C44] dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-bold transition-all"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-text-muted">
                     Small highlighted tag on card corner (e.g. "HOT & FRESH", "20 MINS").
@@ -349,46 +404,96 @@ export const AdminCategoryFormPage: React.FC = () => {
                   value={form.description}
                   onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="e.g. Fresh cleaned chicken, tender mutton, sea fish, prawns & crabs delivered clean."
-                  className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-amber-500 dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-medium resize-none transition-all"
+                  className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-[#B87C44] dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-medium resize-none transition-all"
                 />
               </div>
 
-              {/* Image URL & Live Preview Row */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-black text-slate-600 dark:text-text-muted uppercase tracking-wider">
-                  Image URL *
-                </label>
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <div className="flex-1 w-full">
-                    <input
-                      type="url"
-                      required
-                      value={form.image}
-                      onChange={(e) => setForm(prev => ({ ...prev, image: e.target.value }))}
-                      placeholder="https://images.unsplash.com/photo-..."
-                      className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-amber-500 dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-mono transition-all"
-                    />
-                    <p className="text-[10px] text-slate-500 dark:text-text-muted mt-1">
-                      Direct image link (Unsplash, AWS S3, or CDN URL).
-                    </p>
-                  </div>
+              {/* Category Image - S3 Upload & URL Input Row */}
+              <div className="space-y-3 p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-bg-dark/60 border border-slate-200 dark:border-glass">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-black text-slate-700 dark:text-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <ImageIcon size={15} className="text-[#B87C44] dark:text-primary" />
+                    <span>Category Image (Upload to S3 Bucket or Enter URL) *</span>
+                  </label>
+                  <span className="text-[10px] font-bold text-[#B87C44] dark:text-primary bg-[#B87C44]/10 border border-[#B87C44]/30 px-2.5 py-0.5 rounded-full">
+                    AWS S3 Storage Integrated
+                  </span>
+                </div>
 
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                   {/* Thumbnail Preview */}
-                  <div className="w-20 h-20 rounded-2xl overflow-hidden border border-slate-200 dark:border-glass bg-black/20 shrink-0 shadow-md">
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden border border-slate-300 dark:border-glass bg-slate-100 dark:bg-bg-dark shrink-0 relative group shadow-md">
                     {form.image ? (
                       <img
                         src={form.image}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
+                        alt="Category Preview"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600';
                         }}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <ImageIcon size={24} />
+                      <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-text-muted p-2 text-center">
+                        <ImageIcon size={28} />
+                        <span className="text-[9px] font-bold mt-1">No Image</span>
                       </div>
                     )}
+
+                    {isUploading && (
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                        <RefreshCw className="animate-spin mb-1 text-primary" size={18} />
+                        <span>Uploading...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Input and Upload Controls */}
+                  <div className="flex-1 w-full space-y-3">
+                    {/* S3 File Upload Button */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="px-4 py-2.5 rounded-xl bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black font-extrabold text-xs uppercase tracking-wider shadow-md hover:brightness-110 transition-all flex items-center gap-2 cursor-pointer shrink-0">
+                        {isUploading ? (
+                          <RefreshCw size={15} className="animate-spin" />
+                        ) : (
+                          <Upload size={15} />
+                        )}
+                        <span>{isUploading ? 'Uploading to S3...' : 'Upload Image File to S3'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={isUploading}
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {uploadSuccess && (
+                        <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                          <CheckCircle size={14} /> Uploaded to AWS S3 Bucket!
+                        </span>
+                      )}
+                    </div>
+
+                    {uploadError && (
+                      <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                        <AlertTriangle size={14} /> {uploadError}
+                      </p>
+                    )}
+
+                    {/* Manual Image URL Input */}
+                    <div>
+                      <input
+                        type="url"
+                        required
+                        value={form.image}
+                        onChange={(e) => setForm(prev => ({ ...prev, image: e.target.value }))}
+                        placeholder="https://...s3.amazonaws.com/uploads/..."
+                        className="w-full bg-white dark:bg-bg-dark border border-slate-300 dark:border-glass focus:border-[#B87C44] dark:focus:border-primary text-slate-900 dark:text-white px-4 py-2.5 rounded-xl outline-none text-xs font-mono transition-all shadow-xs"
+                      />
+                      <p className="text-[10px] text-slate-500 dark:text-text-muted mt-1">
+                        Images are stored in AWS S3 bucket; S3 public URLs are saved in DynamoDB (<code className="font-mono text-[#B87C44] dark:text-primary">foodway-categories</code>).
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -404,7 +509,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                     min="1"
                     value={form.order}
                     onChange={(e) => setForm(prev => ({ ...prev, order: parseInt(e.target.value) || 1 }))}
-                    className="w-full bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-amber-500 dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-2.5 rounded-xl outline-none text-xs font-bold"
+                    className="w-full bg-white dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-[#B87C44] dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-2.5 rounded-xl outline-none text-xs font-bold"
                   />
                   <p className="text-[10px] text-slate-500 dark:text-text-muted mt-1">
                     Lower number appears earlier in the homepage categories list.
@@ -417,7 +522,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                     id="pageActiveToggle"
                     checked={form.isActive}
                     onChange={(e) => setForm(prev => ({ ...prev, isActive: e.target.checked }))}
-                    className="w-5 h-5 rounded text-amber-500 focus:ring-amber-500/40 bg-white dark:bg-bg-dark border-slate-300 dark:border-glass cursor-pointer"
+                    className="w-5 h-5 rounded text-[#B87C44] accent-[#B87C44] focus:ring-[#B87C44]/40 bg-white dark:bg-bg-dark border-slate-300 dark:border-glass cursor-pointer"
                   />
                   <div>
                     <label htmlFor="pageActiveToggle" className="text-xs font-bold text-slate-900 dark:text-text-primary cursor-pointer block">
@@ -440,7 +545,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                   value={form.keywords}
                   onChange={(e) => setForm(prev => ({ ...prev, keywords: e.target.value }))}
                   placeholder="e.g. meat, chicken, mutton, fish, seafood, non-veg"
-                  className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-amber-500 dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-medium transition-all"
+                  className="w-full bg-slate-50 dark:bg-bg-dark border border-slate-200 dark:border-glass focus:border-[#B87C44] dark:focus:border-primary text-slate-900 dark:text-text-primary px-4 py-3 rounded-2xl outline-none text-xs font-medium transition-all"
                 />
                 <p className="text-[10px] text-slate-500 dark:text-text-muted">
                   These keywords link dish items and merchant stores to this category when users filter and search.
@@ -462,7 +567,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                       />
                     </div>
                     {form.badge && (
-                      <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-primary">
+                      <span className="px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider bg-[#B87C44]/15 border border-[#B87C44]/30 text-[#B87C44] dark:text-primary">
                         {form.badge}
                       </span>
                     )}
@@ -477,7 +582,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-glass text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                     <span>Explore Stores</span>
-                    <ArrowRight size={11} className="text-amber-500" />
+                    <ArrowRight size={11} className="text-[#B87C44] dark:text-primary" />
                   </div>
                 </div>
               </div>
@@ -494,7 +599,7 @@ export const AdminCategoryFormPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="w-full sm:flex-1 py-3.5 px-6 rounded-2xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-widest shadow-lg hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full sm:flex-1 py-3.5 px-6 rounded-2xl bg-[#B87C44] dark:bg-[#D9A36C] text-white dark:text-black font-black text-xs uppercase tracking-widest shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {saving ? (
                     <>

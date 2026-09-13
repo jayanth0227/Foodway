@@ -149,13 +149,12 @@ export const DeliveryTransitVisualTracker: React.FC<DeliveryTransitVisualTracker
                 {/* Step Node */}
                 <div className="flex flex-col items-center text-center space-y-1 z-10 shrink-0 min-w-[65px] sm:min-w-[85px]">
                   <div
-                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-500 border shadow-xs backdrop-blur-md ${
-                      isCurrent
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all duration-500 border shadow-xs backdrop-blur-md ${isCurrent
                         ? st.activeStyle
                         : isCompleted
-                        ? st.completedStyle
-                        : 'bg-slate-200/80 dark:bg-white/10 text-text-muted border-slate-300/80 dark:border-white/10'
-                    }`}
+                          ? st.completedStyle
+                          : 'bg-slate-200/80 dark:bg-white/10 text-text-muted border-slate-300/80 dark:border-white/10'
+                      }`}
                   >
                     {isCompleted ? (
                       <CheckCircle2 size={16} className="stroke-[2.5]" />
@@ -165,13 +164,12 @@ export const DeliveryTransitVisualTracker: React.FC<DeliveryTransitVisualTracker
                   </div>
 
                   <p
-                    className={`text-[10px] sm:text-[11px] font-extrabold leading-tight ${
-                      isCurrent
+                    className={`text-[10px] sm:text-[11px] font-extrabold leading-tight ${isCurrent
                         ? st.activeText
                         : isCompleted
-                        ? 'text-text-primary font-bold'
-                        : 'text-text-muted'
-                    }`}
+                          ? 'text-text-primary font-bold'
+                          : 'text-text-muted'
+                      }`}
                   >
                     {st.title}
                   </p>
@@ -181,9 +179,8 @@ export const DeliveryTransitVisualTracker: React.FC<DeliveryTransitVisualTracker
                 {idx < steps.length - 1 && (
                   <div className="flex-1 h-1 mx-1 sm:mx-2 rounded-full overflow-hidden bg-slate-200/80 dark:bg-white/10 relative mt-3.5">
                     <div
-                      className={`h-full transition-all duration-700 bg-gradient-to-r ${
-                        idx < currentStep ? st.lineColor : 'bg-transparent'
-                      }`}
+                      className={`h-full transition-all duration-700 bg-gradient-to-r ${idx < currentStep ? st.lineColor : 'bg-transparent'
+                        }`}
                       style={{ width: idx < currentStep ? '100%' : '0%' }}
                     />
                   </div>

@@ -47,7 +47,8 @@ import {
   Utensils,
   Package,
   CheckCircle2,
-  XCircle
+  XCircle,
+  IndianRupee
 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
@@ -302,38 +303,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     return '1 Pc';
   };
 
-  const filteredOrders = orders.filter(o => {
-    const q = orderSearch.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      (o.id || o.orderId || '').toLowerCase().includes(q) ||
-      (o.customerName || o.customer?.name || '').toLowerCase().includes(q) ||
-      (o.customerPhone || o.customer?.phone || '').includes(q) ||
-      (o.restaurantName || o.restaurant || '').toLowerCase().includes(q);
+  const filteredOrders = orders
+    .filter(o => {
+      const q = orderSearch.toLowerCase().trim();
+      const matchesSearch =
+        !q ||
+        (o.id || o.orderId || '').toLowerCase().includes(q) ||
+        (o.customerName || o.customer?.name || '').toLowerCase().includes(q) ||
+        (o.customerPhone || o.customer?.phone || '').includes(q) ||
+        (o.restaurantName || o.restaurant || '').toLowerCase().includes(q);
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    const statusLower = (o.orderStatus || o.status || '').toString().toLowerCase();
-    const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
+      const statusLower = (o.orderStatus || o.status || '').toString().toLowerCase();
+      const isFinalized = statusLower === 'completed' || statusLower === 'delivered' || statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
 
-    if (orderStatusFilter === 'All') {
-      return !isFinalized;
-    }
+      if (orderStatusFilter === 'All') {
+        return !isFinalized;
+      }
 
-    if (orderStatusFilter === 'Completed') {
-      return statusLower === 'completed' || statusLower === 'delivered';
-    }
+      if (orderStatusFilter === 'Completed') {
+        return statusLower === 'completed' || statusLower === 'delivered';
+      }
 
-    if (orderStatusFilter === 'Rejected') {
-      return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
-    }
+      if (orderStatusFilter === 'Rejected') {
+        return statusLower === 'rejected' || statusLower === 'cancelled' || statusLower === 'reject';
+      }
 
-    if (orderStatusFilter === 'Order History') {
+      if (orderStatusFilter === 'Order History') {
+        return true;
+      }
+
       return true;
-    }
-
-    return true;
-  });
+    })
+    .sort((a, b) => {
+      const timeA = new Date(a.createdAt || a.orderedAt || a.createdTime || a.date || 0).getTime();
+      const timeB = new Date(b.createdAt || b.orderedAt || b.createdTime || b.date || 0).getTime();
+      return timeB - timeA; // Recent / newest orders first
+    });
 
   const getTabOrderCount = (st: string) => {
     return orders.filter(o => {
@@ -480,8 +487,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     }
   };
 
-  const deleteDeliveryPartner = async (id: string) => {
-    if (!window.confirm('Are you sure you want to remove this Delivery Partner from the database?')) return;
+  const [deletingPartner, setDeletingPartner] = useState<any | null>(null);
+
+  const confirmDeleteDeliveryPartner = async (id: string) => {
     try {
       setDbDeliveryPartners(prev => prev.filter(p => p.id !== id && p.userId !== id));
       const res = await axios.delete(`${API_BASE_URL}/admin/delivery-partners/${encodeURIComponent(id)}`);
@@ -671,7 +679,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
     try {
       const response = await axios.get(`${API_BASE_URL}/admin/orders`);
       if (response.data.success && Array.isArray(response.data.orders)) {
-        setOrders(response.data.orders);
+        const sorted = [...response.data.orders].sort((a: any, b: any) => {
+          const timeA = new Date(a.createdAt || a.orderedAt || a.createdTime || a.date || 0).getTime();
+          const timeB = new Date(b.createdAt || b.orderedAt || b.createdTime || b.date || 0).getTime();
+          return timeB - timeA;
+        });
+        setOrders(sorted);
       }
     } catch (err) {
       console.error('Error fetching admin orders:', err);
@@ -1203,7 +1216,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
       {/* Desktop Sidebar Navigation */}
       <aside
         data-lenis-prevent
-        className="hidden lg:flex fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-40 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex-col justify-between shrink-0 shadow-2xl"
+        className="hidden lg:flex fixed inset-y-0 left-0 w-64 bg-bg-dark/95 backdrop-blur-xl border-r border-glass z-50 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen flex-col justify-between shrink-0 shadow-2xl"
       >
         {/* Sidebar Header */}
         <div className="p-6 border-b border-glass flex items-center justify-between">
@@ -1673,13 +1686,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                   </div>
 
                   <div className="glass-panel border border-glass rounded-xl p-5 flex items-center gap-4 hover:border-success/20 transition-all duration-300 shadow-sm">
-                    <div className="p-3 rounded-lg bg-success/10 text-success font-black flex items-center justify-center w-11 h-11 text-base">
-                      $
+                    <div className="p-3 rounded-lg bg-success/10 text-success flex items-center justify-center w-11 h-11">
+                      <IndianRupee size={18} />
                     </div>
                     <div>
                       <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest block">Total Revenue</span>
                       <h4 className="text-xl font-black text-success mt-0.5 font-display">
-                        ${orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).reduce((acc, o) => acc + (o.total || 0), 0).toFixed(2)}
+                        ₹{orders.filter(o => o.restaurant.toLowerCase() === selectedResProfile.name.toLowerCase()).reduce((acc, o) => acc + (o.total || 0), 0).toFixed(2)}
                       </h4>
                     </div>
                   </div>
@@ -1760,87 +1773,89 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                           No vendor menu products found for this establishment.
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {vendorMenuItems
-                            .filter(dish => selectedVendorCategory === 'All' || (dish.category || '').toLowerCase() === selectedVendorCategory.toLowerCase())
-                            .map(dish => (
-                              <div key={dish.id} className="flex gap-4 p-3.5 rounded-xl border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
-                                <ItemImageOrIcon
-                                  image={dish.image}
-                                  name={dish.name}
-                                  category={dish.category}
-                                  isVeg={dish.isVeg}
-                                  className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
-                                  containerClassName="w-16 h-16 rounded-lg border border-glass shrink-0 shadow-sm"
-                                  iconSize={20}
-                                  showCategoryLabel={false}
-                                />
-                                <div className="min-w-0 flex-grow flex flex-col justify-between">
-                                  <div>
-                                    <div className="flex justify-between items-start gap-1">
-                                      <h4 className="text-xs font-bold text-text-primary truncate">{dish.name}</h4>
-                                      {/* Availability Badge (Requirement 6) */}
-                                      <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${dish.isAvailable !== false && dish.status !== 'disabled'
-                                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                          : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                                        }`}>
-                                        {dish.isAvailable !== false && dish.status !== 'disabled' ? 'Available' : 'Out of Stock'}
-                                      </span>
+                        <div className="max-h-[460px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-primary/30">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {vendorMenuItems
+                              .filter(dish => selectedVendorCategory === 'All' || (dish.category || '').toLowerCase() === selectedVendorCategory.toLowerCase())
+                              .map(dish => (
+                                <div key={dish.id} className="flex gap-4 p-3.5 rounded-xl border border-glass/40 bg-glass-subtle/50 hover:border-primary/20 transition-all">
+                                  <ItemImageOrIcon
+                                    image={dish.image}
+                                    name={dish.name}
+                                    category={dish.category}
+                                    isVeg={dish.isVeg}
+                                    className="w-16 h-16 rounded-lg object-cover border border-glass shrink-0 shadow-sm"
+                                    containerClassName="w-16 h-16 rounded-lg border border-glass shrink-0 shadow-sm"
+                                    iconSize={20}
+                                    showCategoryLabel={false}
+                                  />
+                                  <div className="min-w-0 flex-grow flex flex-col justify-between">
+                                    <div>
+                                      <div className="flex justify-between items-start gap-1">
+                                        <h4 className="text-xs font-bold text-text-primary truncate">{dish.name}</h4>
+                                        {/* Availability Badge (Requirement 6) */}
+                                        <span className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${dish.isAvailable !== false && dish.status !== 'disabled'
+                                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                            : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                          }`}>
+                                          {dish.isAvailable !== false && dish.status !== 'disabled' ? 'Available' : 'Out of Stock'}
+                                        </span>
+                                      </div>
+                                      <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
+                                        {dish.description || 'Vendor Menu Product'}
+                                      </p>
+
+                                      {/* Variant expand button if item has variants */}
+                                      {dish.variants && dish.variants.length > 0 && (
+                                        <div className="mt-2">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleAdminExpandVariants(dish.id)}
+                                            className="w-full flex items-center justify-between px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-bold transition-all cursor-pointer"
+                                          >
+                                            <span>{dish.variants.length} Variants Available</span>
+                                            <span>{expandedAdminItemIds[dish.id] ? '▲' : '▼'}</span>
+                                          </button>
+
+                                          {expandedAdminItemIds[dish.id] && (
+                                            <div className="mt-1.5 p-2 rounded-lg bg-bg-dark/90 border border-glass space-y-1">
+                                              {dish.variants.map((v: any, vIdx: number) => (
+                                                <div key={v.id || vIdx} className="flex items-center justify-between text-[10px] text-text-secondary border-b border-glass/30 last:border-0 py-0.5">
+                                                  <span>{v.label || `${v.quantity} ${v.unit}`}</span>
+                                                  <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
-                                    <p className="text-[9px] text-text-muted mt-0.5 line-clamp-2 leading-relaxed font-semibold">
-                                      {dish.description || 'Vendor Menu Product'}
-                                    </p>
 
-                                    {/* Variant expand button if item has variants */}
-                                    {dish.variants && dish.variants.length > 0 && (
-                                      <div className="mt-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleAdminExpandVariants(dish.id)}
-                                          className="w-full flex items-center justify-between px-2 py-1 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-bold transition-all cursor-pointer"
-                                        >
-                                          <span>{dish.variants.length} Variants Available</span>
-                                          <span>{expandedAdminItemIds[dish.id] ? '▲' : '▼'}</span>
-                                        </button>
+                                    <div className="flex justify-between items-center mt-2.5">
+                                      {/* Price in ₹ (Requirement 6) */}
+                                      <span className="text-xs font-black font-display text-primary">
+                                        ₹{(dish.price || 0).toFixed(2)}
+                                      </span>
 
-                                        {expandedAdminItemIds[dish.id] && (
-                                          <div className="mt-1.5 p-2 rounded-lg bg-bg-dark/90 border border-glass space-y-1">
-                                            {dish.variants.map((v: any, vIdx: number) => (
-                                              <div key={v.id || vIdx} className="flex items-center justify-between text-[10px] text-text-secondary border-b border-glass/30 last:border-0 py-0.5">
-                                                <span>{v.label || `${v.quantity} ${v.unit}`}</span>
-                                                <span className="font-extrabold text-primary">₹{Number(v.price).toFixed(2)}</span>
-                                              </div>
-                                            ))}
-                                          </div>
+                                      <div className="flex items-center gap-1.5">
+                                        {/* Category Name (Requirement 6) */}
+                                        <span className="text-[8px] font-bold text-text-muted uppercase bg-glass px-1.5 py-0.5 rounded border border-glass">
+                                          {dish.category || 'General'}
+                                        </span>
+
+                                        {/* Veg / Non-Veg badge (Requirement 6) */}
+                                        {(dish.isVeg !== undefined || dish.type) && (
+                                          <span className={`text-[8px] font-extrabold uppercase px-1 py-0.5 rounded border ${dish.isVeg || dish.type === 'veg' ? 'bg-success/10 border-success/20 text-success' : 'bg-error/10 border-error/20 text-error'
+                                            }`}>
+                                            {dish.isVeg || dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
+                                          </span>
                                         )}
                                       </div>
-                                    )}
-                                  </div>
-
-                                  <div className="flex justify-between items-center mt-2.5">
-                                    {/* Price in ₹ (Requirement 6) */}
-                                    <span className="text-xs font-black font-display text-primary">
-                                      ₹{(dish.price || 0).toFixed(2)}
-                                    </span>
-
-                                    <div className="flex items-center gap-1.5">
-                                      {/* Category Name (Requirement 6) */}
-                                      <span className="text-[8px] font-bold text-text-muted uppercase bg-glass px-1.5 py-0.5 rounded border border-glass">
-                                        {dish.category || 'General'}
-                                      </span>
-
-                                      {/* Veg / Non-Veg badge (Requirement 6) */}
-                                      {(dish.isVeg !== undefined || dish.type) && (
-                                        <span className={`text-[8px] font-extrabold uppercase px-1 py-0.5 rounded border ${dish.isVeg || dish.type === 'veg' ? 'bg-success/10 border-success/20 text-success' : 'bg-error/10 border-error/20 text-error'
-                                          }`}>
-                                          {dish.isVeg || dish.type === 'veg' ? 'Veg' : 'Non-Veg'}
-                                        </span>
-                                      )}
                                     </div>
                                   </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -2420,13 +2435,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                         key={st}
                         type="button"
                         onClick={() => setOrderStatusFilter(st)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 ${isActive
-                          ? 'bg-primary text-black font-black shadow-sm'
-                          : 'bg-glass text-text-secondary hover:text-primary border border-glass/60'
+                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${isActive
+                          ? 'bg-primary/15 border-primary/40 text-primary font-black shadow-sm'
+                          : 'bg-transparent border-transparent text-text-secondary hover:text-primary hover:bg-glass-subtle/40'
                           }`}
                       >
                         <span>{st}</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-black/20 text-black' : 'bg-primary/20 text-primary'
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${isActive ? 'bg-primary/25 text-primary' : 'bg-slate-200/50 dark:bg-glass-subtle text-text-muted'
                           }`}>
                           {count}
                         </span>
@@ -2525,8 +2540,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                                   <span>{restaurantName}</span>
                                 </span>
 
-                                <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 text-[11px] font-mono">
-                                  🛒 {totalItemsQty} item{totalItemsQty !== 1 ? 's' : ''}
+                                <span className="px-2 py-0.5 rounded-md bg-glass text-text-muted border border-glass/60 text-[11px] font-mono inline-flex items-center gap-1">
+                                  <ShoppingBag size={12} className="text-primary" />
+                                  <span>{totalItemsQty} item{totalItemsQty !== 1 ? 's' : ''}</span>
                                 </span>
                               </div>
                             </div>
@@ -2801,14 +2817,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
                               <p className="text-xs text-text-secondary truncate" title={partner.email}>{partner.email}</p>
                               <p className="text-[11px] text-text-muted font-mono">{partner.phone || 'No phone'}</p>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => deleteDeliveryPartner(partner.id || partner.userId)}
-                              className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer shrink-0"
-                              title="Remove Partner"
-                            >
-                              <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => navigate('/admin/delivery-partners/new', { state: { editPartner: partner } })}
+                                className="p-1.5 rounded-lg border border-slate-200 dark:border-glass text-slate-600 dark:text-text-muted hover:text-primary transition-colors cursor-pointer"
+                                title="Edit Delivery Partner"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeletingPartner(partner)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500 hover:text-white transition-all cursor-pointer"
+                                title="Remove Partner"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
 
                           {/* Active order chip if on ride */}
@@ -3743,6 +3769,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
           </>
         )}
       </AnimatePresence>
+
+      {/* Delete Delivery Partner Custom Confirmation Modal */}
+      {deletingPartner && (
+        <div className="fixed inset-0 lg:left-64 z-[99995] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-bg-darkSec border border-slate-200 dark:border-glass rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-6"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-500 shrink-0 shadow-inner">
+                <Trash2 size={24} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Delete Delivery Partner?</h3>
+                <p className="text-xs font-medium text-slate-600 dark:text-text-muted mt-1 leading-relaxed">
+                  Are you sure you want to remove delivery partner <span className="font-bold text-slate-900 dark:text-white">"{deletingPartner.name || deletingPartner.email}"</span> from the database? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-glass/40">
+              <button
+                type="button"
+                onClick={() => setDeletingPartner(null)}
+                className="px-5 py-2.5 rounded-xl border border-slate-300 dark:border-glass text-slate-700 dark:text-text-muted hover:bg-slate-100 dark:hover:bg-glass font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const partnerId = deletingPartner.id || deletingPartner.userId;
+                  setDeletingPartner(null);
+                  confirmDeleteDeliveryPartner(partnerId);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg hover:shadow-rose-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                <span>Delete Partner</span>
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
