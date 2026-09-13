@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Lenis from 'lenis';
 import { CartProvider } from './context/CartContext';
@@ -202,8 +202,8 @@ const AppContent: React.FC = () => {
           />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Login />} />
-          <Route path="/admin" element={<Login />} />
-          <Route path="/admin/login" element={<Login />} />
+          <Route path="/admin" element={<Navigate to="/login" replace />} />
+          <Route path="/admin/login" element={<Navigate to="/login" replace />} />
           <Route
             path="/admin/dashboard"
             element={
@@ -269,10 +269,10 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route path="/shop" element={<Login />} />
-          <Route path="/shop/login" element={<Login />} />
-          <Route path="/restaurant" element={<Login />} />
-          <Route path="/restaurant/login" element={<Login />} />
+          <Route path="/shop" element={<Navigate to="/login" replace />} />
+          <Route path="/shop/login" element={<Navigate to="/login" replace />} />
+          <Route path="/restaurant" element={<Navigate to="/login" replace />} />
+          <Route path="/restaurant/login" element={<Navigate to="/login" replace />} />
           <Route
             path="/shop/dashboard"
             element={
@@ -289,8 +289,8 @@ const AppContent: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          <Route path="/delivery" element={<Login />} />
-          <Route path="/delivery/login" element={<Login />} />
+          <Route path="/delivery" element={<Navigate to="/login" replace />} />
+          <Route path="/delivery/login" element={<Navigate to="/login" replace />} />
           <Route
             path="/delivery/dashboard"
             element={

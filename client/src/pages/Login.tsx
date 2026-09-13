@@ -142,23 +142,15 @@ export const Login: React.FC = () => {
   const { login, register, logout, isLoading, isAuthenticated, role } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
-  const currentPath = (location.pathname || '').toLowerCase();
-  const isAdminPortal = currentPath === '/admin' || currentPath === '/admin/login';
-  const isShopPortal = currentPath === '/shop' || currentPath === '/shop/login' || currentPath === '/restaurant' || currentPath === '/restaurant/login';
-  const isDeliveryPortal = currentPath === '/delivery' || currentPath === '/delivery/login';
-  const isCustomerPortal = !isAdminPortal && !isShopPortal && !isDeliveryPortal;
-
   React.useEffect(() => {
-    if (!isCustomerPortal) {
-      setAuthType('login');
-    } else if ((location.state as any)?.authType) {
+    if ((location.state as any)?.authType) {
       setAuthType((location.state as any).authType);
     } else if (location.pathname === '/register') {
       setAuthType('register');
-    } else if (location.pathname === '/login') {
+    } else {
       setAuthType('login');
     }
-  }, [location.pathname, location.state, isCustomerPortal]);
+  }, [location.pathname, location.state]);
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -203,55 +195,17 @@ export const Login: React.FC = () => {
         const isDelivery = ['DELIVERY_PARTNER', 'DELIVERY', 'RIDER'].includes(userRole);
         const isAdmin = userRole === 'ADMIN';
 
-        // Strict Role Gatekeeping by Portal
-        if (isAdminPortal) {
-          if (!isAdmin) {
-            await logout();
-            setErrorMessage('Access Denied: This login is exclusively for System Administrators. User and Vendor accounts cannot access the Admin Portal.');
-            return;
-          }
+        // Session is created for the authenticated role and stored securely in session storage.
+        // Direct the user to their designated dashboard according to their role:
+        if (isAdmin) {
           navigate('/admin/dashboard', { replace: true });
-          return;
-        }
-
-        if (isShopPortal) {
-          if (!isShopVendor) {
-            await logout();
-            setErrorMessage('Access Denied: This login is exclusively for Restaurant & Shop Vendors. Customer and Admin accounts cannot access the Vendor Dashboard.');
-            return;
-          }
+        } else if (isShopVendor) {
           navigate('/shop/dashboard', { replace: true });
-          return;
-        }
-
-        if (isDeliveryPortal) {
-          if (!isDelivery) {
-            await logout();
-            setErrorMessage('Access Denied: This login is exclusively for Delivery Partners.');
-            return;
-          }
+        } else if (isDelivery) {
           navigate('/delivery/dashboard', { replace: true });
-          return;
-        }
-
-        if (isCustomerPortal) {
-          if (isAdmin) {
-            await logout();
-            setErrorMessage('Admin accounts cannot sign in to the Customer Store. Please use the Admin Portal at /admin/login.');
-            return;
-          }
-          if (isShopVendor) {
-            await logout();
-            setErrorMessage('Vendor & Restaurant accounts cannot sign in to the Customer Store. Please use the Merchant Portal at /shop/login.');
-            return;
-          }
-          if (isDelivery) {
-            await logout();
-            setErrorMessage('Delivery Partner accounts cannot sign in to the Customer Store. Please use the Delivery Portal at /delivery/login.');
-            return;
-          }
+        } else {
           const from = (location.state as any)?.from?.pathname || '/';
-          navigate(from === '/login' ? '/' : from, { replace: true });
+          navigate(from === '/login' || from === '/register' ? '/' : from, { replace: true });
         }
       } else {
         setErrorMessage(result.error || 'Authentication failed. Please check your credentials.');
@@ -336,60 +290,44 @@ export const Login: React.FC = () => {
           className="w-full max-w-md bg-white dark:bg-[#181C25] rounded-3xl p-6 sm:p-8 shadow-xl dark:shadow-2xl border border-stone-200/80 dark:border-white/10 relative overflow-hidden"
         >
 
-          {/* Top Switcher Segmented Tabs - Only on Customer Store Portal */}
-          {isCustomerPortal && (
-            <div className="flex bg-stone-100 dark:bg-[#11141B] p-1 rounded-2xl mb-6 border border-stone-200/60 dark:border-white/5">
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage(null);
-                  setAuthType('login');
-                }}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'login'
-                  ? 'bg-[#C59363] text-white shadow-md'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-                  }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setErrorMessage(null);
-                  setAuthType('register');
-                }}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'register'
-                  ? 'bg-[#C59363] text-white shadow-md'
-                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-                  }`}
-              >
-                Register
-              </button>
-            </div>
-          )}
+          {/* Top Switcher Segmented Tabs */}
+          <div className="flex bg-stone-100 dark:bg-[#11141B] p-1 rounded-2xl mb-6 border border-stone-200/60 dark:border-white/5">
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage(null);
+                setAuthType('login');
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'login'
+                ? 'bg-[#C59363] text-white shadow-md'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setErrorMessage(null);
+                setAuthType('register');
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${authType === 'register'
+                ? 'bg-[#C59363] text-white shadow-md'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                }`}
+            >
+              Register
+            </button>
+          </div>
 
           {/* Form Header */}
           <div className="mb-6">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight font-display">
-              {isAdminPortal
-                ? 'Admin Portal'
-                : isShopPortal
-                ? 'Vendor Portal'
-                : isDeliveryPortal
-                ? 'Delivery Partner'
-                : authType === 'login'
-                ? 'Welcome Back!'
-                : 'Create Your Account'}
+              {authType === 'login' ? 'Welcome Back!' : 'Create Your Account'}
             </h1>
             <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mt-1 font-medium leading-relaxed">
-              {isAdminPortal
-                ? 'Sign in with system administrator credentials'
-                : isShopPortal
-                ? 'Sign in to access your shop & restaurant dashboard'
-                : isDeliveryPortal
-                ? 'Sign in to view delivery assignments & orders'
-                : authType === 'login'
-                ? 'Sign in to continue to MK Delivery'
+              {authType === 'login'
+                ? 'Sign in to access your MK Delivery account'
                 : 'Register for gourmet food delivery & orders'}
             </p>
           </div>
