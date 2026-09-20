@@ -2094,6 +2094,14 @@ app.post('/api/orders', async (req: Request, res: Response) => {
         customerName: customerName || 'Valued Customer',
         customerPhone: customerPhone || '',
         deliveryAddress: deliveryAddress || '',
+        customerAddress: deliveryAddress || '',
+        shippingAddress: deliveryAddress || '',
+        address: deliveryAddress || '',
+        customer: {
+          name: customerName || 'Valued Customer',
+          phone: customerPhone || '',
+          address: deliveryAddress || ''
+        },
         paymentMethod: paymentMethod || 'CASH_ON_DELIVERY',
         items: vItems.map((i: any) => ({
           menuItemId: i.id || i.menuItemId || `item_${Date.now()}`,
@@ -2124,6 +2132,14 @@ app.post('/api/orders', async (req: Request, res: Response) => {
         customerName: customerName || 'Valued Customer',
         customerPhone: customerPhone || '',
         deliveryAddress: deliveryAddress || '',
+        customerAddress: deliveryAddress || '',
+        shippingAddress: deliveryAddress || '',
+        address: deliveryAddress || '',
+        customer: {
+          name: customerName || 'Valued Customer',
+          phone: customerPhone || '',
+          address: deliveryAddress || ''
+        },
         totalAmount: vTotal,
         total: vTotal,
         status: 'Pending',
@@ -3653,6 +3669,21 @@ app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, 
     const scanResp = await dynamoDocClient.send(scanCmd);
     const allOrders = scanResp.Items || [];
 
+    let allShops: any[] = [];
+    try {
+      allShops = await shopService.getAllShops();
+    } catch (e) {}
+
+    const shopMap: Record<string, any> = {};
+    allShops.forEach((s: any) => {
+      if (s.shopId) shopMap[s.shopId] = s;
+      if (s.restaurantId) shopMap[s.restaurantId] = s;
+      if (s.id) shopMap[s.id] = s;
+      if (s.shopName) shopMap[String(s.shopName).toLowerCase().trim()] = s;
+      if (s.restaurantName) shopMap[String(s.restaurantName).toLowerCase().trim()] = s;
+      if (s.name) shopMap[String(s.name).toLowerCase().trim()] = s;
+    });
+
     const assignedOrders = allOrders
       .filter((o: any) => {
         const rider = (o.assignedRider || '').toLowerCase().trim();
@@ -3674,7 +3705,54 @@ app.get('/api/delivery-partner/orders/:partnerIdentifier', async (req: Request, 
       })
       .map((o: any) => {
         const pin = (o.deliveryPin || o.deliveryOtp || String((o.id || o.orderId || '').replace(/\D/g, '').slice(-4) || '4829'));
-        return { ...o, deliveryPin: pin, deliveryOtp: pin };
+
+        const matchedShop =
+          shopMap[o.shopId] ||
+          shopMap[o.restaurantId] ||
+          (o.restaurantName ? shopMap[String(o.restaurantName).toLowerCase().trim()] : null) ||
+          (o.shopName ? shopMap[String(o.shopName).toLowerCase().trim()] : null) ||
+          (o.restaurant ? shopMap[String(o.restaurant).toLowerCase().trim()] : null) ||
+          {};
+
+        const latestShopAddress = matchedShop.address || o.restaurantAddress || o.shopAddress || '';
+        const latestShopLat = matchedShop.latitude ?? matchedShop.lat ?? o.restaurantLat ?? o.shopLat;
+        const latestShopLng = matchedShop.longitude ?? matchedShop.lng ?? o.restaurantLng ?? o.shopLng;
+        const latestShopPhone = matchedShop.phone || o.restaurantPhone || o.shopPhone || '';
+        const latestShopName = matchedShop.shopName || matchedShop.restaurantName || matchedShop.name || o.restaurantName || o.shopName;
+
+        let vendorStatuses = o.vendorStatuses;
+        if (Array.isArray(vendorStatuses)) {
+          vendorStatuses = vendorStatuses.map((vs: any) => {
+            const vShop =
+              shopMap[vs.restaurantId] ||
+              shopMap[vs.shopId] ||
+              (vs.restaurantName ? shopMap[String(vs.restaurantName).toLowerCase().trim()] : null) ||
+              {};
+            return {
+              ...vs,
+              restaurantAddress: vShop.address || vs.restaurantAddress || '',
+              restaurantPhone: vShop.phone || vs.restaurantPhone || ''
+            };
+          });
+        }
+
+        return {
+          ...o,
+          deliveryPin: pin,
+          deliveryOtp: pin,
+          restaurant: latestShopName || o.restaurant,
+          restaurantName: latestShopName || o.restaurantName,
+          shopName: latestShopName || o.shopName,
+          restaurantAddress: latestShopAddress,
+          shopAddress: latestShopAddress,
+          storeAddress: latestShopAddress,
+          restaurantLat: latestShopLat,
+          restaurantLng: latestShopLng,
+          shopLat: latestShopLat,
+          shopLng: latestShopLng,
+          restaurantPhone: latestShopPhone,
+          vendorStatuses
+        };
       });
 
     res.json({ success: true, orders: assignedOrders });
@@ -3776,6 +3854,55 @@ app.put('/api/restaurant/profile/:restaurantId', async (req: Request, res: Respo
     const profileUpdates = req.body;
 
     const updated = await restaurantService.updateProfile(restaurantId, profileUpdates);
+
+    if (ordersTableName && (profileUpdates.address || updated?.address)) {
+      try {
+        const newAddr = profileUpdates.address || updated?.address;
+        const newPhone = profileUpdates.phone || updated?.phone;
+        const newName = profileUpdates.name || profileUpdates.shopName || updated?.shopName || (updated as any)?.name;
+        const newLat = profileUpdates.latitude ?? profileUpdates.lat ?? updated?.latitude;
+        const newLng = profileUpdates.longitude ?? profileUpdates.lng ?? updated?.longitude;
+
+        const scanCmd = new ScanCommand({ TableName: ordersTableName });
+        const scanResp = await dynamoDocClient.send(scanCmd);
+        const allOrders = scanResp.Items || [];
+
+        const targetOrders = allOrders.filter((o: any) => {
+          const sId = o.shopId || o.restaurantId;
+          const sName = (o.restaurantName || o.shopName || '').toLowerCase().trim();
+          const targetName = (newName || '').toLowerCase().trim();
+          const isFinished = ['DELIVERED', 'COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(o.status || o.orderStatus || '').toUpperCase());
+          return !isFinished && (sId === restaurantId || (targetName && sName === targetName));
+        });
+
+        for (const ord of targetOrders) {
+          ord.restaurantAddress = newAddr;
+          ord.shopAddress = newAddr;
+          ord.storeAddress = newAddr;
+          if (newPhone) {
+            ord.restaurantPhone = newPhone;
+            ord.shopPhone = newPhone;
+          }
+          if (newName) {
+            ord.restaurantName = newName;
+            ord.shopName = newName;
+          }
+          if (newLat !== undefined) ord.restaurantLat = newLat;
+          if (newLng !== undefined) ord.restaurantLng = newLng;
+
+          await dynamoDocClient.send(new PutCommand({
+            TableName: ordersTableName,
+            Item: ord
+          }));
+
+          if (socketService) {
+            socketService.emitOrderStatusUpdated(ord);
+          }
+        }
+      } catch (orderUpdateErr) {
+        console.error('Error updating active orders with new restaurant profile address:', orderUpdateErr);
+      }
+    }
 
     if (socketService) {
       socketService.emitShopUpdated(updated || profileUpdates);

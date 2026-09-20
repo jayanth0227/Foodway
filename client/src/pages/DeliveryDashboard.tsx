@@ -136,10 +136,51 @@ export const DeliveryDashboard: React.FC = () => {
   const [selectedMapOrder, setSelectedMapOrder] = useState<any | null>(null);
   const [mapTarget, setMapTarget] = useState<'SHOP' | 'CUSTOMER' | 'ROUTE'>('ROUTE');
 
+  // Authoritative Shops State for live shop address & location resolution
+  const [shopsMap, setShopsMap] = useState<Record<string, any>>({});
+
+  const fetchShops = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/shops`);
+      const list = res.data.shops || res.data.restaurants || [];
+      const map: Record<string, any> = {};
+      list.forEach((s: any) => {
+        if (s.shopId) map[s.shopId] = s;
+        if (s.restaurantId) map[s.restaurantId] = s;
+        if (s.id) map[s.id] = s;
+        if (s.shopName) map[String(s.shopName).toLowerCase().trim()] = s;
+        if (s.restaurantName) map[String(s.restaurantName).toLowerCase().trim()] = s;
+        if (s.name) map[String(s.name).toLowerCase().trim()] = s;
+      });
+      setShopsMap(map);
+    } catch (e) {}
+  }, []);
+
   // Helper to resolve coordinates
   const getOrderCoordinates = (order: any) => {
-    const shopLat = Number(order.restaurantLat || order.shopLat || order.restaurant?.lat || 16.5062);
-    const shopLng = Number(order.restaurantLng || order.shopLng || order.restaurant?.lng || 80.6480);
+    const matchedShop =
+      shopsMap[order.shopId] ||
+      shopsMap[order.restaurantId] ||
+      (order.restaurantName ? shopsMap[String(order.restaurantName).toLowerCase().trim()] : null) ||
+      (order.shopName ? shopsMap[String(order.shopName).toLowerCase().trim()] : null) ||
+      (order.restaurant ? shopsMap[String(order.restaurant).toLowerCase().trim()] : null);
+
+    const shopLat = Number(
+      matchedShop?.latitude ??
+      matchedShop?.lat ??
+      order.restaurantLat ??
+      order.shopLat ??
+      order.restaurant?.lat ??
+      16.5062
+    );
+    const shopLng = Number(
+      matchedShop?.longitude ??
+      matchedShop?.lng ??
+      order.restaurantLng ??
+      order.shopLng ??
+      order.restaurant?.lng ??
+      80.6480
+    );
 
     const custLat = Number(
       order.customer?.lat || order.customerLat || order.lat || 16.5142
@@ -280,7 +321,7 @@ export const DeliveryDashboard: React.FC = () => {
 
   useEffect(() => {
     buzzerService.setupAutoUnlock();
-    buzzerService.unlockAudio();
+    fetchShops();
     fetchAssignedOrders();
 
     if (user) {
@@ -383,7 +424,7 @@ export const DeliveryDashboard: React.FC = () => {
         unsubscribeRider();
       };
     }
-  }, [fetchAssignedOrders, user]);
+  }, [fetchAssignedOrders, fetchShops, user]);
 
   const handleUpdateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdatingOrderId(orderId);
@@ -626,7 +667,7 @@ export const DeliveryDashboard: React.FC = () => {
 
               const customerName = order.customer?.name || order.customerName || 'Valued Customer';
               const customerPhone = order.customer?.phone || order.customerPhone || '';
-              let customerAddress = order.deliveryAddress || order.customer?.address || order.customerAddress || order.address || '';
+              let customerAddress = order.deliveryAddress || order.customerAddress || order.shippingAddress || order.address || order.customer?.address || '';
               if (!customerAddress || customerAddress === 'Customer Address') {
                 if (order.shippingAddress) {
                   if (typeof order.shippingAddress === 'string') customerAddress = order.shippingAddress;
@@ -637,13 +678,36 @@ export const DeliveryDashboard: React.FC = () => {
                 }
               }
               if (!customerAddress || customerAddress === 'Customer Address') {
-                customerAddress = 'Ravulapalem Main Center, Konaseema District - 533238';
+                customerAddress = 'Address not specified';
               }
 
-              const restaurantName = order.restaurant || order.restaurantName || order.shopName || 'Gourmet Kitchen';
-              let restaurantAddress = order.restaurantAddress || order.shopAddress || order.storeAddress || order.restaurantDetails?.address || order.shopDetails?.address || '';
-              if (!restaurantAddress || restaurantAddress === 'Main Hub Store') {
-                restaurantAddress = `${restaurantName}, Main Market Road, Ravulapalem, Konaseema District`;
+              const matchedShop =
+                shopsMap[order.shopId] ||
+                shopsMap[order.restaurantId] ||
+                (order.restaurantName ? shopsMap[String(order.restaurantName).toLowerCase().trim()] : null) ||
+                (order.shopName ? shopsMap[String(order.shopName).toLowerCase().trim()] : null) ||
+                (order.restaurant ? shopsMap[String(order.restaurant).toLowerCase().trim()] : null);
+
+              const restaurantName =
+                matchedShop?.shopName ||
+                matchedShop?.restaurantName ||
+                matchedShop?.name ||
+                order.restaurant ||
+                order.restaurantName ||
+                order.shopName ||
+                'Gourmet Kitchen';
+
+              let restaurantAddress =
+                matchedShop?.address ||
+                order.restaurantAddress ||
+                order.shopAddress ||
+                order.storeAddress ||
+                order.restaurantDetails?.address ||
+                order.shopDetails?.address ||
+                '';
+
+              if (!restaurantAddress || restaurantAddress === 'Main Hub Store' || restaurantAddress.includes('Main Market Road, Ravulapalem')) {
+                restaurantAddress = matchedShop?.address || (order.restaurantAddress && !order.restaurantAddress.includes('Main Market Road, Ravulapalem') ? order.restaurantAddress : 'Address not specified');
               }
               const totalAmount = Number(order.total || order.totalAmount || 0);
 
@@ -710,16 +774,23 @@ export const DeliveryDashboard: React.FC = () => {
                       <div className="space-y-2">
                         {order.vendorStatuses.map((vs: any, vIdx: number) => {
                           const isCancelled = String(vs.status || '').toLowerCase().includes('cancel') || String(vs.status || '').toLowerCase().includes('reject');
-                          return (
-                            <div key={vIdx} className="p-2.5 rounded-lg bg-bg-dark/60 border border-glass/40 flex items-center justify-between text-xs gap-2">
-                              <div>
-                                <span className="font-extrabold text-text-primary block">
-                                  {vIdx + 1}. {vs.restaurantName}
-                                </span>
-                                {vs.restaurantAddress && (
-                                  <span className="text-[10px] text-text-muted block font-medium">{vs.restaurantAddress}</span>
-                                )}
-                              </div>
+                            const vShop =
+                              shopsMap[vs.restaurantId] ||
+                              shopsMap[vs.shopId] ||
+                              (vs.restaurantName ? shopsMap[String(vs.restaurantName).toLowerCase().trim()] : null);
+                            const vsName = vShop?.shopName || vShop?.restaurantName || vShop?.name || vs.restaurantName;
+                            const vsAddr = vShop?.address || vs.restaurantAddress;
+
+                            return (
+                              <div key={vIdx} className="p-2.5 rounded-lg bg-bg-dark/60 border border-glass/40 flex items-center justify-between text-xs gap-2">
+                                <div>
+                                  <span className="font-extrabold text-text-primary block">
+                                    {vIdx + 1}. {vsName}
+                                  </span>
+                                  {vsAddr && (
+                                    <span className="text-[10px] text-text-muted block font-medium">{vsAddr}</span>
+                                  )}
+                                </div>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
                                 isCancelled ? 'bg-rose-500/20 border-rose-500/40 text-rose-400' : 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
                               }`}>
@@ -1206,10 +1277,20 @@ export const DeliveryDashboard: React.FC = () => {
                     : (riderLng + shopLng + custLng) / 3;
                 const mapZoom = mapTarget === 'ROUTE' ? 12 : 14;
 
-                const shopName = selectedMapOrder.restaurant || selectedMapOrder.restaurantName || 'Vendor Shop';
-                const shopAddr = selectedMapOrder.restaurantAddress || 'Main Hub';
+                const matchedModalShop =
+                  shopsMap[selectedMapOrder.shopId] ||
+                  shopsMap[selectedMapOrder.restaurantId] ||
+                  (selectedMapOrder.restaurantName ? shopsMap[String(selectedMapOrder.restaurantName).toLowerCase().trim()] : null) ||
+                  (selectedMapOrder.shopName ? shopsMap[String(selectedMapOrder.shopName).toLowerCase().trim()] : null) ||
+                  (selectedMapOrder.restaurant ? shopsMap[String(selectedMapOrder.restaurant).toLowerCase().trim()] : null);
+
+                const shopName = matchedModalShop?.shopName || matchedModalShop?.restaurantName || matchedModalShop?.name || selectedMapOrder.restaurant || selectedMapOrder.restaurantName || 'Vendor Shop';
+                let shopAddr = matchedModalShop?.address || selectedMapOrder.restaurantAddress || selectedMapOrder.shopAddress || '';
+                if (!shopAddr || shopAddr === 'Main Hub' || shopAddr.includes('Main Market Road, Ravulapalem')) {
+                  shopAddr = matchedModalShop?.address || (selectedMapOrder.restaurantAddress && !selectedMapOrder.restaurantAddress.includes('Main Market Road, Ravulapalem') ? selectedMapOrder.restaurantAddress : 'Shop Location');
+                }
                 const custName = selectedMapOrder.customer?.name || selectedMapOrder.customerName || 'Customer';
-                const custAddr = selectedMapOrder.customer?.address || selectedMapOrder.customerAddress || 'Delivery Address';
+                const custAddr = selectedMapOrder.deliveryAddress || selectedMapOrder.customerAddress || selectedMapOrder.shippingAddress || selectedMapOrder.address || selectedMapOrder.customer?.address || 'Delivery Address';
 
                 return (
                   <div className="space-y-0">

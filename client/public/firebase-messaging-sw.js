@@ -1,3 +1,10 @@
+// Suppress all console output except errors in Service Worker scope
+const noop = () => {};
+console.log = noop;
+console.info = noop;
+console.warn = noop;
+console.debug = noop;
+
 // // Firebase Messaging Service Worker for Foodway Web Push Notifications
 // importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js");
 // importScripts("https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js");
@@ -81,11 +88,6 @@ const messaging = firebase.messaging();
 // ============================================================
 
 messaging.onBackgroundMessage((payload) => {
-  console.log(
-    "[firebase-messaging-sw.js] Background push received:",
-    payload
-  );
-
   const data = payload.data || {};
   const notification = payload.notification || {};
 
@@ -189,10 +191,6 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener(
   "notificationclick",
   (event) => {
-    console.log(
-      "[firebase-messaging-sw.js] Notification clicked"
-    );
-
     event.notification.close();
 
     const notificationData =

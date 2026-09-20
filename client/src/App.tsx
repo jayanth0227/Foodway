@@ -86,45 +86,23 @@ const AppContent: React.FC = () => {
   // }, []);
 
   useEffect(() => {
-  let unsubscribe: (() => void) | undefined;
- 
-  const initializeNotifications = async () => {
-    try {
-      console.log("🔔 Initializing Foodway FCM...");
- 
-      unsubscribe = setupForegroundMessageListener((payload) => {
-        console.log(
-          "📩 APP RECEIVED FOREGROUND FCM:",
-          payload
-        );
-      });
- 
-      console.log(
-        "✅ Foreground FCM listener initialized"
-      );
- 
-      const token = await requestNotificationPermission();
- 
-      console.log("🎯 FCM TOKEN RESULT:", {
-        hasToken: !!token,
-        tokenPreview: token
-          ? `${token.substring(0, 15)}...`
-          : null,
-      });
-    } catch (error) {
-      console.error(
-        "❌ FCM initialization failed:",
-        error
-      );
-    }
-  };
- 
-  initializeNotifications();
- 
-  return () => {
-    unsubscribe?.();
-  };
-}, []);
+    let unsubscribe: (() => void) | undefined;
+
+    const initializeNotifications = async () => {
+      try {
+        unsubscribe = setupForegroundMessageListener();
+        await requestNotificationPermission();
+      } catch (error) {
+        console.error("❌ FCM initialization failed:", error);
+      }
+    };
+
+    initializeNotifications();
+
+    return () => {
+      unsubscribe?.();
+    };
+  }, []);
   // Scroll window to top (Start to End) on every page/route transition
   useEffect(() => {
     if (lenisRef.current) {
@@ -137,9 +115,12 @@ const AppContent: React.FC = () => {
 
   const normPath = (location.pathname || '').replace(/\/+$/, '').toLowerCase();
 
-  const isPortalRoute = normPath.startsWith('/admin') ||
-    normPath.startsWith('/shop') ||
-    normPath.startsWith('/restaurant') ||
+  const isPortalRoute =
+    normPath.startsWith('/admin') ||
+    normPath === '/shop' ||
+    normPath.startsWith('/shop/') ||
+    normPath === '/restaurant' ||
+    normPath.startsWith('/restaurant/') ||
     normPath.startsWith('/delivery') ||
     normPath === '/login' ||
     normPath === '/register';

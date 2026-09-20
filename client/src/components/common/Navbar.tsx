@@ -174,8 +174,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${isScrolled
-          ? 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury'
+        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-500 ${isScrolled || location.pathname !== '/'
+          ? 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury backdrop-blur-xl'
           : 'bg-white/95 dark:bg-[#090B10]/95 text-slate-900 dark:text-white border-b border-slate-200/80 dark:border-glass py-3.5 shadow-luxury lg:bg-transparent lg:border-transparent lg:py-6 lg:shadow-none'
           }`}
       >
@@ -218,7 +218,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenAuth }) => {
           {/* Navigation Links - Desktop */}
           <nav className="hidden lg:flex items-center space-x-9">
             {navLinks.map((link) => {
-              const isActive = (link.id === 'shops' && (location.pathname === '/shops' || location.pathname.startsWith('/shops/'))) || (activeSection === link.id && location.pathname === '/');
+              const isShopsRoute = location.pathname.startsWith('/shops') || location.pathname.startsWith('/restaurants');
+              const isActive = (link.id === 'shops' && isShopsRoute) || (activeSection === link.id && location.pathname === '/');
               return (
                 <a
                   key={link.id}

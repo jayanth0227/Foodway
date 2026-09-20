@@ -725,7 +725,10 @@ export const CustomerOrdersPage: React.FC = () => {
           ) : (
             <div className="space-y-6">
               {displayedOrders.map((order, idx) => {
-                const orderId = order.orderId || order.id || `ORD-${idx}`;
+                const orderId = (order.orderId && String(order.orderId).trim())
+                  || (order.id && String(order.id).trim())
+                  || (order._id && String(order._id).trim())
+                  || `ORD-${idx}-${order.createdAt || Date.now()}`;
                 const itemsList = Array.isArray(order.items) && order.items.length > 0
                   ? order.items
                   : Array.isArray(order.rawItems) ? order.rawItems : [];
@@ -747,7 +750,7 @@ export const CustomerOrdersPage: React.FC = () => {
 
                 return (
                   <motion.div
-                    key={orderId}
+                    key={orderId || `order-card-${idx}`}
                     initial={{ opacity: 0, y: 15 }}
                     animate={{ opacity: 1, y: 0 }}
                     className={`bg-white dark:bg-bg-card rounded-3xl p-4 sm:p-5 space-y-3.5 shadow-md relative overflow-hidden ${theme.cardBorder}`}
@@ -887,9 +890,14 @@ export const CustomerOrdersPage: React.FC = () => {
                                     : (item.image || item.foodImage || liveDish?.image || '');
                                   const variantLabel = getItemVariantLabel(item);
 
+                                  const itemUniqueKey = (item.id && String(item.id).trim())
+                                    || (item.menuItemId && String(item.menuItemId).trim())
+                                    || (item.itemId && String(item.itemId).trim())
+                                    || `item-${orderId}-${idx}`;
+
                                   return (
                                     <div
-                                      key={item.id || item.menuItemId || `item-${idx}`}
+                                      key={itemUniqueKey}
                                       className="p-3 sm:p-3.5 rounded-2xl bg-slate-50/90 dark:bg-bg-cardSec/90 border border-slate-200/80 dark:border-white/10 flex items-center justify-between gap-3 hover:border-emerald-500/40 transition-all shadow-xs backdrop-blur-md"
                                     >
                                       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1051,7 +1059,7 @@ export const CustomerOrdersPage: React.FC = () => {
 
             <div className="space-y-1 text-xs font-bold text-amber-600 dark:text-amber-300">
               {stockWarningToast.items.map((itemStr, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                <div key={`stock-warning-${idx}-${itemStr}`} className="flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                   <span>{itemStr}</span>
                 </div>
@@ -1113,7 +1121,7 @@ export const CustomerOrdersPage: React.FC = () => {
                 <div className="flex items-center justify-center gap-2.5 py-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
-                      key={star}
+                      key={`star-rating-${star}`}
                       type="button"
                       onClick={() => setSelectedRating(star)}
                       className="p-1 transition-all duration-200 hover:scale-125 cursor-pointer active:scale-95"

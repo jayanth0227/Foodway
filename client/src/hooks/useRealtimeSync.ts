@@ -12,7 +12,6 @@ export const useRealtimeSync = () => {
   useEffect(() => {
     // Automatically setup mobile audio auto-unlock & request notification permissions
     buzzerService.setupAutoUnlock();
-    buzzerService.unlockAudio();
     buzzerService.requestNotificationPermission();
 
     // 1. Establish socket connection & join user's role/id rooms

@@ -45,7 +45,7 @@ class BuzzerService {
 
     const events = ['touchstart', 'touchend', 'click', 'pointerdown', 'keydown'];
     const handleUnlock = () => {
-      this.unlockAudio();
+      this.unlockAudio(true);
       if (this.audioCtx && this.audioCtx.state === 'running') {
         events.forEach((evt) => {
           try {
@@ -64,18 +64,24 @@ class BuzzerService {
     });
   }
 
-  public unlockAudio(): AudioContext | null {
+  public unlockAudio(force = false): AudioContext | null {
     if (typeof window === 'undefined') return null;
 
+    // Check if user has interacted with the document or if unlock is explicitly triggered
+    const hasUserInteracted = force || (navigator as any)?.userActivation?.hasBeenActive || this.isUnlocked;
+    if (!hasUserInteracted && !this.audioCtx) {
+      return null;
+    }
+
     try {
-      if (!this.audioCtx) {
+      if (!this.audioCtx && hasUserInteracted) {
         const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioCtxClass) {
           this.audioCtx = new AudioCtxClass();
         }
       }
 
-      if (this.audioCtx) {
+      if (this.audioCtx && hasUserInteracted) {
         if (this.audioCtx.state === 'suspended') {
           this.audioCtx.resume().catch(() => {});
         }
@@ -96,7 +102,7 @@ class BuzzerService {
   }
 
   private initAudioContext(): AudioContext | null {
-    return this.unlockAudio();
+    return this.unlockAudio(true);
   }
 
   public subscribe(listener: BuzzerListener): () => void {
@@ -128,7 +134,7 @@ class BuzzerService {
     this.stopBuzzer();
 
     // Ensure audio context is resumed & unlocked
-    this.unlockAudio();
+    this.unlockAudio(true);
 
     this.isBuzzerActive = true;
     this.state = {

@@ -2484,7 +2484,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ initialTab }) =>
 
                     const customerName = o.customer?.name || o.customerName || 'Valued Customer';
                     const customerPhone = o.customer?.phone || o.customerPhone || '';
-                    const customerAddress = o.customer?.address || o.customerAddress || 'No address specified';
+                    const customerAddress = o.deliveryAddress || o.customerAddress || o.shippingAddress || o.address || o.customer?.address || 'No address specified';
                     const restaurantName = o.restaurant || o.restaurantName || 'Partner Store';
                     const totalAmt = Number(o.total || o.totalAmount || 0);
 

@@ -320,7 +320,7 @@ export const AdminOrderDetailsPage: React.FC = () => {
                       <span className="text-[10px] text-slate-500 dark:text-text-muted uppercase tracking-wider block font-bold">Delivery Address</span>
                       <p className="text-slate-700 dark:text-text-secondary font-medium leading-relaxed flex items-start gap-1.5 mt-0.5 bg-slate-50 dark:bg-bg-dark/50 p-2.5 rounded-xl border border-slate-200 dark:border-glass/40">
                         <MapPin size={14} className="text-primary shrink-0 mt-0.5" />
-                        <span>{order.customer?.address || order.customerAddress || order.deliveryAddress || 'N/A'}</span>
+                        <span>{order.deliveryAddress || order.customerAddress || order.shippingAddress || order.address || order.customer?.address || 'N/A'}</span>
                       </p>
                     </div>
                   </div>

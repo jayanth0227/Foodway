@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import {
@@ -30,7 +30,17 @@ import {
   Zap,
   ArrowUp,
   ArrowDown,
-  Sparkles
+  Sparkles,
+  Crosshair,
+  Compass,
+  Map as MapIcon,
+  Building2,
+  Tag,
+  Loader2,
+  RefreshCw,
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -44,6 +54,90 @@ import authService from '../services/auth.service';
 import { CartPageSkeleton } from '../components/common/MobileSkeletonLoader';
 import type { Address } from '../types/auth.types';
 import { getItemVariantLabel } from '../utils/variantUtils';
+import { CartAddressModal } from '../components/cart/CartAddressModal';
+import { getFastAndAccurateLocation, fastReverseGeocode } from '../utils/geolocation';
+
+// Leaflet Map Imports & Dynamic Asset Setup
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
+
+// Custom Pins for Customer Drop-off and Restaurant Pickup Points
+const customerDeliveryPin = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const storeLocationPin = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+// Custom Map View Re-centering Component
+const MapCenterController: React.FC<{ center: [number, number] }> = ({ center }) => {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, map.getZoom());
+  }, [center, map]);
+  return null;
+};
+
+// Interactive Draggable Customer Drop-off Marker
+const CartDraggableMarker: React.FC<{
+  position: [number, number];
+  onLocationChange: (lat: number, lng: number) => void;
+}> = ({ position, onLocationChange }) => {
+  useMapEvents({
+    click(e) {
+      onLocationChange(e.latlng.lat, e.latlng.lng);
+    },
+  });
+
+  const eventHandlers = useMemo(
+    () => ({
+      dragend(e: any) {
+        const marker = e.target;
+        if (marker != null) {
+          const latLng = marker.getLatLng();
+          onLocationChange(latLng.lat, latLng.lng);
+        }
+      },
+    }),
+    [onLocationChange]
+  );
+
+  return (
+    <Marker
+      position={position}
+      draggable={true}
+      icon={customerDeliveryPin}
+      eventHandlers={eventHandlers}
+    >
+      <Popup>
+        <div className="text-xs font-sans font-medium">
+          <strong className="text-emerald-600 block font-bold mb-0.5">Your Delivery Drop-off Point</strong>
+          <span>Drag marker or click map to move</span>
+        </div>
+      </Popup>
+    </Marker>
+  );
+};
+
 
 // Celebration Confetti Explosion Overlay Component
 const CelebrationConfetti: React.FC = () => {
@@ -117,6 +211,23 @@ export const CartPage: React.FC = () => {
   const [isCustomAddress, setIsCustomAddress] = useState(false);
   const [instructions, setInstructions] = useState('');
 
+  // Structured Address Details State
+  const [flatNo, setFlatNo] = useState('');
+  const [street, setStreet] = useState('');
+  const [area, setArea] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [saveAddressToProfile, setSaveAddressToProfile] = useState(false);
+  const [addressLabel, setAddressLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
+  const [customAddressLabel, setCustomAddressLabel] = useState('');
+
+  // Live Location & Map State
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([16.7652, 81.8446]);
+
   // Fixed Payment Method (Cash / Pay on Delivery)
   const paymentMethod = 'CASH_ON_DELIVERY';
 
@@ -124,6 +235,8 @@ export const CartPage: React.FC = () => {
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [showRangeModal, setShowRangeModal] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState<Address | null>(null);
+  const [isAddAddressModalOpen, setIsAddAddressModalOpen] = useState(false);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
   // 1. Always scroll to top when CartPage mounts or orderSuccess changes
   useEffect(() => {
@@ -185,7 +298,32 @@ export const CartPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [user]);
 
-  const applyAddress = (addr: Address) => {
+  // Multi-tier progressive geocoding helper to resolve address coordinates reliably
+  const geocodeAddressProgressive = async (addrStr: string, pincode?: string, city?: string, area?: string) => {
+    const candidates = [
+      addrStr.replace(/[\(\)\-]/g, ' ').replace(/\s+/g, ' ').trim(),
+      [area, city, pincode, 'India'].filter(Boolean).join(', '),
+      [city, pincode, 'India'].filter(Boolean).join(', '),
+      pincode ? `${pincode}, India` : '',
+      city ? `${city}, Andhra Pradesh, India` : ''
+    ].filter(Boolean);
+
+    for (const q of candidates) {
+      if (!q.trim()) continue;
+      try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`, {
+          headers: { 'Accept-Language': 'en' }
+        });
+        const data = await resp.json();
+        if (data && data.length > 0 && data[0].lat && data[0].lon) {
+          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+      } catch (e) { }
+    }
+    return null;
+  };
+
+  const applyAddress = async (addr: Address) => {
     const parts = [
       addr.street,
       addr.area,
@@ -194,18 +332,181 @@ export const CartPage: React.FC = () => {
       addr.pincode ? `- ${addr.pincode}` : '',
       addr.landmark ? `(Landmark: ${addr.landmark})` : ''
     ].filter(Boolean);
-    setDeliveryAddress(parts.join(', '));
+    const formatted = parts.join(', ');
+    setDeliveryAddress(formatted);
+
+    setStreet(addr.street || '');
+    setArea(addr.area || '');
+    setCity(addr.city || '');
+    setPincode(addr.pincode || '');
+    setLandmark(addr.landmark || '');
 
     if (addr.fullName) setCustomerName(addr.fullName);
     if (addr.phone) setCustomerPhone(addr.phone);
-    setSelectedLat(addr.latitude);
-    setSelectedLng(addr.longitude);
+
+    if (addr.latitude && addr.longitude && !isNaN(Number(addr.latitude)) && !isNaN(Number(addr.longitude))) {
+      const latNum = Number(addr.latitude);
+      const lngNum = Number(addr.longitude);
+      setSelectedLat(latNum);
+      setSelectedLng(lngNum);
+      setMapCenter([latNum, lngNum]);
+    } else {
+      setIsCalculatingDistance(true);
+      const resolved = await geocodeAddressProgressive(formatted, addr.pincode, addr.city, addr.area);
+      if (resolved) {
+        setSelectedLat(resolved.lat);
+        setSelectedLng(resolved.lng);
+        setMapCenter([resolved.lat, resolved.lng]);
+      }
+      setIsCalculatingDistance(false);
+    }
+  };
+
+  // Real-Time GPS Live Location Upload & Reverse Geocoding
+  const handleUseLiveLocation = () => {
+    setIsLocating(true);
+    setLocationStatus(null);
+
+    getFastAndAccurateLocation(
+      async (result) => {
+        const latitude = result.latitude;
+        const longitude = result.longitude;
+        setSelectedLat(latitude);
+        setSelectedLng(longitude);
+        setMapCenter([latitude, longitude]);
+        setIsCustomAddress(true);
+        setSelectedAddressId('');
+
+        try {
+          const details = await fastReverseGeocode(latitude, longitude);
+          if (details) {
+            const detectedStreet = details.street || '';
+            const detectedArea = details.area || '';
+            const detectedCity = details.city || '';
+            const detectedState = details.state || 'Andhra Pradesh';
+            const detectedPincode = details.pincode || '';
+
+            setStreet(detectedStreet);
+            setArea(detectedArea);
+            setCity(detectedCity);
+            setPincode(detectedPincode);
+
+            const parts = [
+              flatNo.trim(),
+              detectedStreet,
+              detectedArea,
+              landmark.trim() ? `(Landmark: ${landmark.trim()})` : '',
+              detectedCity,
+              detectedState,
+              detectedPincode ? `- ${detectedPincode}` : ''
+            ].filter(Boolean);
+
+            const fullStr = parts.join(', ') || details.formattedAddress || `Live Location (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`;
+            setDeliveryAddress(fullStr);
+          } else {
+            setDeliveryAddress(`Live Location (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`);
+          }
+
+          setLocationStatus({
+            type: 'success',
+            message: `📍 Live GPS Location Locked! (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          });
+        } catch (e) {
+          setDeliveryAddress(`Live Location (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`);
+          setLocationStatus({
+            type: 'success',
+            message: `📍 Live GPS coordinates locked!`
+          });
+        } finally {
+          setIsLocating(false);
+          setTimeout(() => setLocationStatus(null), 4500);
+        }
+      },
+      (errMessage) => {
+        setIsLocating(false);
+        setLocationStatus({
+          type: 'error',
+          message: errMessage || 'Could not fetch live location. Please tap "Adjust Pin" to set location on map.'
+        });
+      }
+    );
+  };
+
+  // User dragged or clicked on map to adjust delivery point
+  const handleMapLocationSelect = async (lat: number, lng: number) => {
+    setSelectedLat(lat);
+    setSelectedLng(lng);
+    setMapCenter([lat, lng]);
+    setIsCustomAddress(true);
+    setSelectedAddressId('');
+
+    try {
+      const details = await fastReverseGeocode(lat, lng);
+      if (details) {
+        if (details.street) setStreet(details.street);
+        if (details.area) setArea(details.area);
+        if (details.city) setCity(details.city);
+        if (details.pincode) setPincode(details.pincode);
+
+        const parts = [
+          flatNo.trim(),
+          details.street || street,
+          details.area || area,
+          landmark.trim() ? `(Landmark: ${landmark.trim()})` : '',
+          details.city || city,
+          details.pincode ? `- ${details.pincode}` : ''
+        ].filter(Boolean);
+
+        setDeliveryAddress(parts.join(', '));
+      }
+    } catch (e) {
+      console.warn('Map reverse geocode error:', e);
+    }
+  };
+
+  // Sync structured address field updates to full address text
+  const handleFieldChange = (field: 'flatNo' | 'street' | 'area' | 'city' | 'pincode' | 'landmark', value: string) => {
+    setIsCustomAddress(true);
+    setSelectedAddressId('');
+
+    let newFlat = flatNo;
+    let newStreet = street;
+    let newArea = area;
+    let newCity = city;
+    let newPincode = pincode;
+    let newLandmark = landmark;
+
+    if (field === 'flatNo') { newFlat = value; setFlatNo(value); }
+    if (field === 'street') { newStreet = value; setStreet(value); }
+    if (field === 'area') { newArea = value; setArea(value); }
+    if (field === 'city') { newCity = value; setCity(value); }
+    if (field === 'pincode') { newPincode = value; setPincode(value); }
+    if (field === 'landmark') { newLandmark = value; setLandmark(value); }
+
+    const parts = [
+      newFlat.trim(),
+      newStreet.trim(),
+      newArea.trim(),
+      newLandmark.trim() ? `(Landmark: ${newLandmark.trim()})` : '',
+      newCity.trim(),
+      newPincode.trim() ? `- ${newPincode.trim()}` : ''
+    ].filter(Boolean);
+
+    setDeliveryAddress(parts.join(', '));
   };
 
   const handleSelectAddressCard = (addr: Address) => {
     setSelectedAddressId(addr.id);
     setIsCustomAddress(false);
     applyAddress(addr);
+  };
+
+  const handleAddressAdded = (newAddress: Address) => {
+    const updated = [newAddress, ...savedAddresses.filter(a => a.id !== newAddress.id)];
+    setSavedAddresses(updated);
+    setSelectedAddressId(newAddress.id);
+    setIsCustomAddress(false);
+    applyAddress(newAddress);
   };
 
   const handleDeleteSavedAddress = (e: React.MouseEvent, addr: Address) => {
@@ -326,21 +627,41 @@ export const CartPage: React.FC = () => {
             if (shopLat && shopLng && !isNaN(Number(shopLat)) && !isNaN(Number(shopLng))) {
               setStoreLat(Number(shopLat));
               setStoreLng(Number(shopLng));
+            } else if (shop?.address) {
+              geocodeAddressProgressive(shop.address).then(resolved => {
+                if (resolved) {
+                  setStoreLat(resolved.lat);
+                  setStoreLng(resolved.lng);
+                } else if (!resLat || !resLng) {
+                  if (shop.address.toLowerCase().includes('eluru')) {
+                    setStoreLat(16.7107);
+                    setStoreLng(81.0952);
+                  } else {
+                    setStoreLat(16.7652);
+                    setStoreLng(81.8446);
+                  }
+                }
+              }).catch(() => {
+                if (!resLat || !resLng) {
+                  setStoreLat(16.7652);
+                  setStoreLng(81.8446);
+                }
+              });
             } else if (!resLat || !resLng) {
-              setStoreLat(17.3616);
-              setStoreLng(78.4850);
+              setStoreLat(16.7652);
+              setStoreLng(81.8446);
             }
           })
           .catch(() => {
             if (!resLat || !resLng) {
-              setStoreLat(17.3616);
-              setStoreLng(78.4850);
+              setStoreLat(16.7652);
+              setStoreLng(81.8446);
             }
           });
       } else {
         if (!resLat || !resLng) {
-          setStoreLat(17.3616);
-          setStoreLng(78.4850);
+          setStoreLat(16.7652);
+          setStoreLng(81.8446);
         }
       }
     } else {
@@ -389,35 +710,37 @@ export const CartPage: React.FC = () => {
     }
   }, [cartItems]);
 
-  // Geocode delivery address if lat/lng are missing
+  // Geocode delivery address if lat/lng are missing (e.g. for custom input or edited address)
   useEffect(() => {
-    if ((!selectedLat || !selectedLng) && deliveryAddress && deliveryAddress.trim().length > 3) {
+    if (isCustomAddress && deliveryAddress && deliveryAddress.trim().length > 3) {
       const controller = new AbortController();
-      const geocode = async () => {
+      setIsCalculatingDistance(true);
+      const timer = setTimeout(async () => {
         try {
-          const query = encodeURIComponent(deliveryAddress.trim());
-          const resp = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`, {
-            signal: controller.signal
-          });
-          const data = await resp.json();
-          if (data && data.length > 0) {
-            setSelectedLat(parseFloat(data[0].lat));
-            setSelectedLng(parseFloat(data[0].lon));
+          const pinMatch = deliveryAddress.match(/\b\d{6}\b/);
+          const pin = pinMatch ? pinMatch[0] : undefined;
+          const resolved = await geocodeAddressProgressive(deliveryAddress, pin);
+          if (resolved) {
+            setSelectedLat(resolved.lat);
+            setSelectedLng(resolved.lng);
           }
-        } catch (e) { }
-      };
-      const timer = setTimeout(geocode, 500);
+        } catch (e) {
+        } finally {
+          setIsCalculatingDistance(false);
+        }
+      }, 600);
       return () => {
         clearTimeout(timer);
         controller.abort();
       };
     }
-  }, [deliveryAddress, selectedLat, selectedLng]);
+  }, [deliveryAddress, isCustomAddress]);
 
   // Compute 100% Real Road Driving Distance via OSRM OpenStreetMap Routing API
   useEffect(() => {
     if (storeLat && storeLng && selectedLat && selectedLng) {
       let isCancelled = false;
+      setIsCalculatingDistance(true);
       const fetchDrivingDistance = async () => {
         try {
           const url = `https://router.project-osrm.org/route/v1/driving/${storeLng},${storeLat};${selectedLng},${selectedLat}?overview=false`;
@@ -427,6 +750,7 @@ export const CartPage: React.FC = () => {
             const distanceMeters = data.routes[0].distance; // Real road driving distance in meters
             const km = Math.round((distanceMeters / 1000) * 10) / 10;
             setCalculatedDistanceKm(km > 0.1 ? km : 1.0);
+            setIsCalculatingDistance(false);
             return;
           }
         } catch (e) {
@@ -446,6 +770,7 @@ export const CartPage: React.FC = () => {
           const directKm = R * c;
           const roadKm = Math.round((directKm * 1.3) * 10) / 10;
           setCalculatedDistanceKm(roadKm > 0.1 ? roadKm : 1.5);
+          setIsCalculatingDistance(false);
         }
       };
 
@@ -455,6 +780,7 @@ export const CartPage: React.FC = () => {
       };
     } else {
       setCalculatedDistanceKm(null);
+      setIsCalculatingDistance(false);
     }
   }, [storeLat, storeLng, selectedLat, selectedLng]);
 
@@ -504,6 +830,9 @@ export const CartPage: React.FC = () => {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         deliveryAddress: deliveryAddress.trim(),
+        customerAddress: deliveryAddress.trim(),
+        shippingAddress: deliveryAddress.trim(),
+        address: deliveryAddress.trim(),
         latitude: selectedLat,
         longitude: selectedLng,
         instructions: instructions.trim(),
@@ -544,6 +873,30 @@ export const CartPage: React.FC = () => {
         setOrderSuccess(orderId);
         clearCart();
         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Save address to user profile if opted in
+        if (saveAddressToProfile && isAuthenticated && user) {
+          try {
+            const finalLabel = addressLabel === 'Other' ? (customAddressLabel.trim() || 'Other') : addressLabel;
+            const newAddressItem: Address = {
+              id: `addr_${Date.now()}`,
+              label: finalLabel,
+              fullName: customerName.trim() || user.name || 'Customer',
+              phone: customerPhone.trim() || user.phone || '',
+              street: [flatNo, street].filter(Boolean).join(', ') || deliveryAddress.trim(),
+              area: area.trim(),
+              city: city.trim() || 'Eluru',
+              state: 'Andhra Pradesh',
+              pincode: pincode.trim(),
+              landmark: landmark.trim(),
+              latitude: selectedLat,
+              longitude: selectedLng,
+              isDefault: savedAddresses.length === 0
+            };
+            const updatedAddrs = [newAddressItem, ...savedAddresses];
+            updateProfile({ addresses: updatedAddrs }).catch((err: any) => console.warn('Silent save address warning:', err));
+          } catch (e) {}
+        }
       } else {
         alert('Failed to place order: ' + (response.data.error || 'Server error'));
       }
@@ -958,16 +1311,182 @@ export const CartPage: React.FC = () => {
 
                     <div className="space-y-4.5 relative z-10">
 
-                      {/* SAVED ADDRESSES SELECTOR */}
-                      {(isAuthenticated || !!getCurrentUser()) && savedAddresses.length > 0 && (
+                      {/* 1. LIVE LOCATION UPLOAD & INTERACTIVE MAP SECTION ("THERE ITSELF") */}
+                      <div className="rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/15 via-amber-500/5 to-transparent p-3.5 sm:p-4 space-y-3 shadow-xs">
+                        {/* Header: Title, Icon & Auto-Distance badge */}
+                        <div className="flex items-start justify-between gap-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-primary text-black flex items-center justify-center font-bold shadow-sm shrink-0">
+                              {isLocating ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Crosshair className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.2]" />}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-xs sm:text-sm font-black text-text-primary uppercase tracking-wide font-display truncate">
+                                Upload Live Location
+                              </h4>
+                              <p className="text-[10.5px] sm:text-[11px] text-text-muted leading-tight mt-0.5">
+                                Detect GPS or adjust map pin for accurate distance fee
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 text-[9px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md font-extrabold uppercase tracking-wider">
+                            Live Fee
+                          </span>
+                        </div>
+
+                        {/* Action Buttons: 2-Column Grid (Perfect on mobile & desktop sidebar) */}
+                        <div className="grid grid-cols-2 gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={handleUseLiveLocation}
+                            disabled={isLocating}
+                            className="w-full py-2.5 px-2 sm:px-3 rounded-xl bg-primary hover:bg-amber-400 active:scale-95 text-black text-[11px] sm:text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                          >
+                            {isLocating ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                                <span className="truncate">Detecting...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Crosshair className="w-3.5 h-3.5 stroke-[2.5] shrink-0" />
+                                <span className="truncate">Use Live GPS</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowMapPicker(!showMapPicker)}
+                            className={`w-full py-2.5 px-2 sm:px-3 rounded-xl border text-[11px] sm:text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              showMapPicker
+                                ? 'bg-text-primary text-bg-main border-transparent shadow-sm'
+                                : 'border-glass bg-bg-cardSec hover:border-primary/50 text-text-primary'
+                            }`}
+                            title="Toggle map view to adjust pin"
+                          >
+                            <MapIcon className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">{showMapPicker ? 'Hide Map' : 'Pin on Map'}</span>
+                          </button>
+                        </div>
+
+                        {/* Status / Feedback Banner */}
+                        {locationStatus && (
+                          <div
+                            className={`p-2.5 rounded-xl text-xs flex items-center gap-2 border transition-all ${
+                              locationStatus.type === 'success'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            {locationStatus.type === 'success' ? (
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 shrink-0" />
+                            )}
+                            <span className="font-semibold text-[11px] leading-tight">{locationStatus.message}</span>
+                          </div>
+                        )}
+
+                        {/* Live Coordinates & Distance Locked Bar */}
+                        {selectedLat && selectedLng && !locationStatus && (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 p-2 sm:p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 text-[10.5px] sm:text-[11px]">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="relative flex h-2 w-2 shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                              </span>
+                              <span className="font-bold shrink-0">GPS:</span>
+                              <span className="font-mono truncate">{selectedLat.toFixed(4)}, {selectedLng.toFixed(4)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 justify-between sm:justify-end shrink-0">
+                              {calculatedDistanceKm && (
+                                <span className="font-black bg-emerald-500/20 px-2 py-0.5 rounded-md text-[10px] uppercase font-mono">
+                                  {calculatedDistanceKm} km Road Dist
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={handleUseLiveLocation}
+                                disabled={isLocating}
+                                className="p-1 hover:bg-emerald-500/20 rounded-md transition-colors cursor-pointer text-emerald-700 dark:text-emerald-300 ml-auto"
+                                title="Refresh live location"
+                              >
+                                <RefreshCw className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* COLLAPSIBLE INTERACTIVE LEAFLET MAP */}
+                        <AnimatePresence>
+                          {showMapPicker && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden space-y-2 pt-1"
+                            >
+                              <div className="rounded-2xl overflow-hidden border border-glass shadow-inner h-[260px] relative z-0">
+                                <MapContainer
+                                  center={selectedLat && selectedLng ? [selectedLat, selectedLng] : mapCenter}
+                                  zoom={15}
+                                  scrollWheelZoom={false}
+                                  className="w-full h-full"
+                                >
+                                  <TileLayer
+                                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                  />
+                                  <MapCenterController center={selectedLat && selectedLng ? [selectedLat, selectedLng] : mapCenter} />
+
+                                  {/* Draggable Customer Drop-off Marker */}
+                                  <CartDraggableMarker
+                                    position={selectedLat && selectedLng ? [selectedLat, selectedLng] : mapCenter}
+                                    onLocationChange={handleMapLocationSelect}
+                                  />
+
+                                  {/* Store Pickup Marker */}
+                                  {storeLat && storeLng && (
+                                    <Marker position={[storeLat, storeLng]} icon={storeLocationPin}>
+                                      <Popup>
+                                        <div className="text-xs font-sans">
+                                          <strong className="text-rose-600 block font-bold mb-0.5">
+                                            {closedStoreName || 'Restaurant / Store'}
+                                          </strong>
+                                          <span>Order pickup location</span>
+                                        </div>
+                                      </Popup>
+                                    </Marker>
+                                  )}
+                                </MapContainer>
+                              </div>
+                              <div className="flex items-center justify-between text-[10.5px] text-text-muted px-1">
+                                <span className="flex items-center gap-1.5">
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                                  <span>Green: Your delivery point (drag or click map)</span>
+                                </span>
+                                {storeLat && (
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" />
+                                    <span>Red: Store point</span>
+                                  </span>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* 2. SAVED ADDRESSES SELECTOR (FOR LOGGED-IN USERS) */}
+                      {(isAuthenticated || !!getCurrentUser()) && (
                         <div className="space-y-2.5">
                           <div className="flex items-center justify-between">
                             <label className="block text-[11px] font-black text-text-primary uppercase tracking-wider">
-                              Select Saved Address
+                              Or Choose Saved Address
                             </label>
                             <button
                               type="button"
-                              onClick={() => navigate('/profile/address/new')}
+                              onClick={() => setIsAddAddressModalOpen(true)}
                               className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                             >
                               <Plus className="w-3.5 h-3.5" />
@@ -975,58 +1494,61 @@ export const CartPage: React.FC = () => {
                             </button>
                           </div>
 
-                          <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-primary/40 scrollbar-track-transparent">
-                            {savedAddresses.map((addr: Address) => {
-                              const isSelected = selectedAddressId === addr.id && !isCustomAddress;
-                              return (
-                                <div
-                                  key={addr.id}
-                                  onClick={() => handleSelectAddressCard(addr)}
-                                  className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${isSelected
-                                    ? 'bg-primary/10 border-primary ring-2 ring-primary/20 text-text-primary'
-                                    : 'bg-bg-cardSec border-glass text-text-secondary hover:border-primary/40'
-                                    }`}
-                                >
-                                  <div className="space-y-1 text-xs min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="px-2 py-0.5 rounded-md bg-bg-dark border border-glass text-[10px] font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1">
-                                        {addr.label === 'Home' && <Home className="w-3 h-3 text-primary" />}
-                                        {addr.label === 'Work' && <Briefcase className="w-3 h-3 text-primary" />}
-                                        {addr.label !== 'Home' && addr.label !== 'Work' && <Navigation className="w-3 h-3 text-primary" />}
-                                        <span>{addr.label || 'Address'}</span>
-                                      </span>
-                                      {addr.isDefault && (
-                                        <span className="text-[9px] font-black text-emerald-500 uppercase">Default</span>
-                                      )}
+                          {savedAddresses.length > 0 && (
+                            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1.5 scrollbar-thin scrollbar-thumb-primary/40 scrollbar-track-transparent">
+                              {savedAddresses.map((addr: Address) => {
+                                const isSelected = selectedAddressId === addr.id && !isCustomAddress;
+                                return (
+                                  <div
+                                    key={addr.id}
+                                    onClick={() => handleSelectAddressCard(addr)}
+                                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${isSelected
+                                      ? 'bg-primary/10 border-primary ring-2 ring-primary/20 text-text-primary'
+                                      : 'bg-bg-cardSec border-glass text-text-secondary hover:border-primary/40'
+                                      }`}
+                                  >
+                                    <div className="space-y-1 text-xs min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="px-2 py-0.5 rounded-md bg-bg-dark border border-glass text-[10px] font-extrabold text-text-primary uppercase tracking-wider flex items-center gap-1">
+                                          {addr.label === 'Home' && <Home className="w-3 h-3 text-primary" />}
+                                          {addr.label === 'Work' && <Briefcase className="w-3 h-3 text-primary" />}
+                                          {addr.label !== 'Home' && addr.label !== 'Work' && <Navigation className="w-3 h-3 text-primary" />}
+                                          <span>{addr.label || 'Address'}</span>
+                                        </span>
+                                        {addr.isDefault && (
+                                          <span className="text-[9px] font-black text-emerald-500 uppercase">Default</span>
+                                        )}
+                                      </div>
+                                      <p className="font-extrabold text-text-primary truncate">{addr.fullName || user?.name}</p>
+                                      <p className="text-[11px] text-text-muted leading-tight line-clamp-2">
+                                        {addr.street}, {addr.city} {addr.pincode}
+                                      </p>
                                     </div>
-                                    <p className="font-extrabold text-text-primary truncate">{addr.fullName || user?.name}</p>
-                                    <p className="text-[11px] text-text-muted leading-tight line-clamp-2">
-                                      {addr.street}, {addr.city} {addr.pincode}
-                                    </p>
-                                  </div>
-                                  <div className="pt-0.5 shrink-0 flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      title="Delete Address"
-                                      onClick={(e) => handleDeleteSavedAddress(e, addr)}
-                                      className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/15 transition-all cursor-pointer active:scale-95"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-primary border-primary text-white dark:text-black' : 'border-glass'
-                                      }`}>
-                                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                    <div className="pt-0.5 shrink-0 flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        title="Delete Address"
+                                        onClick={(e) => handleDeleteSavedAddress(e, addr)}
+                                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/15 transition-all cursor-pointer active:scale-95"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-primary border-primary text-white dark:text-black' : 'border-glass'
+                                        }`}>
+                                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Customer Contact & Address Inputs */}
+                      {/* 3. STRUCTURED DELIVERY DETAILS FORM */}
                       <div className="space-y-3 pt-1 border-t border-glass">
+                        {/* Receiver Name & Phone */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
@@ -1063,11 +1585,98 @@ export const CartPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Full Delivery Address Textarea */}
+                        {/* Flat / Door No & Landmark */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                              Flat / Door / House No.
+                            </label>
+                            <div className="relative">
+                              <Building2 className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                              <input
+                                type="text"
+                                value={flatNo}
+                                onChange={(e) => handleFieldChange('flatNo', e.target.value)}
+                                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                                placeholder="e.g. Flat 302, D.No 4-12"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                              Landmark (Optional)
+                            </label>
+                            <div className="relative">
+                              <Compass className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                              <input
+                                type="text"
+                                value={landmark}
+                                onChange={(e) => handleFieldChange('landmark', e.target.value)}
+                                className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                                placeholder="e.g. Near Temple, Opp Bank"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Street & Locality */}
                         <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                            Delivery Address Details *
+                            Street & Area / Locality *
                           </label>
+                          <div className="relative">
+                            <Navigation className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                            <input
+                              type="text"
+                              required
+                              value={street}
+                              onChange={(e) => handleFieldChange('street', e.target.value)}
+                              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                              placeholder="e.g. Kandhi Kattu Vari Lane, Powerpet"
+                            />
+                          </div>
+                        </div>
+
+                        {/* City & Pincode */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                              City / Town *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={city}
+                              onChange={(e) => handleFieldChange('city', e.target.value)}
+                              className="w-full px-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium"
+                              placeholder="e.g. Eluru / Ravulapalem"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                              Pincode *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={pincode}
+                              onChange={(e) => handleFieldChange('pincode', e.target.value)}
+                              className="w-full px-3 py-2.5 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary font-medium font-mono"
+                              placeholder="e.g. 534001"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Full Delivery Address Details Textarea (Editable & Synced) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
+                              Full Delivery Address Details *
+                            </label>
+                            <span className="text-[10px] text-text-muted">Auto-compiled from details</span>
+                          </div>
                           <textarea
                             required
                             rows={2}
@@ -1075,11 +1684,51 @@ export const CartPage: React.FC = () => {
                             onChange={(e) => {
                               setDeliveryAddress(e.target.value);
                               setIsCustomAddress(true);
+                              setSelectedAddressId('');
                             }}
                             className="w-full p-3 rounded-xl bg-bg-cardSec border border-glass text-xs text-text-primary focus:outline-none focus:border-primary resize-none font-medium leading-relaxed"
-                            placeholder="House No, Flat, Street, Locality, City, Pincode"
+                            placeholder="Complete address will be confirmed here..."
                           />
                         </div>
+
+                        {/* Save Address to Profile Option */}
+                        {isAuthenticated && user && (
+                          <div className="p-3 rounded-2xl bg-bg-cardSec border border-glass space-y-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={saveAddressToProfile}
+                                onChange={(e) => setSaveAddressToProfile(e.target.checked)}
+                                className="w-4 h-4 rounded text-primary focus:ring-primary/20 accent-primary cursor-pointer"
+                              />
+                              <span className="text-xs font-bold text-text-primary">
+                                Save this address to my profile for future orders
+                              </span>
+                            </label>
+
+                            {saveAddressToProfile && (
+                              <div className="flex items-center gap-2 pt-1">
+                                {(['Home', 'Work', 'Other'] as const).map((lbl) => (
+                                  <button
+                                    key={lbl}
+                                    type="button"
+                                    onClick={() => setAddressLabel(lbl)}
+                                    className={`px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                                      addressLabel === lbl
+                                        ? 'bg-primary text-black'
+                                        : 'bg-bg-dark border border-glass text-text-secondary'
+                                    }`}
+                                  >
+                                    {lbl === 'Home' && <Home className="w-3 h-3" />}
+                                    {lbl === 'Work' && <Briefcase className="w-3 h-3" />}
+                                    {lbl === 'Other' && <Tag className="w-3 h-3" />}
+                                    <span>{lbl}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Special Delivery Instructions */}
                         <div className="space-y-1">
@@ -1130,8 +1779,13 @@ export const CartPage: React.FC = () => {
                           <div className="flex justify-between items-center text-text-secondary pt-2.5 border-t border-glass/60">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-semibold text-text-primary">Delivery Fee</span>
-                              {calculatedDistanceKm ? (
-                                <span className="text-[10px] text-text-muted font-mono bg-bg-dark px-2 py-0.5 rounded-md border border-glass">
+                              {isCalculatingDistance ? (
+                                <span className="text-[10px] text-primary font-mono bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20 flex items-center gap-1 animate-pulse">
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                  <span>Calculating distance...</span>
+                                </span>
+                              ) : calculatedDistanceKm ? (
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 font-bold">
                                   {calculatedDistanceKm} km @ ₹{deliveryFeePerKm}/km
                                 </span>
                               ) : (
@@ -1140,9 +1794,16 @@ export const CartPage: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <span className={deliveryFee === 0 ? 'text-emerald-500 font-black font-mono text-xs bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20' : 'text-text-primary font-bold font-mono text-sm'}>
-                              {deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}
-                            </span>
+                            <div className="text-right">
+                              <span className={deliveryFee === 0 ? 'text-emerald-500 font-black font-mono text-xs bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20' : 'text-text-primary font-bold font-mono text-sm'}>
+                                {isCalculatingDistance ? '...' : deliveryFee === 0 ? 'FREE' : `₹${deliveryFee.toFixed(2)}`}
+                              </span>
+                              {baseDeliveryFee && rawCalculatedFee < baseDeliveryFee && (
+                                <span className="block text-[9px] text-text-muted font-sans font-medium">
+                                  (Min. base fee ₹{baseDeliveryFee})
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
 
@@ -1356,6 +2017,16 @@ export const CartPage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Instant In-Cart Add New Delivery Address Modal */}
+      <CartAddressModal
+        isOpen={isAddAddressModalOpen}
+        onClose={() => setIsAddAddressModalOpen(false)}
+        onAddressAdded={handleAddressAdded}
+        currentUser={user}
+        existingAddresses={savedAddresses}
+        updateProfile={updateProfile}
+      />
     </>
   );
 };

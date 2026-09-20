@@ -67,43 +67,22 @@ export const setupForegroundMessageListener = (
     ) {
       return;
     }
- 
-    console.log(
-      "🔔 Setting up Firebase foreground message listener..."
-    );
- 
+
     const unsubscribe = onMessage(messaging, (payload) => {
-      console.log(
-        "🔥 FOREGROUND FCM MESSAGE RECEIVED:",
-        payload
-      );
- 
       const title =
         payload.notification?.title ||
         payload.data?.title ||
-        "🔔 Foodway Alert";
- 
+        "Foodway Alert";
+
       const body =
         payload.notification?.body ||
         payload.data?.body ||
         "You have a new update.";
- 
+
       const type = payload.data?.type;
       const role = payload.data?.role;
       const orderId = payload.data?.orderId;
- 
-      console.log("📦 FCM ORDER DATA:", {
-        type,
-        role,
-        orderId,
-      });
- 
-      /**
-       * =========================================================
-       * 🚨 NEW ORDER ALERT
-       * Vendor + Delivery Boy
-       * =========================================================
-       */
+
       const isNewOrder =
         type === "NEW_ORDER" &&
         (
@@ -111,34 +90,15 @@ export const setupForegroundMessageListener = (
           role === "DELIVERY_PARTNER" ||
           role === "DELIVERY"
         );
- 
+
       if (isNewOrder) {
-        console.log(
-          "🚨 NEW ORDER ALERT - STARTING BUZZER"
-        );
- 
         buzzerService.triggerBuzzer({
           title,
           message: body,
           orderId,
           durationMs: 30000,
         });
- 
-        /**
-         * IMPORTANT:
-         * Do NOT create another new Notification here.
-         *
-         * buzzerService.triggerBuzzer()
-         * already calls triggerNativePushNotification().
-         */
- 
       } else {
-        /**
-         * =====================================================
-         * 🔔 NORMAL FCM NOTIFICATIONS
-         * Rider Assigned / Ready / Out for Delivery / Delivered
-         * =====================================================
-         */
         if (
           "Notification" in window &&
           Notification.permission === "granted"
@@ -154,18 +114,10 @@ export const setupForegroundMessageListener = (
                 "/favicon.ico",
               data: payload.data,
             });
- 
-            console.log(
-              "✅ BROWSER NOTIFICATION CREATED"
-            );
- 
+
             notification.onclick = () => {
-              console.log(
-                "🖱️ Notification clicked"
-              );
- 
               window.focus();
- 
+
               if (orderId) {
                 window.location.href =
                   `/orders?orderId=${orderId}`;
@@ -175,21 +127,9 @@ export const setupForegroundMessageListener = (
               }
             };
           } catch (err) {
-            console.error(
-              "❌ Native notification failed:",
-              err
-            );
- 
-            /**
-             * Service Worker fallback
-             */
             if ("serviceWorker" in navigator) {
               navigator.serviceWorker.ready
                 .then((registration) => {
-                  console.log(
-                    "🔄 Trying Service Worker notification fallback"
-                  );
- 
                   return registration.showNotification(
                     title,
                     {
@@ -200,11 +140,6 @@ export const setupForegroundMessageListener = (
                     }
                   );
                 })
-                .then(() => {
-                  console.log(
-                    "✅ Service Worker notification created"
-                  );
-                })
                 .catch((swError) => {
                   console.error(
                     "❌ Service Worker notification failed:",
@@ -213,22 +148,14 @@ export const setupForegroundMessageListener = (
                 });
             }
           }
-        } else {
-          console.warn(
-            "⚠️ Notification permission is not granted:",
-            Notification.permission
-          );
         }
       }
- 
-      /**
-       * Optional callback
-       */
+
       if (onMessageReceived) {
         onMessageReceived(payload);
       }
     });
- 
+
     return unsubscribe;
   } catch (error) {
     console.error(
@@ -238,4 +165,4 @@ export const setupForegroundMessageListener = (
   }
 };
  
-export default setupForegroundMessageListener;
+export default setupForegroundMessageListener;

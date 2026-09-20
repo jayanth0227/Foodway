@@ -52,18 +52,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setToken(storedToken || 'active_session');
       }
 
-      try {
-        const res = await authService.getCurrentUser();
-        if (res && res.success && res.user && localStorage.getItem('foodway_explicit_logout') !== 'true') {
-          const activeToken = res.token || storedToken || 'active_session';
-          saveSession(activeToken, res.user);
-          setUser(res.user);
-          setRole(res.user.role);
-          setToken(activeToken);
+      // Only attempt to verify session with backend if user has a stored session or token
+      if (storedToken || storedUser) {
+        try {
+          const res = await authService.getCurrentUser();
+          if (res && res.success && res.user && localStorage.getItem('foodway_explicit_logout') !== 'true') {
+            const activeToken = res.token || storedToken || 'active_session';
+            saveSession(activeToken, res.user);
+            setUser(res.user);
+            setRole(res.user.role);
+            setToken(activeToken);
 
-          // Asynchronously sync FCM push notification token post-restoration
-          notificationService.syncFcmTokenAfterLogin();
-        } else {
+            // Asynchronously sync FCM push notification token post-restoration
+            notificationService.syncFcmTokenAfterLogin();
+          } else {
+            if (!storedUser) {
+              clearSession();
+              setUser(null);
+              setRole(null);
+              setToken(null);
+            }
+          }
+        } catch (error) {
+          // Preserve existing offline/stored user session on network or API error
           if (!storedUser) {
             clearSession();
             setUser(null);
@@ -71,17 +82,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setToken(null);
           }
         }
-      } catch (error) {
-        // Preserve existing offline/stored user session on network or API error
-        if (!storedUser) {
-          clearSession();
-          setUser(null);
-          setRole(null);
-          setToken(null);
-        }
-      } finally {
-        setIsLoading(false);
+      } else {
+        setUser(null);
+        setRole(null);
+        setToken(null);
       }
+      setIsLoading(false);
     };
 
     initializeAuth();
@@ -182,6 +188,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const isLoggedOut = typeof window !== 'undefined' && localStorage.getItem('foodway_explicit_logout') === 'true';
       if (isLoggedOut || isLoggingOutRef.current) return;
+      if (!token && !user && !getToken() && !getCurrentUser()) return;
 
       const res = await authService.getCurrentUser();
       if (res && res.success && res.user && localStorage.getItem('foodway_explicit_logout') !== 'true') {
